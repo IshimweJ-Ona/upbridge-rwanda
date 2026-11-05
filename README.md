@@ -253,28 +253,70 @@ git push -u origin feature/your-task-name
 
 > **Do not push unfinished work directly to `main`.**
 
-## Team Responsibilities
+## Team Responsibilities and Task Ownership
 
-The project is divided into five workstreams.
+The UpBridge Rwanda project is developed by five team members. Each member is responsible for specific features and tasks on the Scrum board.
 
-| Member | Responsibility | Main areas |
+| Team member | Assigned responsibilities | Main tasks |
 |---|---|---|
-| Student 1 | Authentication and user management | Authentication, onboarding, profiles |
-| Student 2 | Learning and portfolio | Learning activities, submissions, portfolio |
-| Student 3 | Mentorship | Mentor and learner workflows |
-| Student 4 | Career opportunities | Opportunities and applications |
-| Student 5 | Core and integration | App shell, shared components, administration, configuration, integration |
+| Jonathan Ishimwe | Project setup and integration | Repository setup, package configuration, Firebase setup, architecture, shared widgets, home dashboard, administration, and final integration/release. |
+| Ghislaine Marie Inez | Authentication and user management | User registration, email/password login, logout, onboarding, authentication flows, and user profiles. |
+| Lisa Ineza | Learning and portfolio | Learning paths, learning activities, submissions, progress tracking, and portfolio management. |
+| Boaz Prince Iza | Mentorship | Mentor workspace, mentorship requests, mentor reviews, and mentorship sessions. |
+| Kellen Ashley Mutoni | Career opportunities | Opportunities discovery, opportunity details, applications, and application management. |
 
-The team should agree on exact file ownership before implementation begins.
+### Individual ownership
 
-Every contributor should:
+**1. Jonathan Ishimwe — Project Setup and Integration**
 
-- Work only on assigned feature areas unless collaboration is agreed.
-- Communicate before modifying shared files.
-- Reuse shared widgets and services where appropriate.
-- Avoid changing another contributor's files without coordination.
-- Keep their branch updated with approved changes from `main`.
-- Test changes before opening a pull request.
+- Repository and GitHub management.
+- Flutter project configuration and dependencies.
+- Firebase project configuration and integration.
+- Application architecture and shared infrastructure.
+- Shared widgets and application shell.
+- Home dashboard and administration.
+- Integration, testing, and release coordination.
+
+**2. Ghislaine Marie Inez — Authentication and User Management**
+
+- Email/password registration.
+- User login and logout.
+- Authentication validation and error handling.
+- Onboarding workflows.
+- User profile management.
+
+**3. Lisa Ineza — Learning and Portfolio**
+
+- Learning paths and learning content.
+- Learning progress tracking.
+- Assignment and project submissions.
+- Submission management.
+- Portfolio creation and management.
+
+**4. Boaz Prince Iza — Mentorship**
+
+- Mentor discovery and profiles.
+- Mentorship requests.
+- Mentor workspace.
+- Mentor reviews and feedback.
+- Mentorship session management.
+
+**5. Kellen Ashley Mutoni — Opportunities and Applications**
+
+- Career opportunities listing.
+- Opportunity details.
+- Opportunity search and filtering.
+- Application submission.
+- Application tracking and management.
+
+### Collaboration rules
+
+- Each member should primarily work on their assigned feature area.
+- Shared files must be coordinated with Jonathan Ishimwe.
+- All members should create feature branches and submit pull requests.
+- No member should push unfinished work directly to `main`.
+- Changes affecting multiple features must be communicated before implementation.
+- All completed tasks should be reflected on the Scrum board.
 
 ## Code Guidelines
 
