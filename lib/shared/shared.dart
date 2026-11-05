@@ -1,0 +1,20 @@
+// Owner: Student 5 · Core, shared, app shell, home & admin
+export 'package:upbridge/shared/animations/effects.dart';
+export 'package:upbridge/shared/animations/page_transitions.dart';
+export 'package:upbridge/shared/animations/pressable.dart';
+export 'package:upbridge/shared/animations/reveal.dart';
+export 'package:upbridge/shared/animations/shimmer.dart';
+export 'package:upbridge/shared/animations/success_mark.dart';
+export 'package:upbridge/core/themes/app_colors.dart';
+export 'package:upbridge/core/themes/app_text.dart';
+export 'package:upbridge/core/themes/app_theme.dart';
+export 'package:upbridge/core/themes/app_tokens.dart';
+export 'package:upbridge/core/utils/links.dart';
+export 'package:upbridge/shared/widgets/buttons.dart';
+export 'package:upbridge/shared/widgets/choice.dart';
+export 'package:upbridge/shared/widgets/domain_cards.dart';
+export 'package:upbridge/shared/widgets/feedback.dart';
+export 'package:upbridge/shared/widgets/fields.dart';
+export 'package:upbridge/shared/widgets/logo.dart';
+export 'package:upbridge/shared/widgets/scaffolds.dart';
+export 'package:upbridge/shared/widgets/surfaces.dart';

@@ -1,0 +1,49 @@
+// Owner: Student 5 · Core, shared, app shell, home & admin
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:upbridge/core/themes/app_tokens.dart';
+
+/// Gives any widget a soft press-down scale and a light haptic tick.
+class Pressable extends StatefulWidget {
+  const Pressable({super.key, required this.child, this.onTap, this.scale = 0.97, this.haptic = true});
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final double scale;
+  final bool haptic;
+
+  @override
+  State<Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<Pressable> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (widget.onTap == null || _down == v) return;
+    setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _set(true),
+      onTapUp: (_) => _set(false),
+      onTapCancel: () => _set(false),
+      onTap: widget.onTap == null
+          ? null
+          : () {
+              if (widget.haptic) HapticFeedback.selectionClick();
+              widget.onTap!();
+            },
+      child: AnimatedScale(
+        scale: _down ? widget.scale : 1,
+        duration: Motion.fast,
+        curve: Motion.curve,
+        child: widget.child,
+      ),
+    );
+  }
+}
