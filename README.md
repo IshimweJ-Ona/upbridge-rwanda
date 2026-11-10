@@ -346,6 +346,19 @@ flutter run
 
 Report any failing command, including the relevant error output, in your pull request. Successful dependency installation or static analysis does not prove that every workflow works.
 
+### Firebase emulators
+
+The local Auth and Firestore emulators are configured on ports `9099` and `8080`:
+
+```bash
+firebase emulators:start --only auth,firestore
+flutter run --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+The Emulator UI is available on port `4000`. Emulator mode is debug-only and does not connect to production. See [`docs/firebase-setup.md`](docs/firebase-setup.md), [`docs/firestore-schema.md`](docs/firestore-schema.md), and [`docs/integration-guide.md`](docs/integration-guide.md). Do not deploy rules or indexes without project lead approval.
+
+Email verification is required by the shared Firestore rules. Firebase Console must have Email/Password sign-in enabled and a configured verification email template. The app-level verification screen is in place; the current signup/login screens still use demo state and must be connected by the authentication owner before real users can complete onboarding.
+
 ## Security
 
 - Never commit passwords, access tokens, API secrets, or private keys.
