@@ -1,4 +1,4 @@
-// Owner: Student 5 - Core, shared, app shell, home & admin
+// Keeps email-verification redirect policy separate and easy to test.
 
 String? emailVerificationRedirect({
   required bool signedIn,

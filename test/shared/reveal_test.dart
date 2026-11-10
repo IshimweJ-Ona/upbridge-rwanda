@@ -1,3 +1,4 @@
+// Tests that staggered reveal animations leave no pending timer after disposal.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/shared/animations/reveal.dart';

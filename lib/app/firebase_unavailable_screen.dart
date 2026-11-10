@@ -1,4 +1,4 @@
-// Owner: Student 5 - Core, shared, app shell, home & admin
+// Shows a safe startup message when Firebase cannot initialize.
 import 'package:flutter/material.dart';
 
 class FirebaseUnavailableApp extends StatelessWidget {

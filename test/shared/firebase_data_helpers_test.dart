@@ -1,3 +1,4 @@
+// Tests timestamp conversion and safe mapping of Firebase service failures.
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/core/errors/app_failure.dart';

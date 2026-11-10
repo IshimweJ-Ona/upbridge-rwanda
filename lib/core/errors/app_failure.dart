@@ -1,4 +1,4 @@
-// Owner: Student 5 - Core, shared, app shell, home & admin
+// Represents safe, typed failures returned by shared application services.
 
 sealed class AppFailure implements Exception {
   const AppFailure(this.code);

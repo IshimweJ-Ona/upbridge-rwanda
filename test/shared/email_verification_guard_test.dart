@@ -1,3 +1,4 @@
+// Tests that Firebase users must verify their email before opening app routes.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/app/router/route_guards.dart';
 

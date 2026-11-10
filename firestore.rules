@@ -1,3 +1,4 @@
+// Requires verified Firebase email claims; feature writes stay closed until reviewed.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {

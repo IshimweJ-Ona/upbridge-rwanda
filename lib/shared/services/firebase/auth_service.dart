@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Wraps shared Firebase Auth state and email-verification operations.
 import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthService {

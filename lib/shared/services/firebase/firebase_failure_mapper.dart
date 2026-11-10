@@ -1,4 +1,4 @@
-// Owner: Student 5 - Core, shared, app shell, home & admin
+// Maps Firebase exceptions to safe application failure types.
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:upbridge/core/errors/app_failure.dart';

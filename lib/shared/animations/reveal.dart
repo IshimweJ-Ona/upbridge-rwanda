@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Adds staggered entrance animations and cancels delayed starts on disposal.
 import 'dart:async';
 
 import 'package:flutter/material.dart';

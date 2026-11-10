@@ -1,4 +1,4 @@
-// Owner: Student 5 - Core, shared, app shell, home & admin
+// Validates Firestore document maps and normalizes timestamp values.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 DateTime? dateTimeFromFirestore(Object? value) {
