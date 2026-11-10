@@ -4,12 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:upbridge/app/app.dart';
+import 'package:upbridge/app/firebase_unavailable_screen.dart';
 import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/shared/services/firebase/firebase_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initFirebase();
+  final firebaseReady = await initFirebase();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -19,5 +20,9 @@ Future<void> main() async {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+  if (!firebaseReady) {
+    runApp(const FirebaseUnavailableApp());
+    return;
+  }
   runApp(const ProviderScope(child: UpBridgeApp()));
 }

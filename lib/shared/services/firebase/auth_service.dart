@@ -6,12 +6,28 @@ class AuthService {
 
   final FirebaseAuth _auth;
 
-  /// Development placeholder: anonymous sign-in gives every device a stable uid.
-  /// Replace with phone sign-in once the product decides how youth log in.
-  Future<String> ensureSignedIn() async {
-    final current = _auth.currentUser;
-    if (current != null) return current.uid;
-    final result = await _auth.signInAnonymously();
-    return result.user!.uid;
+  User? get currentUser => _auth.currentUser;
+
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+  String? get currentEmail => _auth.currentUser?.email;
+
+  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
+
+  Future<void> sendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('No Firebase user is signed in.');
+    if (!user.emailVerified) await user.sendEmailVerification();
   }
+
+  Future<bool> reloadAndCheckEmailVerification() async {
+    if (_auth.currentUser == null) return false;
+    await _auth.currentUser!.reload();
+    final refreshedUser = _auth.currentUser;
+    if (refreshedUser == null) return false;
+    await refreshedUser.getIdToken(true);
+    return _auth.currentUser?.emailVerified ?? false;
+  }
+
+  Future<void> signOut() => _auth.signOut();
 }

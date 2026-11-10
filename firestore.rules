@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    // Roles are trusted only when provisioned as Firebase Auth custom claims.
+    function isAdmin() {
+      return signedIn() && request.auth.token.role == 'admin';
+    }
+
+    function owns(field) {
+      return signedIn() && resource.data[field] == request.auth.uid;
+    }
+
+    function isGenericCollection(collection) {
+      return !(collection in [
+        'users', 'auditLogs', 'appSettings', 'learningPaths',
+        'learningTasks', 'opportunities'
+      ]);
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == 'youth'
+        && request.resource.data.accountStatus == 'active';
+      allow update: if isAdmin() || (signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'photoUrl', 'phone', 'interests', 'learningGoal',
+          'onboarded', 'updatedAt'
+        ]));
+      allow delete: if isAdmin();
+    }
+
+    match /{catalog}/{documentId} {
+      allow read: if catalog in ['learningPaths', 'learningTasks', 'opportunities']
+        && resource.data.status == 'published' && signedIn();
+      allow write: if catalog in ['learningPaths', 'learningTasks', 'opportunities']
+        && isAdmin();
+    }
+
+    match /{collection}/{documentId} {
+      allow read: if isGenericCollection(collection)
+        && (isAdmin()
+          || (collection == 'mentorProfiles' && signedIn())
+          || owns('userId')
+          || owns('ownerId')
+          || owns('requesterId'));
+      // Feature-owned writes stay closed until their field validation and
+      // permitted status transitions are reviewed with each feature owner.
+      allow create, update, delete: if isGenericCollection(collection)
+        && isAdmin();
+    }
+
+    match /auditLogs/{documentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /appSettings/{documentId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
