@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Shows the youth dashboard with sample learning and opportunity summaries.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,10 +27,21 @@ class HomeScreen extends ConsumerWidget {
 
     return PageFrame(
       largeTitle: 'Muraho, ${user.firstName}',
-      eyebrow: data.isFirstDay ? '${SampleData.today} · Your first day' : '${SampleData.today} · Web development path',
+      eyebrow: data.isFirstDay
+          ? '${SampleData.today} · Your first day'
+          : '${SampleData.today} · Web development path',
       actions: [bell, const SizedBox(width: 4)],
       onRefresh: () => Future<void>.delayed(const Duration(milliseconds: 900)),
-      children: data.isFirstDay ? _firstDay(context, data) : _returning(context, data),
+      children: [
+        const NoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Demo preview',
+          body: 'This dashboard uses sample data, not live account records.',
+        ),
+        ...(data.isFirstDay
+            ? _firstDay(context, data)
+            : _returning(context, data)),
+      ],
     );
   }
 
@@ -57,19 +68,44 @@ class HomeScreen extends ConsumerWidget {
               action: 'Start task 1',
               onAction: () => context.push('/task/t1'),
             ),
-      SectionLabel('Stage 1 · HTML and CSS foundations', action: 'Full path', onAction: () => context.go('/learn')),
+      SectionLabel(
+        'Stage 1 · HTML and CSS foundations',
+        action: 'Full path',
+        onAction: () => context.go('/learn'),
+      ),
       ListGroup(
         children: [
-          for (final t in data.tasks.where((t) => t.stage == 1)) TaskRow(task: t, highlight: t.id == 't1', onTap: () => context.push('/task/${t.id}')),
+          for (final t in data.tasks.where((t) => t.stage == 1))
+            TaskRow(
+              task: t,
+              highlight: t.id == 't1',
+              onTap: () => context.push('/task/${t.id}'),
+            ),
         ],
       ),
       const SectionLabel('How UpBridge works'),
       const ListGroup(
         children: [
-          _HowRow('01', 'Do practical tasks', 'Short tasks based on freeCodeCamp and MDN, done in your own time.'),
-          _HowRow('02', 'Get mentor feedback', 'A working professional reviews each task against clear criteria.'),
-          _HowRow('03', 'Build your portfolio', 'Approved work becomes evidence an employer can open and check.'),
-          _HowRow('04', 'Apply with proof', 'Use that evidence to apply for internships, jobs and paid gigs.'),
+          _HowRow(
+            '01',
+            'Do practical tasks',
+            'Short tasks based on freeCodeCamp and MDN, done in your own time.',
+          ),
+          _HowRow(
+            '02',
+            'Get mentor feedback',
+            'A working professional reviews each task against clear criteria.',
+          ),
+          _HowRow(
+            '03',
+            'Build your portfolio',
+            'Approved work becomes evidence an employer can open and check.',
+          ),
+          _HowRow(
+            '04',
+            'Apply with proof',
+            'Use that evidence to apply for internships, jobs and paid gigs.',
+          ),
         ],
       ),
       const SizedBox(height: 16),
@@ -86,7 +122,9 @@ class HomeScreen extends ConsumerWidget {
   List<Widget> _returning(BuildContext context, AppData data) {
     final current = data.currentTask;
     final irembo = data.opportunity('irembo');
-    final upcoming = data.mySessions.where((s) => s.state == SessionState.upcoming).toList();
+    final upcoming = data.mySessions
+        .where((s) => s.state == SessionState.upcoming)
+        .toList();
     final applied = irembo == null ? null : data.applicationFor(irembo.id);
 
     return [
@@ -120,7 +158,10 @@ class HomeScreen extends ConsumerWidget {
             ),
           if (!data.checkInDone)
             ListRow(
-              leading: const IconTile(Icons.fact_check_outlined, tone: Tone.success),
+              leading: const IconTile(
+                Icons.fact_check_outlined,
+                tone: Tone.success,
+              ),
               title: 'Monthly check-in',
               meta: '3 questions · 2 min',
               onTap: () => context.push('/check-in'),
@@ -134,12 +175,17 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       if (irembo != null) ...[
-        SectionLabel('Matched to your evidence', action: 'All jobs', onAction: () => context.go('/jobs')),
+        SectionLabel(
+          'Matched to your evidence',
+          action: 'All jobs',
+          onAction: () => context.go('/jobs'),
+        ),
         OpportunityCard(
           opportunity: irembo,
           heroTag: 'opp-irembo-home',
           applied: applied?.status,
-          onTap: () => context.push('/opportunity/irembo', extra: 'opp-irembo-home'),
+          onTap: () =>
+              context.push('/opportunity/irembo', extra: 'opp-irembo-home'),
         ),
       ],
       const SectionLabel('Your evidence'),
@@ -158,8 +204,11 @@ class HomeScreen extends ConsumerWidget {
         return NextStepCard(
           eyebrow: '1 change requested',
           icon: Icons.edit_note_rounded,
-          title: task.id == 't3' ? 'Fix the footer on small screens' : 'Make the change your mentor asked for',
-          body: '${review?.mentorName.split(' ').first ?? 'Your mentor'} reviewed “${task.title}”: ${review?.metCount ?? 3} of ${review?.results.length ?? 4} criteria met. Make one change and it’s ready for your portfolio.',
+          title: task.id == 't3'
+              ? 'Fix the footer on small screens'
+              : 'Make the change your mentor asked for',
+          body:
+              '${review?.mentorName.split(' ').first ?? 'Your mentor'} reviewed “${task.title}”: ${review?.metCount ?? 3} of ${review?.results.length ?? 4} criteria met. Make one change and it’s ready for your portfolio.',
           action: 'Open feedback',
           onAction: () => context.push('/task-feedback/${task.id}'),
         );
@@ -176,7 +225,8 @@ class HomeScreen extends ConsumerWidget {
         return NextStepCard(
           eyebrow: 'Next task',
           title: task.title,
-          body: '${task.summary} Task ${task.number} of ${data.tasks.length} · ${task.duration.toLowerCase()}.',
+          body:
+              '${task.summary} Task ${task.number} of ${data.tasks.length} · ${task.duration.toLowerCase()}.',
           action: 'Start task ${task.number}',
           onAction: () => context.push('/task/${task.id}'),
         );
@@ -199,7 +249,9 @@ class _ProgressSummary extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(SampleData.pathTitle, style: AppText.bodySStrong)),
+              Expanded(
+                child: Text(SampleData.pathTitle, style: AppText.bodySStrong),
+              ),
               MonoLabel('$approved of $total approved'),
             ],
           ),
@@ -225,7 +277,15 @@ class _HowRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 34, child: Text(number, style: AppText.dataMonoStrong.copyWith(color: AppColors.accentText))),
+          SizedBox(
+            width: 34,
+            child: Text(
+              number,
+              style: AppText.dataMonoStrong.copyWith(
+                color: AppColors.accentText,
+              ),
+            ),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
