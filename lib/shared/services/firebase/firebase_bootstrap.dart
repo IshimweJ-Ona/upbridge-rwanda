@@ -6,7 +6,17 @@ import 'package:flutter/foundation.dart';
 
 import 'package:upbridge/shared/services/firebase/firebase_options.dart';
 
-/// Returns false when Firebase isn't configured yet, so the app still opens with demo data.
+/// Resolves the emulator host for local debug devices and simulators.
+String firebaseEmulatorHost({
+  required bool isAndroid,
+  String configuredHost = '',
+}) {
+  final host = configuredHost.trim();
+  if (host.isNotEmpty) return host;
+  return isAndroid ? '10.0.2.2' : '127.0.0.1';
+}
+
+/// Returns false when Firebase setup fails so startup can fail closed.
 Future<bool> initFirebase() async {
   try {
     if (Firebase.apps.isEmpty) {
@@ -15,9 +25,11 @@ Future<bool> initFirebase() async {
       );
     }
     if (kDebugMode && const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) {
-      final host = defaultTargetPlatform == TargetPlatform.android
-          ? '10.0.2.2'
-          : '127.0.0.1';
+      const configuredHost = String.fromEnvironment('FIREBASE_EMULATOR_HOST');
+      final host = firebaseEmulatorHost(
+        isAndroid: defaultTargetPlatform == TargetPlatform.android,
+        configuredHost: configuredHost,
+      );
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
     }

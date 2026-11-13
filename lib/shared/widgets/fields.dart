@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Provides shared text inputs, verification code fields, and toggles.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Adds consistent touch feedback to interactive controls.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

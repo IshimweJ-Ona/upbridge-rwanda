@@ -1,5 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: collection names and status values. Must match docs/SCHEMA.md and firestore.rules.
+// Firestore collection names and statuses shared with firestore.rules and docs/firestore-schema.md.
 
 /// Collection names (one place only). Keep in sync with firestore.rules.
 abstract final class Fs {
@@ -21,7 +20,7 @@ abstract final class Fs {
   static const appSettings = 'appSettings';
 }
 
-/// Submission status values (proposed in docs/SCHEMA.md, confirm at the Friday meeting).
+/// Submission statuses currently written by the shared repository.
 abstract final class SubmissionStatus {
   static const submitted = 'submitted';
   static const changesRequested = 'changesRequested';

@@ -1,2 +1,6 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: One pilot target on the overview: label, value, target, on-track flag.
+// Reuses the shared pilot objective model rather than defining a duplicate.
+import 'package:upbridge/shared/models/models.dart' show Objective;
+
+export 'package:upbridge/shared/models/models.dart' show Objective;
+
+typedef PilotObjective = Objective;

@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Holds the explicitly in-memory demo session and cross-screen sample state.
 import 'dart:async';
 
 import 'package:flutter/material.dart';

@@ -1,2 +1,2 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Reexports the generated platform Firebase options.
 export 'package:upbridge/firebase_options.dart';

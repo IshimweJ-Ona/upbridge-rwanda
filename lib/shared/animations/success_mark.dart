@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Draws the shared animated success checkmark.
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
