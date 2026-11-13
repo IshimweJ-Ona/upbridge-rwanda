@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Provides common page layouts, app bars, back actions, and step indicators.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 

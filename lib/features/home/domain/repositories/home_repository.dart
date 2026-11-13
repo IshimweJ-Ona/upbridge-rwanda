@@ -1,2 +1,6 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: Abstract contract that returns the home summary.
+// Read-only contract for the Firebase-backed youth overview aggregate.
+import '../entities/home_summary.dart';
+
+abstract interface class HomeRepository {
+  Future<HomeSummary> loadSummary(String userId);
+}

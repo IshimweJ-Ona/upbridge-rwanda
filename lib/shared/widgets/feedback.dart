@@ -1,11 +1,11 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Presents shared toast messages, confirmation dialogs, and banners.
 import 'dart:async';
 
-import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:upbridge/shared/animations/pressable.dart';
+import 'package:upbridge/shared/animations/dialog_transitions.dart';
 import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/core/themes/app_text.dart';
 import 'package:upbridge/core/themes/app_tokens.dart';
@@ -29,7 +29,12 @@ class _ActiveToast {
 }
 
 /// Short confirmation that slides up above the tab bar and leaves on its own.
-void showToast(BuildContext context, String message, {IconData icon = Icons.check_circle_rounded, Tone tone = Tone.success}) {
+void showToast(
+  BuildContext context,
+  String message, {
+  IconData icon = Icons.check_circle_rounded,
+  Tone tone = Tone.success,
+}) {
   final overlay = Overlay.of(context, rootOverlay: true);
   _activeToast?.remove();
   late final _ActiveToast handle;
@@ -50,7 +55,12 @@ void showToast(BuildContext context, String message, {IconData icon = Icons.chec
 }
 
 class _Toast extends StatefulWidget {
-  const _Toast({required this.message, required this.icon, required this.tone, required this.onDone});
+  const _Toast({
+    required this.message,
+    required this.icon,
+    required this.tone,
+    required this.onDone,
+  });
 
   final String message;
   final IconData icon;
@@ -62,8 +72,16 @@ class _Toast extends StatefulWidget {
 }
 
 class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: Motion.base, reverseDuration: Motion.fast);
-  late final Animation<double> _t = CurvedAnimation(parent: _c, curve: Motion.emphasized, reverseCurve: Motion.exit);
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: Motion.base,
+    reverseDuration: Motion.fast,
+  );
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _c,
+    curve: Motion.emphasized,
+    reverseCurve: Motion.exit,
+  );
   Timer? _timer;
 
   @override
@@ -101,7 +119,10 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             animation: _t,
             builder: (context, child) => Opacity(
               opacity: _t.value.clamp(0.0, 1.0),
-              child: Transform.translate(offset: Offset(0, 24 * (1 - _t.value)), child: child),
+              child: Transform.translate(
+                offset: Offset(0, 24 * (1 - _t.value)),
+                child: child,
+              ),
             ),
             child: Material(
               color: AppColors.inverse,
@@ -112,12 +133,28 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                 borderRadius: Radii.rLg,
                 onTap: _dismiss,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   child: Row(
                     children: [
-                      Icon(widget.icon, size: 20, color: widget.tone == Tone.success ? const Color(0xFF7FD3A7) : AppColors.brandOrange),
+                      Icon(
+                        widget.icon,
+                        size: 20,
+                        color: widget.tone == Tone.success
+                            ? const Color(0xFF7FD3A7)
+                            : AppColors.brandOrange,
+                      ),
                       const SizedBox(width: 12),
-                      Expanded(child: Text(widget.message, style: AppText.bodySStrong.copyWith(color: AppColors.textInverse))),
+                      Expanded(
+                        child: Text(
+                          widget.message,
+                          style: AppText.bodySStrong.copyWith(
+                            color: AppColors.textInverse,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -157,13 +194,21 @@ Future<bool> showAppDialog(
       destructive: destructive,
       icon: icon,
     ),
-    transitionBuilder: (ctx, anim, _, child) => FadeScaleTransition(animation: anim, child: child),
+    transitionBuilder: (ctx, anim, _, child) =>
+        dialogFadeScaleTransition(anim, child),
   );
   return result ?? false;
 }
 
 class _AppDialog extends StatelessWidget {
-  const _AppDialog({required this.title, this.body, required this.confirmLabel, required this.cancelLabel, required this.destructive, this.icon});
+  const _AppDialog({
+    required this.title,
+    this.body,
+    required this.confirmLabel,
+    required this.cancelLabel,
+    required this.destructive,
+    this.icon,
+  });
 
   final String title;
   final String? body;
@@ -191,11 +236,18 @@ class _AppDialog extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (icon != null) ...[
-                      IconTile(icon!, tone: destructive ? Tone.danger : Tone.info, size: 40),
+                      IconTile(
+                        icon!,
+                        tone: destructive ? Tone.danger : Tone.info,
+                        size: 40,
+                      ),
                       const SizedBox(height: 14),
                     ],
                     Text(title, style: AppText.titleM),
-                    if (body != null) ...[const SizedBox(height: 8), Text(body!, style: AppText.bodyM)],
+                    if (body != null) ...[
+                      const SizedBox(height: 8),
+                      Text(body!, style: AppText.bodyM),
+                    ],
                     const SizedBox(height: 22),
                     Row(
                       children: [
@@ -211,7 +263,9 @@ class _AppDialog extends StatelessWidget {
                         Expanded(
                           child: AppButton(
                             confirmLabel,
-                            variant: destructive ? ButtonVariant.danger : ButtonVariant.primary,
+                            variant: destructive
+                                ? ButtonVariant.danger
+                                : ButtonVariant.primary,
                             size: ButtonSize.medium,
                             onPressed: () => Navigator.of(context).pop(true),
                           ),
@@ -230,7 +284,11 @@ class _AppDialog extends StatelessWidget {
 }
 
 /// Rounded bottom sheet with a drag handle.
-Future<T?> showAppSheet<T>(BuildContext context, {required String title, required Widget Function(BuildContext) builder}) {
+Future<T?> showAppSheet<T>(
+  BuildContext context, {
+  required String title,
+  required Widget Function(BuildContext) builder,
+}) {
   return showModalBottomSheet<T>(
     context: context,
     useRootNavigator: true,
@@ -238,11 +296,18 @@ Future<T?> showAppSheet<T>(BuildContext context, {required String title, require
     showDragHandle: true,
     backgroundColor: AppColors.surface,
     barrierColor: AppColors.scrim,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.xl))),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.xl)),
+    ),
     builder: (ctx) => SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
+        padding: EdgeInsets.fromLTRB(
+          Space.gutter,
+          0,
+          Space.gutter,
+          16 + MediaQuery.viewInsetsOf(ctx).bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -260,7 +325,12 @@ Future<T?> showAppSheet<T>(BuildContext context, {required String title, require
 // ───────────────────────────── In-app banner ─────────────────────────────
 
 class AppBanner {
-  const AppBanner({required this.title, required this.body, required this.route, this.icon = Icons.notifications_active_rounded});
+  const AppBanner({
+    required this.title,
+    required this.body,
+    required this.route,
+    this.icon = Icons.notifications_active_rounded,
+  });
 
   final String title;
   final String body;
@@ -289,7 +359,9 @@ class BannerController extends Notifier<AppBanner?> {
   }
 }
 
-final bannerProvider = NotifierProvider<BannerController, AppBanner?>(BannerController.new);
+final bannerProvider = NotifierProvider<BannerController, AppBanner?>(
+  BannerController.new,
+);
 
 /// Sits above the router and drops a notification banner in from the top
 /// (the Alice-approved message that appears 3 s after a resubmission).
@@ -317,7 +389,10 @@ class BannerHost extends ConsumerWidget {
             switchInCurve: Motion.emphasized,
             switchOutCurve: Motion.exit,
             transitionBuilder: (child, anim) => SlideTransition(
-              position: Tween(begin: const Offset(0, -1.4), end: Offset.zero).animate(anim),
+              position: Tween(
+                begin: const Offset(0, -1.4),
+                end: Offset.zero,
+              ).animate(anim),
               child: FadeTransition(opacity: anim, child: child),
             ),
             child: banner == null
@@ -329,7 +404,8 @@ class BannerHost extends ConsumerWidget {
                       child: Dismissible(
                         key: ValueKey('d-${banner.title}'),
                         direction: DismissDirection.up,
-                        onDismissed: (_) => ref.read(bannerProvider.notifier).hide(),
+                        onDismissed: (_) =>
+                            ref.read(bannerProvider.notifier).hide(),
                         child: Pressable(
                           onTap: () {
                             ref.read(bannerProvider.notifier).hide();
@@ -348,23 +424,51 @@ class BannerHost extends ConsumerWidget {
                                   Container(
                                     width: 36,
                                     height: 36,
-                                    decoration: BoxDecoration(color: AppColors.brandOrange.withValues(alpha: 0.18), borderRadius: Radii.rMd),
-                                    child: Icon(banner.icon, size: 20, color: AppColors.brandOrange),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.brandOrange.withValues(
+                                        alpha: 0.18,
+                                      ),
+                                      borderRadius: Radii.rMd,
+                                    ),
+                                    child: Icon(
+                                      banner.icon,
+                                      size: 20,
+                                      color: AppColors.brandOrange,
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('UPBRIDGE · NOW', style: AppText.labelMono.copyWith(color: const Color(0xB3FFFFFF))),
+                                        Text(
+                                          'UPBRIDGE · NOW',
+                                          style: AppText.labelMono.copyWith(
+                                            color: const Color(0xB3FFFFFF),
+                                          ),
+                                        ),
                                         const SizedBox(height: 4),
-                                        Text(banner.title, style: AppText.bodySStrong.copyWith(color: AppColors.textInverse)),
+                                        Text(
+                                          banner.title,
+                                          style: AppText.bodySStrong.copyWith(
+                                            color: AppColors.textInverse,
+                                          ),
+                                        ),
                                         const SizedBox(height: 2),
-                                        Text(banner.body, style: AppText.bodyS.copyWith(color: const Color(0xD9FFFFFF))),
+                                        Text(
+                                          banner.body,
+                                          style: AppText.bodyS.copyWith(
+                                            color: const Color(0xD9FFFFFF),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.chevron_right_rounded, color: Color(0xB3FFFFFF)),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: Color(0xB3FFFFFF),
+                                  ),
                                 ],
                               ),
                             ),

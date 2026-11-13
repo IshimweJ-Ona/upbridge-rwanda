@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Defines semantic color roles shared by themes, widgets, and charts.
 import 'package:flutter/material.dart';
 
 /// Colour roles from the Figma variables (page 01 — Foundations).

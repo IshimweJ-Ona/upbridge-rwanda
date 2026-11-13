@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Defines reusable text styles for the product typography scale.
 import 'package:flutter/material.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';

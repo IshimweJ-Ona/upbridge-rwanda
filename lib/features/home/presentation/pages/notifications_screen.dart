@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Displays a user notification feed with read actions.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,7 +38,12 @@ class NotificationsScreen extends ConsumerWidget {
         AnimatedOpacity(
           opacity: unread > 0 ? 1 : 0,
           duration: Motion.base,
-          child: TextLink('Mark all read', onTap: unread > 0 ? () => ref.read(appStoreProvider.notifier).markAllRead() : null),
+          child: TextLink(
+            'Mark all read',
+            onTap: unread > 0
+                ? () => ref.read(appStoreProvider.notifier).markAllRead()
+                : null,
+          ),
         ),
         const SizedBox(width: 12),
       ],
@@ -46,15 +51,29 @@ class NotificationsScreen extends ConsumerWidget {
         if (list.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 24),
-            child: EmptyState(icon: Icons.notifications_off_outlined, title: 'You’re all caught up', body: 'Mentor feedback and replies from employers will appear here.'),
+            child: EmptyState(
+              icon: Icons.notifications_off_outlined,
+              title: 'You’re all caught up',
+              body: 'Mentor feedback and replies from employers will appear here.',
+            ),
           ),
         if (today.isNotEmpty) ...[
           SectionLabel(unread > 0 ? 'Today · $unread new' : 'Today', top: 8),
-          ListGroup(children: [for (final n in today) _NotificationRow(n: n, onTap: () => _open(context, ref, n))]),
+          ListGroup(
+            children: [
+              for (final n in today)
+                _NotificationRow(n: n, onTap: () => _open(context, ref, n)),
+            ],
+          ),
         ],
         if (earlier.isNotEmpty) ...[
           const SectionLabel('Earlier'),
-          ListGroup(children: [for (final n in earlier) _NotificationRow(n: n, onTap: () => _open(context, ref, n))]),
+          ListGroup(
+            children: [
+              for (final n in earlier)
+                _NotificationRow(n: n, onTap: () => _open(context, ref, n)),
+            ],
+          ),
         ],
       ],
     );
@@ -73,7 +92,9 @@ class _NotificationRow extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: Motion.slow,
-        color: n.unread ? AppColors.accentSubtle.withValues(alpha: 0.35) : AppColors.surface,
+        color: n.unread
+            ? AppColors.accentSubtle.withValues(alpha: 0.35)
+            : AppColors.surface,
         padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +108,9 @@ class _NotificationRow extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: Text(n.title, style: AppText.bodyMStrong)),
+                      Expanded(
+                        child: Text(n.title, style: AppText.bodyMStrong),
+                      ),
                       const SizedBox(width: 8),
                       MonoLabel(n.time),
                     ],
@@ -106,7 +129,10 @@ class _NotificationRow extends StatelessWidget {
                 margin: const EdgeInsets.only(top: 6),
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
           ],

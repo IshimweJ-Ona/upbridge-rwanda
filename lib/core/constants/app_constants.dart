@@ -1,2 +1,11 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: Numbers the rules depend on: review due hours (48), OTP length (6) and resend gap (40 s), note minimum (60 characters), mentor limit (12), report threshold (3), session length (30 min). No strings, no widgets.
+// Shared limits and durations used by the application shell and workflows.
+abstract final class AppConstants {
+  static const splashDuration = Duration(seconds: 25);
+  static const otpLength = 6;
+  static const otpResendDelay = Duration(seconds: 40);
+  static const reviewResponseWindow = Duration(hours: 48);
+  static const minimumReviewNoteLength = 60;
+  static const maximumMenteesPerMentor = 12;
+  static const reportEscalationThreshold = 3;
+  static const mentorSessionDuration = Duration(minutes: 30);
+}

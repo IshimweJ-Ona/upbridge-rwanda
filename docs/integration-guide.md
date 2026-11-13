@@ -14,7 +14,7 @@ Before introducing fields or status values, update the contract with Jonathan an
 2. Request your own Firebase Console access from the project owner; never share accounts or service keys.
 3. Obtain Android/iOS native Firebase files through the approved team process; they are ignored locally.
 4. Read `firebase-setup.md`, this guide, and `firestore-schema.md`.
-5. Run `firebase emulators:start --only auth,firestore`; launch with `flutter run --dart-define=USE_FIREBASE_EMULATORS=true` when testing Firebase integration.
+5. On Windows, run `scripts/start_firebase_emulators.ps1`; elsewhere run `firebase emulators:start --project upridge-rwanda-dev --only auth,firestore`. Launch with `flutter run --dart-define=USE_FIREBASE_EMULATORS=true` when testing Firebase integration. For a physical device, also pass `--dart-define=FIREBASE_EMULATOR_HOST=<computer-LAN-IP>`.
 6. Create test accounts only in the emulator or through the approved Firebase Auth process. Application role claims require trusted provisioning.
 7. Implement only your assigned feature and consume shared providers/contracts.
 8. Add feature-owned tests, run `flutter analyze` and `flutter test`, and open a pull request for review.

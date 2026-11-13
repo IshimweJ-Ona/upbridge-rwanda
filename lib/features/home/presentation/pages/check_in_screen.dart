@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Collects and submits the youth monthly check-in.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,33 +43,62 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
       backFallback: '/home',
       footerNote: Row(
         children: [
-          Expanded(child: ProgressLine(answered / 2, color: AppColors.successText, height: 4)),
+          Expanded(
+            child: ProgressLine(
+              answered / 2,
+              color: AppColors.successText,
+              height: 4,
+            ),
+          ),
           const SizedBox(width: 10),
           MonoLabel('$answered of 2 required'),
         ],
       ),
-      footer: [AppButton('Submit check-in', loading: _sending, onPressed: answered == 2 ? _submit : null)],
+      footer: [
+        AppButton(
+          'Submit check-in',
+          loading: _sending,
+          onPressed: answered == 2 ? _submit : null,
+        ),
+      ],
       children: [
         const PageHeading(
           eyebrow: '3 questions · 2 min',
           title: 'How is UpBridge working for you?',
           body: 'Your answers help the pilot team decide what to improve. Only the team sees them.',
         ),
-        const _Question(number: 1, text: 'How useful was UpBridge for you this month?'),
-        ScaleSelector(value: _useful, onChanged: (v) => setState(() => _useful = v)),
+        const _Question(
+          number: 1,
+          text: 'How useful was UpBridge for you this month?',
+        ),
+        ScaleSelector(
+          value: _useful,
+          onChanged: (v) => setState(() => _useful = v),
+        ),
         const SizedBox(height: 28),
-        const _Question(number: 2, text: 'Did you apply for any work this month?'),
+        const _Question(
+          number: 2,
+          text: 'Did you apply for any work this month?',
+        ),
         RadioCards<String>(
           value: _applied,
           onChanged: (v) => setState(() => _applied = v),
           options: const [
             RadioOption(value: 'upbridge', title: 'Yes, through UpBridge'),
-            RadioOption(value: 'elsewhere', title: 'Yes, somewhere else', subtitle: 'For example a friend, a job board or a walk-in'),
+            RadioOption(
+              value: 'elsewhere',
+              title: 'Yes, somewhere else',
+              subtitle: 'For example a friend, a job board or a walk-in',
+            ),
             RadioOption(value: 'no', title: 'Not this month'),
           ],
         ),
         const SizedBox(height: 28),
-        const _Question(number: 3, text: 'What’s one thing we should change?', optional: true),
+        const _Question(
+          number: 3,
+          text: 'What’s one thing we should change?',
+          optional: true,
+        ),
         AppTextField(
           label: 'Your answer',
           controller: _change,
@@ -83,7 +112,11 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
 }
 
 class _Question extends StatelessWidget {
-  const _Question({required this.number, required this.text, this.optional = false});
+  const _Question({
+    required this.number,
+    required this.text,
+    this.optional = false,
+  });
 
   final int number;
   final String text;
