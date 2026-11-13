@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Reads and writes only the shared Firestore fields documented for the pilot.
 // Holds: the only class that talks to Cloud Firestore for the youth journey. Field names follow docs/SCHEMA.md.
 import 'package:cloud_firestore/cloud_firestore.dart';
 

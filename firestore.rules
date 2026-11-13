@@ -37,6 +37,35 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /checkIns/{checkInId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userId', 'monthKey', 'usefulness', 'applied', 'changeNote', 'createdAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.monthKey is string
+        && request.resource.data.monthKey.matches('^\\d{4}-(0[1-9]|1[0-2])$')
+        && checkInId == request.auth.uid + '_' + request.resource.data.monthKey
+        && request.resource.data.usefulness is int
+        && request.resource.data.usefulness >= 1
+        && request.resource.data.usefulness <= 5
+        && request.resource.data.applied is bool
+        && request.resource.data.changeNote is string
+        && request.resource.data.changeNote.size() <= 500
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])
+        && request.resource.data.isRead == true
+        && request.resource.data.readAt == request.time;
+    }
+
     match /{catalog}/{documentId} {
       allow read: if catalog in ['learningPaths', 'learningTasks', 'opportunities']
         && resource.data.status == 'published' && signedIn();

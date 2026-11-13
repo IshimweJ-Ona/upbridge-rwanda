@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Reviews mentor application checks and records the admin decision.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

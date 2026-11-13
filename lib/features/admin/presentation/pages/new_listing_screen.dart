@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Collects and validates a new opportunity listing for the pilot.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

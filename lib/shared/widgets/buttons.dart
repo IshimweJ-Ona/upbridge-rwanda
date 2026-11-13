@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Defines consistent filled, outlined, and icon button styles.
 import 'package:flutter/material.dart';
 
 import 'package:upbridge/shared/animations/pressable.dart';

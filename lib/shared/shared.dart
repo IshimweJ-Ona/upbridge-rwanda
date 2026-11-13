@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Public barrel for shared theme, animation, and widget APIs.
 export 'package:upbridge/shared/animations/effects.dart';
 export 'package:upbridge/shared/animations/page_transitions.dart';
 export 'package:upbridge/shared/animations/pressable.dart';

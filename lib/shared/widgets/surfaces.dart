@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Defines reusable cards, rows, labels, metrics, and empty states.
 import 'package:flutter/material.dart';
 
 import 'package:upbridge/shared/animations/effects.dart';

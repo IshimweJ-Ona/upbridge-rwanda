@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Defines shared spacing, radius, and motion tokens.
 import 'package:flutter/material.dart';
 
 /// Spacing scale from the `space/*` variables.

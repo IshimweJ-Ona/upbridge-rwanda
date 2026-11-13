@@ -1,2 +1,8 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: Abstract contract: applications to forward, forward, record outcome.
+// Port for admin review actions; application fields remain owned by Kellen's contract.
+import 'package:upbridge/shared/models/models.dart';
+
+abstract interface class AdminApplicationRepository {
+  Future<List<ForwardItem>> listPendingForwards();
+  Future<void> forward(String forwardId);
+  Future<void> recordOutcome(String forwardId, String outcome);
+}
