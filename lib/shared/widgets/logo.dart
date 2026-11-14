@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Renders the UpBridge logo in light and dark contexts.
 import 'package:flutter/material.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';

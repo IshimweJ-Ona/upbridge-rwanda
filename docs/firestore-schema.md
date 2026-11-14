@@ -14,8 +14,8 @@ This document describes the shared names in `Fs` and the operations currently im
 | `mentorshipRequests`, `mentorSessions` | Mentorship lifecycle; feature-defined ID | Boaz to confirm requester/mentor IDs, allowed transitions, and access |
 | `opportunities` | Published opportunities; feature-defined ID | Kellen to confirm publisher, moderation state, fields, and admin operations |
 | `applications` | Youth application; feature-defined ID | Kellen to confirm applicant ownership and status transitions |
-| `notifications` | Per-user notification; feature-defined ID | `userId` ownership and read state to be confirmed by Jonathan/home owner |
-| `checkIns` | Per-user check-in; feature-defined ID | `userId` ownership and answer retention to be confirmed |
+| `notifications` | Per-user notification; feature-defined ID | `userId`, `title`, `body`, optional `route`, `createdAt`, `isRead`, and `readAt`; the recipient can only mark a notification read |
+| `checkIns` | One monthly response; document ID `{uid}_{YYYY-MM}` | `userId`, `monthKey`, `usefulness` (1-5), `applied`, `changeNote` (up to 500 chars), and `createdAt`; immutable after creation |
 | `auditLogs` | Trusted administrative audit events | Server-written only; clients cannot write |
 | `appSettings` | Shared platform settings | Admin writes; signed-in reads |
 

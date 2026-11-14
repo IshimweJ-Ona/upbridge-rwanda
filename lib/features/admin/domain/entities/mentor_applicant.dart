@@ -1,2 +1,3 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: A mentor application with its four checks: ID, work history, reference, code of conduct.
+// Reuses the shared applicant model so the admin demo and domain layer share one type.
+export 'package:upbridge/shared/models/models.dart'
+    show ApplicantState, Check, MentorApplicant;

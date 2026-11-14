@@ -27,6 +27,7 @@ import 'package:upbridge/features/auth/presentation/pages/sign_up_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/welcome_screen.dart';
 import 'package:upbridge/app/auth/verify_email_screen.dart';
+import 'package:upbridge/app/splash/splash_screen.dart';
 import 'package:upbridge/features/home/presentation/pages/check_in_screen.dart';
 import 'package:upbridge/features/home/presentation/pages/home_screen.dart';
 import 'package:upbridge/features/home/presentation/pages/notifications_screen.dart';
@@ -68,20 +69,21 @@ import 'package:upbridge/features/profile/presentation/pages/not_found_screen.da
 import 'package:upbridge/features/profile/presentation/pages/profile_screen.dart';
 import 'package:upbridge/app/router/role_shell.dart';
 import 'package:upbridge/app/router/route_guards.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 const _publicRoutes = {
-  '/welcome',
-  '/signup',
-  '/login',
-  '/forgot',
-  '/verify',
-  '/new-password',
-  '/password-updated',
-  '/verify-email',
+  AppRoutes.welcome,
+  AppRoutes.signup,
+  AppRoutes.login,
+  AppRoutes.forgotPassword,
+  AppRoutes.verifyCode,
+  AppRoutes.newPassword,
+  AppRoutes.passwordUpdated,
+  AppRoutes.verifyEmail,
 };
-const _sharedRoutes = {'/language'};
+const _sharedRoutes = {AppRoutes.language};
 
 /// Re-runs the redirect whenever who is signed in (or their onboarding state) changes.
 class _AuthRefresh extends ChangeNotifier {
@@ -100,6 +102,7 @@ class _AuthRefresh extends ChangeNotifier {
 String? _redirect(Ref ref, GoRouterState state) {
   final user = ref.read(appStoreProvider).user;
   final loc = state.matchedLocation;
+  if (loc == AppRoutes.splash) return null;
   final isPublic = _publicRoutes.contains(loc);
 
   if (Firebase.apps.isNotEmpty) {
@@ -126,13 +129,7 @@ String? _redirect(Ref ref, GoRouterState state) {
     return null;
   }
 
-  final mentorArea = loc.startsWith('/m/') || loc.startsWith('/m-');
-  final adminArea = loc.startsWith('/a/') || loc.startsWith('/a-');
-  return switch (user.role) {
-    Role.youth => (mentorArea || adminArea) ? user.role.home : null,
-    Role.mentor => mentorArea ? null : user.role.home,
-    Role.admin => adminArea ? null : user.role.home,
-  };
+  return roleAreaRedirect(role: user.role, location: loc);
 }
 
 String _id(GoRouterState s) => s.pathParameters['id'] ?? '';
@@ -174,13 +171,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _AuthRefresh(ref);
   final router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/welcome',
+    initialLocation: '/splash',
     refreshListenable: refresh,
     redirect: (context, state) => _redirect(ref, state),
     errorPageBuilder: (context, state) =>
         fadePage(state, const NotFoundScreen()),
     routes: [
-      GoRoute(path: '/', redirect: (_, _) => '/welcome'),
+      GoRoute(path: '/', redirect: (_, _) => '/splash'),
+      _route('/splash', fadePage, (_) => const SplashScreen()),
 
       // ── Auth & onboarding ──
       _route('/welcome', fadePage, (_) => const WelcomeScreen()),

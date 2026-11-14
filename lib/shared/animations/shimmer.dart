@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Provides animated skeleton placeholders for loading content.
 import 'package:flutter/material.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';

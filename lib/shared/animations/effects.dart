@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Provides small decorative motion effects used by shared widgets.
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
