@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Provides reusable selection chips, cards, tabs, and rubric controls.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

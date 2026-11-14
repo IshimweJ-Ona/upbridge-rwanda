@@ -1,409 +1,129 @@
 # UpBridge Rwanda
 
-A career development platform that connects young people in Rwanda with learning opportunities, mentors, and career pathways.
+UpBridge Rwanda is a Flutter career development app for young people in Rwanda. It brings together practical learning, portfolios, mentorship, and career opportunities. The project is actively developed; some screens still use clearly labeled sample data, and feature completion varies by team owner.
 
-UpBridge Rwanda is a Flutter application that helps young people build practical skills, develop professional portfolios, connect with mentors, and discover opportunities for career growth. It is developed by a team of five students using a feature-based architecture.
+## Current status
 
-> **Project status:** This repository contains the Flutter application prototype and its UI structure. Some features use demonstration data. Firebase integration, authentication workflows, Firestore operations, and production configuration are not yet fully implemented or verified. The application is not production-ready.
+- The app starts on a branded splash screen with a bundled Kigali night image.
+- Flutter, Riverpod, and GoRouter provide the app foundation and shared navigation.
+- Firebase Core, Authentication, and Cloud Firestore are configured for local development and emulator use.
+- Shared routing includes email-verification and role-area guards. Authentication screens and role provisioning still need their feature owner to connect real account flows.
+- Jonathan's home and admin integration includes Firestore read boundaries, monthly check-ins, notifications, route policy, and shared app components. Screens backed by `AppStore` remain demo data and are labeled as such.
+- Firestore rules and indexes are present locally. They have not been deployed to the development or production Firebase project.
+- Firebase Storage is not configured as a dependency; image selection is local until an upload backend is agreed.
 
-## Table of Contents
+See [`docs/firestore-schema.md`](docs/firestore-schema.md) and [`docs/integration-guide.md`](docs/integration-guide.md) for contract ownership and handoffs.
 
-- [Overview](#overview)
-- [Features](#features)
-- [Technology Stack](#technology-stack)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Firebase Configuration](#firebase-configuration)
-- [Development Workflow](#development-workflow)
-- [Team Responsibilities](#team-responsibilities)
-- [Code Guidelines](#code-guidelines)
-- [Testing and Verification](#testing-and-verification)
-- [Security](#security)
-- [Project Status and Limitations](#project-status-and-limitations)
-- [Contributing](#contributing)
+## Technology
 
-## Overview
-
-UpBridge Rwanda provides a central platform where young people can:
-
-- Improve their professional and technical skills
-- Access structured learning activities
-- Build and showcase portfolios
-- Receive guidance from experienced mentors
-- Discover internships, jobs, and other career opportunities
-- Track applications and learning progress
-
-The application supports three user roles: learners, mentors, and administrators. The long-term goal is a reliable, accessible, and maintainable platform for youth career development in Rwanda.
-
-## Features
-
-| Feature | Description |
+| Technology | Use |
 |---|---|
-| Authentication and onboarding | Registration, sign-in, and onboarding flows |
-| User profiles | Personal information and professional profile management |
-| Learning | Learning activities, progress tracking, and educational content |
-| Submissions | Submission and review of learning activities and projects |
-| Portfolio | Showcase of completed projects, skills, and achievements |
-| Mentorship | Connecting learners with mentors and supporting mentorship activities |
-| Opportunities | Discovery of internships, jobs, and other opportunities |
-| Applications | Management of applications to available opportunities |
-| Notifications | Updates on relevant activities |
-| Administration | Administrative views and platform management |
-
-> **Note:** The presence of a screen or UI flow does not mean its backend functionality is complete. Some features currently use local demonstration data.
-
-## Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| Flutter | Cross-platform application framework |
-| Dart | Programming language |
-| Riverpod | State management |
-| GoRouter | Navigation and routing |
+| Flutter and Dart | Cross-platform app and UI |
+| Riverpod | State and dependency management |
+| GoRouter | Navigation and role-aware routing |
 | Firebase Core | Firebase initialization |
-| Firebase Authentication | Authentication (planned) |
-| Cloud Firestore | Cloud database (planned) |
+| Firebase Authentication | Auth service and email-verification integration points |
+| Cloud Firestore | Shared repository and data-source integration |
 
-Additional dependencies are listed in `pubspec.yaml`.
-
-## Architecture
-
-The project uses a feature-based structure to separate responsibilities and ease collaboration.
+## Project layout
 
 ```text
 lib/
-├── app/
-│   ├── router/
-│   ├── theme/
-│   └── ...
-├── core/
-│   ├── constants/
-│   ├── errors/
-│   ├── services/
-│   ├── utils/
-│   └── ...
-├── features/
-│   ├── auth/
-│   ├── learning/
-│   ├── submissions/
-│   ├── portfolio/
-│   ├── mentorship/
-│   ├── opportunities/
-│   ├── applications/
-│   ├── notifications/
-│   └── admin/
-├── shared/
-│   ├── services/
-│   ├── widgets/
-│   └── ...
-└── main.dart
-
-test/
-└── widget_test.dart
+  app/          App shell, routing, splash, and unavailable states
+  core/         Shared constants, errors, themes, and utilities
+  features/     Feature-owned presentation, domain, and data code
+  shared/       Shared models, Firebase services, and reusable widgets
+test/           Unit and widget tests
+scripts/        Local Firebase emulator helpers and rule smoke test
+docs/           Firebase setup, schemas, integration, and testing notes
+firestore.rules Firestore authorization rules (local only)
 ```
 
-This structure shows the intended organization. Refer to the repository for the current layout.
+Feature code belongs to its assigned owner. Coordinate changes to shared routes, models, Firebase configuration, rules, and indexes with Jonathan. Do not implement another feature owner's schema based on assumptions; agree on its fields and access rules first.
 
-### Principles
+## Requirements
 
-- Keep feature-specific code inside its feature folder.
-- Place reusable application-wide widgets in `shared/widgets`.
-- Place shared services and infrastructure in `shared` or `core`.
-- Separate presentation, business logic, and data access where applicable.
-- Use Riverpod for state management and GoRouter for navigation.
-- Avoid duplicating shared functionality across features.
+- Flutter and Dart versions compatible with [`pubspec.yaml`](pubspec.yaml)
+- Git
+- For Android: Android Studio and an emulator or device
+- For Firebase emulator checks: Firebase CLI, Node.js, and Java
+- For iOS builds: macOS and Xcode
 
-## Getting Started
-
-### Prerequisites
-
-- [Flutter SDK](https://docs.flutter.dev/get-started/install)
-- [Dart SDK](https://dart.dev/get-dart) compatible with the constraint in `pubspec.yaml`
-- [Git](https://git-scm.com/downloads)
-- [Android Studio](https://developer.android.com/studio) or Visual Studio Code
-- An Android emulator or physical device
-- For iOS development: a Mac with Xcode
-
-Verify your Flutter installation:
+## Get started
 
 ```bash
-flutter doctor
-```
-
-### Installation
-
-1. Clone the repository and enter the project directory:
-
-   ```bash
-   git clone https://github.com/IshimweJ-Ona/upbridge-rwanda.git
-   cd upbridge-rwanda
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   flutter pub get
-   ```
-
-3. Analyze the project:
-
-   ```bash
-   flutter analyze
-   ```
-
-4. Run the application on an emulator or connected device:
-
-   ```bash
-   flutter devices
-   flutter run
-   ```
-
-If the application requires Firebase configuration or local setup not included in the repository, follow the [Firebase Configuration](#firebase-configuration) section or contact the integration lead.
-
-## Firebase Configuration
-
-Firebase is intended to provide backend services, but integration is incomplete. The presence of Firebase dependencies or initialization code does not mean Firebase is fully configured.
-
-Target Firebase project:
-
-```text
-upridge-rwanda-dev
-```
-
-Before using Firebase:
-
-1. Confirm the project lead has granted you access to the correct project.
-2. Confirm the project ID is `upridge-rwanda-dev`.
-3. Confirm the FlutterFire configuration files and their import paths are correct.
-4. Confirm the Android and iOS apps are registered with the correct application identifiers.
-5. Confirm the required Firebase services are enabled.
-6. Follow the integration lead's instructions before changing shared Firebase configuration.
-
-### Firebase CLI
-
-With approval from the integration lead, authenticate the Firebase CLI:
-
-```bash
-firebase login
-firebase projects:list
-```
-
-Do not create a new Firebase project or deploy Firestore rules or indexes without project lead approval.
-
-### Local configuration files
-
-Some Firebase configuration files contain project-specific information and may be excluded from Git. Never commit:
-
-- Private service account keys
-- Firebase Admin SDK credentials
-- Local environment files containing secrets
-- Signing keys or passwords
-- Personal access tokens
-
-If a required local file is missing, ask the integration lead for the approved configuration process.
-
-## Development Workflow
-
-All contributors follow the same Git workflow to reduce conflicts and keep `main` stable.
-
-### Branch strategy
-
-| Branch | Purpose |
-|---|---|
-| `main` | Stable, reviewed project baseline |
-| `feature/*` | New features and assigned development work |
-| `fix/*` | Bug fixes |
-| `docs/*` | Documentation changes |
-
-### Starting work
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b feature/your-task-name
-```
-
-Use a branch name that identifies your assigned task, for example `feature/UB-AUTH`.
-
-### During development
-
-```bash
-git status
-flutter analyze
-flutter test
-```
-
-Commit with clear messages:
-
-```bash
-git add .
-git commit -m "feat: implement assigned feature"
-git push -u origin feature/your-task-name
-```
-
-### Pull requests
-
-1. Push your feature branch to GitHub.
-2. Open a pull request targeting `main`.
-3. Describe what you implemented.
-4. List the important files changed.
-5. Note any known issues or incomplete work.
-6. Request a review from the integration lead.
-7. Merge only after review and approval.
-
-> **Do not push unfinished work directly to `main`.**
-
-## Team Responsibilities and Task Ownership
-
-The UpBridge Rwanda project is developed by five team members. Each member is responsible for specific features and tasks on the Scrum board.
-
-| Team member | Assigned responsibilities | Main tasks |
-|---|---|---|
-| Jonathan Ishimwe | Project setup and integration | Repository setup, package configuration, Firebase setup, architecture, shared widgets, home dashboard, administration, and final integration/release. |
-| Ghislaine Marie Inez | Authentication and user management | User registration, email/password login, logout, onboarding, authentication flows, and user profiles. |
-| Lisa Ineza | Learning and portfolio | Learning paths, learning activities, submissions, progress tracking, and portfolio management. |
-| Boaz Prince Iza | Mentorship | Mentor workspace, mentorship requests, mentor reviews, and mentorship sessions. |
-| Kellen Ashley Mutoni | Career opportunities | Opportunities discovery, opportunity details, applications, and application management. |
-
-### Individual ownership
-
-**1. Jonathan Ishimwe — Project Setup and Integration**
-
-- Repository and GitHub management.
-- Flutter project configuration and dependencies.
-- Firebase project configuration and integration.
-- Application architecture and shared infrastructure.
-- Shared widgets and application shell.
-- Home dashboard and administration.
-- Integration, testing, and release coordination.
-
-**2. Ghislaine Marie Inez — Authentication and User Management**
-
-- Email/password registration.
-- User login and logout.
-- Authentication validation and error handling.
-- Onboarding workflows.
-- User profile management.
-
-**3. Lisa Ineza — Learning and Portfolio**
-
-- Learning paths and learning content.
-- Learning progress tracking.
-- Assignment and project submissions.
-- Submission management.
-- Portfolio creation and management.
-
-**4. Boaz Prince Iza — Mentorship**
-
-- Mentor discovery and profiles.
-- Mentorship requests.
-- Mentor workspace.
-- Mentor reviews and feedback.
-- Mentorship session management.
-
-**5. Kellen Ashley Mutoni — Opportunities and Applications**
-
-- Career opportunities listing.
-- Opportunity details.
-- Opportunity search and filtering.
-- Application submission.
-- Application tracking and management.
-
-### Collaboration rules
-
-- Each member should primarily work on their assigned feature area.
-- Shared files must be coordinated with Jonathan Ishimwe.
-- All members should create feature branches and submit pull requests.
-- No member should push unfinished work directly to `main`.
-- Changes affecting multiple features must be communicated before implementation.
-- All completed tasks should be reflected on the Scrum board.
-
-## Code Guidelines
-
-1. Follow the existing folder structure.
-2. Use descriptive file, class, and variable names.
-3. Keep widgets focused and reusable.
-4. Keep application logic out of screen widgets.
-5. Use Riverpod consistently for state management.
-6. Use GoRouter for navigation.
-7. Use shared constants instead of hardcoding repeated values.
-8. Handle loading, success, empty, and error states.
-9. Do not commit generated build files or local machine configuration.
-10. Do not add new dependencies without team agreement.
-
-Discuss changes to existing architecture or shared APIs with the integration lead before implementing them.
-
-## Testing and Verification
-
-Run these commands before submitting changes:
-
-```bash
+git clone https://github.com/IshimweJ-Ona/upbridge-rwanda.git
+cd upbridge-rwanda
+flutter pub get
 flutter analyze
 flutter test
 flutter devices
 flutter run
 ```
 
-Report any failing command, including the relevant error output, in your pull request. Successful dependency installation or static analysis does not prove that every workflow works.
+Some platform Firebase files are local and ignored by Git. Follow [`docs/firebase-setup.md`](docs/firebase-setup.md) for the approved setup; do not commit service account keys or secrets.
 
-### Firebase emulators
+## Firebase emulators
 
-The local Auth and Firestore emulators are configured on ports `9099` and `8080`:
+Use Auth and Firestore emulators for local Firebase work. The app connects to them in debug builds with:
 
 ```bash
-firebase emulators:start --only auth,firestore
 flutter run --dart-define=USE_FIREBASE_EMULATORS=true
 ```
 
-The Emulator UI is available on port `4000`. Emulator mode is debug-only and does not connect to production. See [`docs/firebase-setup.md`](docs/firebase-setup.md), [`docs/firestore-schema.md`](docs/firestore-schema.md), and [`docs/integration-guide.md`](docs/integration-guide.md). Do not deploy rules or indexes without project lead approval.
+On Windows, start the emulators with:
 
-Email verification is required by the shared Firestore rules. Firebase Console must have Email/Password sign-in enabled and a configured verification email template. The app-level verification screen is in place; the current signup/login screens still use demo state and must be connected by the authentication owner before real users can complete onboarding.
+```powershell
+.\scripts\start_firebase_emulators.ps1
+```
 
-## Security
+Elsewhere, use:
 
-- Never commit passwords, access tokens, API secrets, or private keys.
-- Never share personal Firebase credentials with other contributors.
-- Use your own authorized account.
-- Do not share Firebase Owner access unnecessarily.
-- Use the minimum permissions required for your work.
-- Do not deploy database rules or modify production data without approval.
-- Do not expose private user information in logs, screenshots, or commits.
-- Review staged files before committing.
+```bash
+firebase emulators:start --project upridge-rwanda-dev --only auth,firestore
+```
 
-## Project Status and Limitations
+The default ports are Auth `9099`, Firestore `8080`, and Emulator UI `4000`. Android emulators connect through `10.0.2.2`; physical devices need the computer's reachable LAN address via `FIREBASE_EMULATOR_HOST`. See [`docs/firebase-setup.md`](docs/firebase-setup.md) for platform details.
 
-The repository is under active development. The following areas require implementation or verification:
+### Firestore rules smoke test
 
-- [ ] Complete Firebase initialization and configuration
-- [ ] Functional authentication with Firebase Authentication
-- [ ] Firestore integration for application data
-- [ ] Consistent data models, repositories, and services
-- [ ] Firestore security rules and required indexes
-- [ ] Missing or uncommitted application assets
-- [ ] Correct platform application identifiers
-- [ ] Automated tests for key workflows
-- [ ] Updated documentation and setup instructions
+This check starts isolated demo emulators, verifies email through the Auth Emulator's local verification code, and exercises profile ownership rules. It deletes its temporary emulator accounts and documents when it finishes. Stop other emulators first so the default ports are available:
 
-A feature should be described as complete only after its implementation has been tested.
+```powershell
+firebase emulators:exec --project demo-upbridge-jonathan --only auth,firestore "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_firebase_emulator_rules_smoke.ps1"
+```
 
-## Contributing
+The smoke test checks that unverified writes and cross-user profile writes are denied while a verified owner can create their own profile. It does not replace the remaining check-in, notification, or feature-owner authorization tests. Never use production data for tests.
 
-Contributions are open to the assigned project team.
+## Tests
 
-1. Read this README.
-2. Understand your assigned feature and file ownership.
-3. Pull the latest approved `main` branch.
-4. Create a feature branch.
-5. Implement and test your changes.
-6. Commit and push your branch.
-7. Open a pull request for review.
+Run before opening a pull request:
 
-For questions about architecture, Firebase configuration, shared files, or integration, contact the project integration lead.
+```bash
+flutter analyze
+flutter test
+```
 
-## Repository
+Current unit and widget coverage includes routing policy, splash behavior, shared Firebase helpers, Kigali time and formatting, check-in validation, admin listing validation, and demo-state labeling. The current full suite passes 36 tests. See [`test_plan.md`](test_plan.md) for coverage and known gaps.
 
-[github.com/IshimweJ-Ona/upbridge-rwanda](https://github.com/IshimweJ-Ona/upbridge-rwanda)
+## Team ownership
 
----
+| Owner | Area |
+|---|---|
+| Jonathan Ishimwe | App integration, Firebase setup, shared infrastructure, home, admin, and project-wide testing |
+| Ghislaine Marie Inez | Authentication, onboarding, and user management |
+| Lisa Ineza | Learning, submissions, progress, and portfolio |
+| Boaz Prince Iza | Mentorship and mentor workspace |
+| Kellen Ashley Mutoni | Opportunities and applications |
 
-**UpBridge Rwanda: building skills, connecting talent, and creating opportunities.**
+The authentication screens are not yet connected end to end to Firebase. Admin operations that depend on another owner's unconfirmed Firestore contract remain behind integration boundaries until that contract is agreed. Refer to [`docs/integration-guide.md`](docs/integration-guide.md) for owner-specific handoffs.
+
+## Security and contribution
+
+- Never commit passwords, access tokens, private keys, or service account files.
+- Keep local tests on Firebase emulators; do not deploy rules/indexes or modify production data without explicit project approval.
+- Work in your assigned feature area and coordinate shared API or schema changes.
+- Run analysis and tests, describe known gaps, and submit work through a reviewed pull request.
+- Do not push unfinished work directly to `main`.
+
+Repository: [github.com/IshimweJ-Ona/upbridge-rwanda](https://github.com/IshimweJ-Ona/upbridge-rwanda)

@@ -1,4 +1,4 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
+// Supplies the fixed sample records used by explicitly marked demo flows.
 import 'package:flutter/material.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';

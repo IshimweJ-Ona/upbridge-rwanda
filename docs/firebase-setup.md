@@ -1,6 +1,17 @@
 # Firebase setup
 
-The configured project is `upridge-rwanda-dev`. The existing FlutterFire registrations are Android `com.example.upbridge`, iOS `com.example.upbridge`, and web. The Firebase CLI verified these registrations and the default Firestore database (`nam5`). No project settings were changed.
+The configured project ID is `upridge-rwanda-dev`. It matches `firebase.json`,
+the local Android configuration, and the FlutterFire Android/iOS/web options.
+The local Android package is `com.example.upbridge`. Android configuration and
+`lib/firebase_options.dart` are ignored by Git; the Android file is present in
+this checkout. The iOS `GoogleService-Info.plist` is absent locally, so iOS
+native builds need the approved file from the project owner. FlutterFire options
+do not currently configure Windows, macOS, or Linux desktop.
+
+There is no `.firebaserc`; Firebase CLI commands must name the project to avoid
+relying on a developer's implicit project selection. Keep local work on the
+development project and never deploy rules or indexes without project-lead
+approval.
 
 ## Local prerequisites
 
@@ -9,7 +20,10 @@ The configured project is `upridge-rwanda-dev`. The existing FlutterFire registr
 - Individual Firebase Console access granted by the project lead.
 - Project-specific platform files supplied through the team's approved process.
 
-Run `flutter pub get`. Local `android/app/google-services.json` and `ios/Runner/GoogleService-Info.plist` are ignored by Git. Do not create or share service-account keys. The Dart options contain client identifiers, not privileged credentials.
+Run `flutter pub get`. Local `android/app/google-services.json` and
+`ios/Runner/GoogleService-Info.plist` are ignored by Git. Do not create or share
+service-account keys. The Dart options contain client identifiers, not
+privileged credentials.
 
 ## Email verification requirement
 
@@ -17,7 +31,20 @@ Firebase Auth must have the **Email/Password** provider enabled in the existing 
 
 The current auth screens still use the demo store and phone-based UI. Ghislaine must connect signup/login to Firebase Email/Password and navigate a newly created user to `/verify-email`; until then, the real account flow is not usable end to end. Do not turn demo login into a production bypass.
 
-Start local Auth and Firestore emulators with `firebase emulators:start --only auth,firestore`. The configured ports are Auth `9099`, Firestore `8080`, and Emulator UI `4000`. To connect a debug Flutter run, pass `--dart-define=USE_FIREBASE_EMULATORS=true`. Android emulators use `10.0.2.2`; other debug platforms use loopback. This switch is ignored in release builds.
+Start the Auth and Firestore emulators on Windows from the repository root with
+`.\scripts\start_firebase_emulators.ps1`. The helper selects an installed
+Node version directly when NVM is present and explicitly uses
+`upridge-rwanda-dev`, matching the Flutter app. On other platforms, run
+`firebase emulators:start --project upridge-rwanda-dev --only auth,firestore`.
+The configured ports are Auth `9099`, Firestore `8080`, and Emulator UI `4000`.
+In another terminal, launch Flutter with
+`flutter run --dart-define=USE_FIREBASE_EMULATORS=true`. Android emulators use
+`10.0.2.2`; desktop and simulators default to `127.0.0.1`. A physical phone must
+use the development computer's reachable LAN address, for example:
+`flutter run --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=192.168.1.12`.
+Replace that example with the computer's current LAN address and allow the
+emulator ports through the local firewall. Emulator settings are debug-only;
+the switch is ignored in release builds.
 
 Stop emulators with Ctrl+C. Restarting without an export directory clears emulator data. Never point emulator or integration-test data at the production project.
 
@@ -29,4 +56,10 @@ Verify configuration with `firebase projects:list`, `firebase apps:list --projec
 
 ## Current blockers
 
-The CLI can see registered apps and Firestore, but enabled Authentication providers and Storage configuration were not verified. Platform native config files are not committed. Ask the project owner for approved local config and confirm enabled providers before live sign-in work. Firebase Storage is not currently a Flutter dependency.
+The local emulator startup and Firestore rules parsing were verified on
+13 Nov 2026 with Firebase CLI 15.35.0 and Java 21. Enabled Authentication
+providers, verification-email template settings, and Storage configuration
+remain unverified in Firebase Console. Confirm Email/Password before live
+sign-in work. Firebase Storage is not currently a Flutter dependency. The
+Firebase CLI project-list commands below are read-only; do not run deploy
+commands as part of local setup.

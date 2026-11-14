@@ -1,2 +1,23 @@
-// Owner: Student 5 · Core, shared, app shell, home & admin
-// Holds: The one thing the home screen asks the youth to do next: fix a task, wait for review, start a task, or path complete.
+// A single actionable item selected from the learner's current workflow state.
+enum NextStepKind {
+  reviseTask,
+  awaitReview,
+  continueLearning,
+  addProject,
+  browseOpportunities,
+  completePath,
+}
+
+class NextStep {
+  const NextStep({
+    required this.kind,
+    required this.title,
+    required this.message,
+    this.route,
+  });
+
+  final NextStepKind kind;
+  final String title;
+  final String message;
+  final String? route;
+}

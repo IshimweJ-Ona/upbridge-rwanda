@@ -43,3 +43,18 @@
 - Feature-owned collection writes are denied by the initial rules until each owner supplies verified field and transition requirements. Lisa's portfolio path mismatch is recorded in `firestore-schema.md`.
 - Font files are absent; obtain licensed assets from the team if IBM Plex is required.
 - Jonathan's implementation is recorded in local commits on the feature branch. Nothing was pushed, merged, or deployed to production.
+
+## Firebase workflow follow-up (13 Nov 2026)
+
+- Confirmed `firebase.json`, local Android config, and FlutterFire options use
+  `upridge-rwanda-dev`; local Android package is `com.example.upbridge`.
+- Added a Windows emulator start helper that selects an installed NVM Node
+  binary without changing the machine's active NVM setting and always starts
+  only Auth/Firestore emulators with an explicit project ID.
+- Added a configurable emulator host for physical devices. Android emulator,
+  desktop, and simulator defaults are unchanged.
+- Started and stopped both emulators successfully; Firestore parsed the current
+  rules. No production Firebase settings, rules, indexes, or IAM were changed.
+- Remaining dependencies: Firebase Console Email/Password and verification
+  template settings; an approved iOS plist; Ghislaine's auth/profile integration;
+  and feature-owner collection contracts for complete authorization tests.
