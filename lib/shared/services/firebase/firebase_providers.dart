@@ -6,6 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'package:upbridge/shared/services/firebase/auth_service.dart';
 import 'package:upbridge/shared/services/firebase/upbridge_repository.dart';
+import 'package:upbridge/shared/services/cloudinary_storage_service.dart';
+import 'package:upbridge/shared/services/storage_service.dart';
 
 final firebaseAuthProvider = Provider<FirebaseAuth>(
   (ref) => FirebaseAuth.instance,
@@ -28,3 +30,12 @@ final authStateProvider = StreamProvider<User?>(
 final repositoryProvider = Provider<UpBridgeRepository>(
   (ref) => UpBridgeRepository(db: ref.watch(firestoreProvider)),
 );
+
+/// Uses Cloudinary only when its public image-upload settings are supplied.
+final storageServiceProvider = Provider<StorageService>((ref) {
+  final config = CloudinaryConfig.fromEnvironment();
+  if (!config.isConfigured) return const StorageUnavailable();
+  final service = CloudinaryPublicImageStorageService(config: config);
+  ref.onDispose(service.close);
+  return service;
+});

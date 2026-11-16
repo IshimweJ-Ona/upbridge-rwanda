@@ -2,11 +2,28 @@
 import 'dart:typed_data';
 
 abstract interface class StorageService {
-  Future<Uri> upload({
+  Future<StoredAsset> upload({
     required String path,
     required Uint8List bytes,
     required String contentType,
   });
+}
+
+/// Cloud file metadata returned to a feature repository after a successful upload.
+class StoredAsset {
+  const StoredAsset({
+    required this.secureUrl,
+    required this.publicId,
+    required this.resourceType,
+    required this.format,
+    this.bytes,
+  });
+
+  final Uri secureUrl;
+  final String publicId;
+  final String resourceType;
+  final String format;
+  final int? bytes;
 }
 
 /// Fails explicitly until the team enables and configures Firebase Storage.
@@ -14,13 +31,13 @@ class StorageUnavailable implements StorageService {
   const StorageUnavailable();
 
   @override
-  Future<Uri> upload({
+  Future<StoredAsset> upload({
     required String path,
     required Uint8List bytes,
     required String contentType,
   }) {
     throw UnsupportedError(
-      'Firebase Storage is not configured for this build.',
+      'Cloud media storage is not configured for this build.',
     );
   }
 }

@@ -1,60 +1,45 @@
 # UpBridge Rwanda test plan
 
-Status is recorded for this checkout on 13 Nov 2026. Feature-specific tests remain
-with their owners; this plan tracks Jonathan's startup and cross-feature QA scope.
+This plan tracks the current checkout. It separates automated coverage from flows that remain unimplemented or require owner contracts.
 
-## Local execution
+## Commands
 
 ```bash
 flutter pub get
+dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
-flutter test integration_test
 ```
 
-For emulator checks, start Auth and Firestore with
-`firebase emulators:start --only auth,firestore`, then run the Flutter app with
-`--dart-define=USE_FIREBASE_EMULATORS=true`. Never point these checks at production.
+Firebase rules smoke test (isolated demo project; do not point at production):
 
-## Test cases
+```powershell
+.\scripts\test_firebase_emulator_rules.ps1
+```
 
-| Category | Case and expected behavior | Status |
-|---|---|---|
-| Unit | Splash destination resolves signed-out, unverified, onboarding, and role-home states using existing router conventions. | Passed (`flutter test --no-pub`) |
-| Unit | Firebase emulator host defaults work for Android and local desktop; a supplied LAN host supports physical devices. | Passed (`flutter test --no-pub`) |
-| Widget | Splash renders the supplied Kigali night image, brand content, and account actions without overflow at compact phone and wide desktop sizes. | Passed (`flutter test --no-pub`) |
-| Widget | Configured duration triggers one destination; tapping an account action cancels the timer destination. | Passed (`flutter test --no-pub`) |
-| Widget | Application launches into the splash route. | Passed (`flutter test --no-pub`) |
-| Widget | Youth home and admin overview identify sample content as demo data. | Passed (`flutter test --no-pub`) |
-| Integration | Cold start, relaunch, auth changes, logout, back behavior, and youth/mentor/admin navigation. | Not configured; blocked on app auth integration and `integration_test/` harness |
-| Firebase emulator | Auth email verification plus Firestore owner profile create; reject unverified and cross-user writes. | Passed using disposable Auth and Firestore emulators; temporary users and documents cleared after the run |
-| Firebase rules | Check-in ownership, one-per-month constraints, and notification read-state transition. | Rules are implemented; direct emulator cases remain to be added |
-| Regression | Feature-owned screens and cross-feature routes remain stable after integration. | Pending broader journey coverage; feature owners retain feature-folder tests |
-| Manual | Small-screen/large-text overflow, semantics/accessibility, reduced motion, and visual comparison against the supplied image. | Pending device exploration |
+## Automated coverage
 
-## Known gaps and blockers
+| Area | Coverage |
+|---|---|
+| Unit | Date/currency/phone formatting, Kigali time, check-in validation and payload, admin listing validation, route guard policy, Firebase error and timestamp helpers. |
+| Widget | Splash appearance/navigation, registration/login pending messages, demo-state labeling, shared reveal disposal, and app startup. |
+| Cloudinary service | Multipart request shape, missing configuration, image size/type rejection, response validation, and upload error handling with an HTTP test client. |
+| Firebase emulator | Email verification; allow verified owner profile/check-in writes; reject unverified and cross-user profile writes, invalid check-ins, duplicate submissions, and check-in edits. |
 
-- Firebase-backed login and role provisioning are not connected end to end yet;
-  Ghislaine owns those feature files. Signed-in routing without the app's role
-  record therefore falls back to the existing welcome route.
-- Feature collection permissions depend on schema decisions from their owners.
-  No production rules or indexes are deployed by this work.
-- The supplied reference image is a Google thumbnail. The bundled image is used
-  locally so launch does not depend on a network request.
-- Integration tests require a configured device/emulator and a maintained
-  `integration_test/` harness; none is currently present in the repository.
+## Gaps
 
-## Execution log
+- No `integration_test/` harness currently exists for real app journeys on Android.
+- The current full-suite line coverage is 18.6% (1,094 of 5,877 executable lines), below the assignment's 70% target. Coverage is not yet reported separately for Jonathan-owned code.
+- Notification access, custom-claim admin access, and each teammate-owned entity still need emulator tests after owners confirm their contracts.
+- Auth screens still use demo state; real email/password and Google auth are Ghislaine's work.
+- Portfolio, learning, mentorship, opportunities, and applications still need their owners' persistence contracts before CRUD/security tests can be meaningful.
+- Cloudinary upload tests use a mocked HTTP transport. A live upload cannot run until a free account and a restricted unsigned image preset are configured. Private certificates must wait for a trusted signing service.
+- Physical Android emulator/device launch and release APK evidence still need recording for the assignment; web/desktop builds do not satisfy the mobile requirement.
 
-- `flutter pub get` - passed.
-- `flutter analyze --no-pub` - passed with no issues.
-- `flutter test --no-pub` - passed, 22 tests.
-- `flutter build web --debug --no-pub` - passed; built `build/web` in 44.2s.
-- `firebase emulators:exec` with isolated project `demo-upbridge-jonathan` - passed: unverified profile writes denied; verified owner write allowed; cross-user profile write denied. Temporary Auth accounts and Firestore documents were cleared in the script's `finally` cleanup; emulator shut down after execution.
-- `scripts/start_firebase_emulators.ps1` - started Auth/Firestore and selected the installed Node runtime; stopped after readiness confirmation.
-- The earlier REST smoke attempt used an unsupported direct verified-claim update and failed the positive write case. The current test uses the Auth Emulator's actual email verification OOB code flow and passes; no production project was contacted.
-- `flutter test integration_test` - not run; the repository has no
-  `integration_test/` directory or harness.
-- Firebase emulator authorization tests - not run in this pass; Firebase rules
-  and repositories were not changed. Existing setup notes document incomplete
-  emulator authorization coverage.
+## Latest known results
+
+- `flutter test --no-pub --reporter expanded` passed 42 tests, including the five Cloudinary adapter tests.
+- `flutter analyze --no-pub` passed with no issues after cleanup.
+- `flutter test --no-pub --coverage --reporter compact` passed all 42 tests; generated `coverage/lcov.info` reports 18.6% overall line coverage.
+- The Auth/Firestore rules smoke test passed against a unique disposable `demo-*` project. It confirmed email verification, profile ownership, and check-in validation/immutability against the actual Firestore rules; the emulator shut down and temporary Auth/Firestore data was cleared.
+- `flutter build apk --debug --no-pub` built `build/app/outputs/flutter-apk/app-debug.apk` successfully. No Android emulator or phone is currently attached, so on-device launch remains unverified.
