@@ -16,8 +16,12 @@ class MyMentorshipScreen extends ConsumerWidget {
     final data = ref.watch(appStoreProvider);
     final m = data.mentor('alice');
     final mine = data.mySessions;
-    final upcoming = mine.where((s) => s.state == SessionState.upcoming).toList();
-    final requested = mine.where((s) => s.state == SessionState.requested).toList();
+    final upcoming = mine
+        .where((s) => s.state == SessionState.upcoming)
+        .toList();
+    final requested = mine
+        .where((s) => s.state == SessionState.requested)
+        .toList();
     final past = mine.where((s) => s.state == SessionState.done).toList();
     final reviews = data.reviews;
 
@@ -27,10 +31,14 @@ class MyMentorshipScreen extends ConsumerWidget {
       children: [
         const SizedBox(height: 8),
         SurfaceCard(
-          onTap: () => context.push('/mentor/${m.id}', extra: 'mentor-alice-yours'),
+          onTap: () =>
+              context.push('/mentor/${m.id}', extra: 'mentor-alice-yours'),
           child: Row(
             children: [
-              Hero(tag: 'mentor-alice-yours', child: AppAvatar(m.initials, tone: m.tone, size: 52)),
+              Hero(
+                tag: 'mentor-alice-yours',
+                child: AppAvatar(m.initials, tone: m.tone, size: 52),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -43,7 +51,10 @@ class MyMentorshipScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textMuted,
+              ),
             ],
           ),
         ),
@@ -70,7 +81,10 @@ class MyMentorshipScreen extends ConsumerWidget {
             children: [
               for (final s in requested)
                 ListRow(
-                  leading: const IconTile(Icons.hourglass_top_rounded, tone: Tone.warning),
+                  leading: const IconTile(
+                    Icons.hourglass_top_rounded,
+                    tone: Tone.warning,
+                  ),
                   title: s.topic,
                   meta: '${s.day} · ${s.time}',
                   trailing: const StatusBadge('Requested', tone: Tone.warning),
@@ -84,7 +98,10 @@ class MyMentorshipScreen extends ConsumerWidget {
             children: [
               for (final s in past)
                 ListRow(
-                  leading: const IconTile(Icons.check_rounded, tone: Tone.success),
+                  leading: const IconTile(
+                    Icons.check_rounded,
+                    tone: Tone.success,
+                  ),
                   title: s.topic,
                   meta: '${s.day} · ${s.time} · ${s.mode}',
                 ),
@@ -97,9 +114,15 @@ class MyMentorshipScreen extends ConsumerWidget {
             children: [
               for (final r in reviews)
                 ListRow(
-                  leading: IconTile(r.approved ? Icons.verified_outlined : Icons.edit_note_rounded, tone: r.approved ? Tone.success : Tone.warning),
+                  leading: IconTile(
+                    r.approved
+                        ? Icons.verified_outlined
+                        : Icons.edit_note_rounded,
+                    tone: r.approved ? Tone.success : Tone.warning,
+                  ),
                   title: data.task(r.taskId).title,
-                  meta: '${r.when} · ${r.approved ? 'approved' : 'changes requested'}',
+                  meta:
+                      '${r.when} · ${r.approved ? 'approved' : 'changes requested'}',
                   onTap: () => context.push('/task-feedback/${r.taskId}'),
                 ),
             ],
@@ -119,26 +142,50 @@ class _NextSession extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.inverse, borderRadius: Radii.rXl),
+      decoration: BoxDecoration(
+        color: AppColors.inverse,
+        borderRadius: Radii.rXl,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.videocam_outlined, size: 18, color: AppColors.brandOrange),
+              const Icon(
+                Icons.videocam_outlined,
+                size: 18,
+                color: AppColors.brandOrange,
+              ),
               const SizedBox(width: 8),
-              Expanded(child: MonoLabel('${session.day} · ${session.time} · ${session.mode}', color: AppColors.brandOrange)),
+              Expanded(
+                child: MonoLabel(
+                  '${session.day} · ${session.time} · ${session.mode}',
+                  color: AppColors.brandOrange,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: const Color(0x26FFFFFF), borderRadius: Radii.rSm),
-                child: Text('In 3 days', style: AppText.caption.copyWith(color: AppColors.textInverse)),
+                decoration: BoxDecoration(
+                  color: const Color(0x26FFFFFF),
+                  borderRadius: Radii.rSm,
+                ),
+                child: Text(
+                  'In 3 days',
+                  style: AppText.caption.copyWith(color: AppColors.textInverse),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text(session.topic, style: AppText.titleM.copyWith(color: AppColors.textInverse)),
+          Text(
+            session.topic,
+            style: AppText.titleM.copyWith(color: AppColors.textInverse),
+          ),
           const SizedBox(height: 4),
-          Text('With ${session.mentorName} · 30 minutes', style: AppText.bodyS.copyWith(color: const Color(0xD9FFFFFF))),
+          Text(
+            'With ${session.mentorName} · 30 minutes',
+            style: AppText.bodyS.copyWith(color: const Color(0xD9FFFFFF)),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -157,7 +204,8 @@ class _NextSession extends StatelessWidget {
                 variant: ButtonVariant.outlineOnDark,
                 size: ButtonSize.medium,
                 expand: false,
-                onPressed: () => context.push('/mentor-request/${session.mentorId}'),
+                onPressed: () =>
+                    context.push('/mentor-request/${session.mentorId}'),
               ),
             ],
           ),

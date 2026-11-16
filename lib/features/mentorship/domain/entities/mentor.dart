@@ -1,2 +1,3 @@
 // Owner: Student 3 · Mentorship & mentor workspace
-// Holds: A mentor in the youth directory: name, title, city, area, skills, verified flag, accepting flag, reply time.
+// Reuses the shared mentor model so the demo screens and the domain layer share one type.
+export 'package:upbridge/shared/models/models.dart' show Mentor;

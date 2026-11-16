@@ -24,22 +24,46 @@ class MentorProfileScreen extends ConsumerWidget {
       title: m.name,
       backFallback: '/mentors',
       footer: m.accepting
-          ? [AppButton('Request a session', icon: Icons.event_available_rounded, onPressed: () => context.push('/mentor-request/${m.id}'))]
+          ? [
+              AppButton(
+                'Request a session',
+                icon: Icons.event_available_rounded,
+                onPressed: () => context.push('/mentor-request/${m.id}'),
+              ),
+            ]
           : [
               const AppButton('Full until November', onPressed: null),
               AppButton(
                 'Tell me when there’s space',
                 variant: ButtonVariant.secondary,
-                onPressed: () => showToast(context, 'We’ll notify you when ${m.name.split(' ').first} has space', icon: Icons.notifications_active_outlined),
+                onPressed: () => showToast(
+                  context,
+                  'We’ll notify you when ${m.name.split(' ').first} has space',
+                  icon: Icons.notifications_active_outlined,
+                ),
               ),
             ],
       children: [
         const SizedBox(height: 12),
-        Center(child: heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar)),
+        Center(
+          child: heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar),
+        ),
         const SizedBox(height: 14),
-        Center(child: Text(m.name, style: AppText.titleL, textAlign: TextAlign.center)),
+        Center(
+          child: Text(
+            m.name,
+            style: AppText.titleL,
+            textAlign: TextAlign.center,
+          ),
+        ),
         const SizedBox(height: 4),
-        Center(child: Text('${m.title} · ${m.employer}', style: AppText.bodyM, textAlign: TextAlign.center)),
+        Center(
+          child: Text(
+            '${m.title} · ${m.employer}',
+            style: AppText.bodyM,
+            textAlign: TextAlign.center,
+          ),
+        ),
         const SizedBox(height: 10),
         Center(
           child: Wrap(
@@ -47,9 +71,17 @@ class MentorProfileScreen extends ConsumerWidget {
             runSpacing: 8,
             alignment: WrapAlignment.center,
             children: [
-              StatusBadge('${m.years} yrs experience', icon: Icons.work_history_outlined),
+              StatusBadge(
+                '${m.years} yrs experience',
+                icon: Icons.work_history_outlined,
+              ),
               StatusBadge(m.city, icon: Icons.place_outlined),
-              if (isYours) const StatusBadge('Your mentor', tone: Tone.accent, icon: Icons.favorite_border_rounded),
+              if (isYours)
+                const StatusBadge(
+                  'Your mentor',
+                  tone: Tone.accent,
+                  icon: Icons.favorite_border_rounded,
+                ),
             ],
           ),
         ),
@@ -92,7 +124,9 @@ class MentorProfileScreen extends ConsumerWidget {
                   style: AppText.bodyM.copyWith(color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
-                const MonoLabel('From a Task 3 review · shared with permission'),
+                const MonoLabel(
+                  'From a Task 3 review · shared with permission',
+                ),
               ],
             ),
           ),

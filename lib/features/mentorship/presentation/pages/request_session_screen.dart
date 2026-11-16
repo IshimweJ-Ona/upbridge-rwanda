@@ -15,7 +15,8 @@ class RequestSessionScreen extends ConsumerStatefulWidget {
   final String mentorId;
 
   @override
-  ConsumerState<RequestSessionScreen> createState() => _RequestSessionScreenState();
+  ConsumerState<RequestSessionScreen> createState() =>
+      _RequestSessionScreenState();
 }
 
 class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
@@ -25,10 +26,30 @@ class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
   bool _sending = false;
 
   static const _topics = [
-    RadioOption(value: 'Review my work', title: 'Review my work', subtitle: 'Go through a task or project together', icon: Icons.rate_review_outlined),
-    RadioOption(value: 'Portfolio feedback', title: 'Portfolio feedback', subtitle: 'Get it ready to send to employers', icon: Icons.folder_special_outlined),
-    RadioOption(value: 'Career advice', title: 'Career advice', subtitle: 'Choosing roles, CVs, first-job questions', icon: Icons.explore_outlined),
-    RadioOption(value: 'Interview practice', title: 'Interview practice', subtitle: 'A short mock interview with feedback', icon: Icons.record_voice_over_outlined),
+    RadioOption(
+      value: 'Review my work',
+      title: 'Review my work',
+      subtitle: 'Go through a task or project together',
+      icon: Icons.rate_review_outlined,
+    ),
+    RadioOption(
+      value: 'Portfolio feedback',
+      title: 'Portfolio feedback',
+      subtitle: 'Get it ready to send to employers',
+      icon: Icons.folder_special_outlined,
+    ),
+    RadioOption(
+      value: 'Career advice',
+      title: 'Career advice',
+      subtitle: 'Choosing roles, CVs, first-job questions',
+      icon: Icons.explore_outlined,
+    ),
+    RadioOption(
+      value: 'Interview practice',
+      title: 'Interview practice',
+      subtitle: 'A short mock interview with feedback',
+      icon: Icons.record_voice_over_outlined,
+    ),
   ];
 
   @override
@@ -41,13 +62,22 @@ class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
     setState(() => _sending = true);
     await Future<void>.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
-    final id = ref.read(appStoreProvider.notifier).requestSession(mentorId: widget.mentorId, slot: _slot!, topic: _topic!, note: _note.text.trim());
+    final id = ref
+        .read(appStoreProvider.notifier)
+        .requestSession(
+          mentorId: widget.mentorId,
+          slot: _slot!,
+          topic: _topic!,
+          note: _note.text.trim(),
+        );
     context.pushReplacement('/request-sent/$id');
   }
 
   @override
   Widget build(BuildContext context) {
-    final m = ref.watch(appStoreProvider.select((s) => s.mentor(widget.mentorId)));
+    final m = ref.watch(
+      appStoreProvider.select((s) => s.mentor(widget.mentorId)),
+    );
     final first = m.name.split(' ').first;
     final days = <String, List<SessionSlot>>{};
     for (final s in m.slots) {
@@ -60,13 +90,22 @@ class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
       footerNote: AnimatedSwitcher(
         duration: Motion.base,
         child: Text(
-          _slot == null ? 'Choose a time and a topic' : '${_slot!.label} · ${_topic ?? 'choose a topic'}',
+          _slot == null
+              ? 'Choose a time and a topic'
+              : '${_slot!.label} · ${_topic ?? 'choose a topic'}',
           key: ValueKey('${_slot?.label}$_topic'),
           style: AppText.bodySStrong,
           textAlign: TextAlign.center,
         ),
       ),
-      footer: [AppButton('Send request', icon: Icons.send_rounded, loading: _sending, onPressed: _slot != null && _topic != null ? _send : null)],
+      footer: [
+        AppButton(
+          'Send request',
+          icon: Icons.send_rounded,
+          loading: _sending,
+          onPressed: _slot != null && _topic != null ? _send : null,
+        ),
+      ],
       children: [
         const SizedBox(height: 8),
         Row(
@@ -127,7 +166,8 @@ class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
           tone: Tone.info,
           icon: Icons.videocam_outlined,
           title: '30 minutes on Google Meet',
-          body: '$first confirms within a day. You’ll get the link by SMS and in the app.',
+          body:
+              '$first confirms within a day. You’ll get the link by SMS and in the app.',
         ),
       ],
     );

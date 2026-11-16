@@ -49,9 +49,12 @@ class Mentor {
 }
 
 class SessionSlot {
-  const SessionSlot(this.day, this.time);
+  const SessionSlot(this.day, this.time, {this.startsAt});
   final String day;
   final String time;
+
+  /// The exact UTC instant when the slot comes from Firestore; null for demo slots.
+  final DateTime? startsAt;
   String get label => '$day · $time';
 }
 
@@ -71,6 +74,7 @@ class Session {
     this.mode = 'Google Meet',
     this.note = '',
     this.link = 'https://meet.google.com/',
+    this.startsAt,
   });
 
   final String id;
@@ -86,6 +90,9 @@ class Session {
   final String note;
   final String link;
 
+  /// The exact UTC start time when the session comes from Firestore; null for demo sessions.
+  final DateTime? startsAt;
+
   Session copyWith({SessionState? state, String? day, String? time}) => Session(
     id: id,
     mentorId: mentorId,
@@ -99,6 +106,7 @@ class Session {
     mode: mode,
     note: note,
     link: link,
+    startsAt: startsAt,
   );
 }
 

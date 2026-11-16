@@ -25,14 +25,22 @@ class RequestSentScreen extends ConsumerWidget {
       backFallback: '/mentors',
       onBack: () => context.go('/mentors'),
       footer: [
-        AppButton('Go to my mentorship', onPressed: () => context.pushReplacement('/my-mentorship')),
-        AppButton('Back to mentors', variant: ButtonVariant.secondary, onPressed: () => context.go('/mentors')),
+        AppButton(
+          'Go to my mentorship',
+          onPressed: () => context.pushReplacement('/my-mentorship'),
+        ),
+        AppButton(
+          'Back to mentors',
+          variant: ButtonVariant.secondary,
+          onPressed: () => context.go('/mentors'),
+        ),
       ],
       children: [
         SuccessBlock(
           eyebrow: 'Session request',
           title: 'Request sent to $first',
-          body: '$first usually replies within a day. We’ll text you when the session is confirmed, with the Google Meet link.',
+          body:
+              '$first usually replies within a day. We’ll text you when the session is confirmed, with the Google Meet link.',
         ),
         if (session != null)
           KeyValueTable([

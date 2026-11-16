@@ -16,7 +16,12 @@ class MentorsScreen extends ConsumerStatefulWidget {
 }
 
 class _MentorsScreenState extends ConsumerState<MentorsScreen> {
-  static const _areas = ['All', 'Web development', 'UI/UX design', 'Data analysis'];
+  static const _areas = [
+    'All',
+    'Web development',
+    'UI/UX design',
+    'Data analysis',
+  ];
   String _area = 'All';
   String _query = '';
   final _search = TextEditingController();
@@ -32,11 +37,17 @@ class _MentorsScreenState extends ConsumerState<MentorsScreen> {
     final data = ref.watch(appStoreProvider);
     final hasMentor = !data.isFirstDay;
     final yours = hasMentor ? data.mentor('alice') : null;
-    final next = data.mySessions.where((s) => s.state == SessionState.upcoming).toList();
+    final next = data.mySessions
+        .where((s) => s.state == SessionState.upcoming)
+        .toList();
     final q = _query.trim().toLowerCase();
     final list = data.mentors.where((m) {
       final areaOk = _area == 'All' || m.area == _area;
-      final queryOk = q.isEmpty || m.name.toLowerCase().contains(q) || m.skills.any((s) => s.toLowerCase().contains(q)) || m.city.toLowerCase().contains(q);
+      final queryOk =
+          q.isEmpty ||
+          m.name.toLowerCase().contains(q) ||
+          m.skills.any((s) => s.toLowerCase().contains(q)) ||
+          m.city.toLowerCase().contains(q);
       return areaOk && queryOk;
     }).toList();
 
@@ -53,30 +64,55 @@ class _MentorsScreenState extends ConsumerState<MentorsScreen> {
               children: [
                 Row(
                   children: [
-                    Hero(tag: 'mentor-alice-yours', child: AppAvatar(yours.initials, tone: yours.tone, size: 48)),
+                    Hero(
+                      tag: 'mentor-alice-yours',
+                      child: AppAvatar(
+                        yours.initials,
+                        tone: yours.tone,
+                        size: 48,
+                      ),
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(yours.name, style: AppText.titleS),
-                          Text('${yours.title} · ${yours.city}', style: AppText.bodyS),
+                          Text(
+                            '${yours.title} · ${yours.city}',
+                            style: AppText.bodyS,
+                          ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textMuted,
+                    ),
                   ],
                 ),
                 if (next.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: AppColors.infoSubtle, borderRadius: Radii.rMd),
+                    decoration: BoxDecoration(
+                      color: AppColors.infoSubtle,
+                      borderRadius: Radii.rMd,
+                    ),
                     child: Row(
                       children: [
-                        const Icon(Icons.videocam_outlined, size: 18, color: AppColors.infoText),
+                        const Icon(
+                          Icons.videocam_outlined,
+                          size: 18,
+                          color: AppColors.infoText,
+                        ),
                         const SizedBox(width: 8),
-                        Expanded(child: MonoLabel('Next: ${next.first.day} · ${next.first.time} · ${next.first.mode}', color: AppColors.infoText)),
+                        Expanded(
+                          child: MonoLabel(
+                            'Next: ${next.first.day} · ${next.first.time} · ${next.first.mode}',
+                            color: AppColors.infoText,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -94,7 +130,12 @@ class _MentorsScreenState extends ConsumerState<MentorsScreen> {
           onChanged: (v) => setState(() => _query = v),
         ),
         const SizedBox(height: 12),
-        ChipBar(options: _areas, selected: _area, padding: EdgeInsets.zero, onSelected: (v) => setState(() => _area = v)),
+        ChipBar(
+          options: _areas,
+          selected: _area,
+          padding: EdgeInsets.zero,
+          onSelected: (v) => setState(() => _area = v),
+        ),
         const SizedBox(height: 14),
         AnimatedSwitcher(
           duration: Motion.base,
@@ -119,7 +160,10 @@ class _MentorsScreenState extends ConsumerState<MentorsScreen> {
                         index: i,
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: MentorCard(mentor: list[i], isYours: hasMentor && list[i].isYours),
+                          child: MentorCard(
+                            mentor: list[i],
+                            isYours: hasMentor && list[i].isYours,
+                          ),
                         ),
                       ),
                   ],
@@ -148,7 +192,10 @@ class MentorCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Hero(tag: tag, child: AppAvatar(m.initials, tone: m.tone, size: 44)),
+              Hero(
+                tag: tag,
+                child: AppAvatar(m.initials, tone: m.tone, size: 44),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -156,7 +203,10 @@ class MentorCard extends StatelessWidget {
                   children: [
                     Text(m.name, style: AppText.titleS),
                     const SizedBox(height: 2),
-                    Text('${m.title} · ${m.years} yrs · ${m.city}', style: AppText.bodyS),
+                    Text(
+                      '${m.title} · ${m.years} yrs · ${m.city}',
+                      style: AppText.bodyS,
+                    ),
                   ],
                 ),
               ),
@@ -171,7 +221,10 @@ class MentorCard extends StatelessWidget {
           const SizedBox(height: 12),
           TagWrap(m.helpsWith),
           const SizedBox(height: 12),
-          MonoLabel('${m.reviews} reviews · replies in ${m.replyTime} · ${m.availability}', maxLines: 2),
+          MonoLabel(
+            '${m.reviews} reviews · replies in ${m.replyTime} · ${m.availability}',
+            maxLines: 2,
+          ),
         ],
       ),
     );
