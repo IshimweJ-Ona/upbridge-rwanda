@@ -1,5 +1,7 @@
 # Firestore contract (current shared baseline)
 
+See [`firestore-erd.md`](firestore-erd.md) for the code-backed ERD draft and the teammate decisions needed before it can be treated as final.
+
 This document describes the shared names in `Fs` and the operations currently implemented by `UpBridgeRepository`. It is an integration baseline; feature owners must confirm their fields and status transitions before writing production records. Documents are created by writes; collection constants do not create collections.
 
 | Collection | Purpose / document ID | Current known fields and ownership |
@@ -21,8 +23,10 @@ This document describes the shared names in `Fs` and the operations currently im
 
 Use Firebase Auth UID as identity, ISO-independent Firestore `Timestamp` values for dates, camelCase field names, and bounded documents. Client-supplied role fields never establish privileges. The rules currently permit user creation only with `role: youth` and `accountStatus: active`; assign mentor/admin claims through a trusted administrative process.
 
-`firestore.indexes.json` contains only the three composite indexes required by the current shared repository queries: projects by owner and descending creation time, submissions by user and descending submission time, and published opportunities by deadline. Other feature queries may require additional indexes, which their owners should document and coordinate before changing the shared index file.
+`firestore.indexes.json` currently contains five composite indexes: projects by owner and descending creation time; submissions by user and descending submission time; published opportunities by status and deadline; and notifications by user/time and user/read/time. Other feature queries may require indexes, which their owners should document and coordinate before changing the shared index file.
 
 The initial `firestore.rules` is intentionally restrictive: every Firestore operation requires an authenticated Firebase user with `email_verified == true`; user profile creation is limited to a youth account; published catalogs are readable only by verified users; and feature collection writes require an admin claim until per-feature field and transition rules are reviewed. Mentor access, feature-specific validation, state transitions, and complete admin audit logging remain dependent on the contracts above. Test those rules in the emulator before any deployment.
 
 Lisa's current portfolio data-source note describes `users/{uid}/projects`, while the shared `UpBridgeRepository` uses the top-level `projects` collection with `ownerId`. Lisa and Jonathan must agree on one path before portfolio writes are enabled. No portfolio files were changed.
+
+The shared repository exposes profile, progress, project, submission, and opportunity operations, but its map-based project/submission payloads do not establish full feature schemas; those methods are not yet connected to the corresponding feature screens. `checkIns` and notification reads/read-state updates are the only explicit home data contracts currently implemented. Treat the unconfirmed inventory rows above as planned names, not finalized collections.

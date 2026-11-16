@@ -1,8 +1,14 @@
 // Exercises real Firestore rules against disposable Auth/Firestore emulators.
-const projectId = 'demo-upbridge-jonathan';
+import { randomBytes, randomUUID } from 'node:crypto';
+
+const projectId = process.env.UPBRIDGE_FIREBASE_EMULATOR_PROJECT_ID;
 const authBase = `http://127.0.0.1:${process.env.UPBRIDGE_AUTH_EMULATOR_PORT ?? '9099'}`;
 const firestoreBase = `http://127.0.0.1:${process.env.UPBRIDGE_FIRESTORE_EMULATOR_PORT ?? '8080'}`;
-const apiKey = 'emulator-only-key';
+const apiKey = process.env.UPBRIDGE_FIREBASE_API_KEY ?? 'emulator-only-key';
+
+if (!projectId?.startsWith('demo-')) {
+  throw new Error('The rules smoke test requires a demo-* emulator project ID.');
+}
 
 async function request(url, options = {}) {
   const response = await fetch(url, options);
@@ -42,13 +48,29 @@ async function firestoreCall(path, { token, method = 'GET', body } = {}) {
   });
 }
 
+async function firestoreCommit(writes, token) {
+  return request(
+    `${firestoreBase}/v1/projects/${projectId}/databases/(default)/documents:commit`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ writes }),
+    },
+  );
+}
+
 async function main() {
-  const email = `jonathan-rules-${Date.now()}@example.test`;
+  const runId = randomUUID();
+  const email = `jonathan-rules-${runId}@example.test`;
+  const password = `Emulator-${randomBytes(18).toString('hex')}`;
   let localId;
   try {
     const created = await authCall('accounts:signUp', {
       email,
-      password: 'EmulatorOnly-12345',
+      password,
       returnSecureToken: true,
     });
     assert(created.status === 200, `Auth emulator signup failed: ${JSON.stringify(created.data)}`);
@@ -80,7 +102,7 @@ async function main() {
     assert(verified.status === 200, `Email verification failed: ${JSON.stringify(verified.data)}`);
     const signedIn = await authCall('accounts:signInWithPassword', {
       email,
-      password: 'EmulatorOnly-12345',
+      password,
       returnSecureToken: true,
     });
     assert(signedIn.status === 200, `Verified account sign-in failed: ${JSON.stringify(signedIn.data)}`);
@@ -99,7 +121,72 @@ async function main() {
     });
     assert(ownWrite.status === 200, `Verified owner write denied: ${JSON.stringify(ownWrite.data)}`);
 
-    const foreignWrite = await firestoreCall('users/another-user', {
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const checkInId = `${localId}_${monthKey}`;
+    const checkInName = `projects/${projectId}/databases/(default)/documents/checkIns/${checkInId}`;
+    const checkInFields = {
+      userId: { stringValue: localId },
+      monthKey: { stringValue: monthKey },
+      usefulness: { integerValue: '5' },
+      applied: { booleanValue: true },
+      changeNote: { stringValue: 'Applied the feedback to my project.' },
+    };
+    const validCheckIn = await firestoreCommit([
+      {
+        update: { name: checkInName, fields: checkInFields },
+        updateTransforms: [
+          { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+        ],
+      },
+    ], signedIn.data.idToken);
+    assert(
+      validCheckIn.status === 200,
+      `Valid check-in denied: ${JSON.stringify(validCheckIn.data)}`,
+    );
+
+    const savedCheckIn = await firestoreCall(`checkIns/${checkInId}`, {
+      token: signedIn.data.idToken,
+    });
+    assert(savedCheckIn.status === 200, 'Owner could not read their check-in.');
+    assert(
+      savedCheckIn.data.fields?.userId?.stringValue === localId,
+      'Check-in owner was not persisted.',
+    );
+
+    const duplicateCheckIn = await firestoreCommit([
+      {
+        update: { name: checkInName, fields: checkInFields },
+        updateTransforms: [
+          { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+        ],
+      },
+    ], signedIn.data.idToken);
+    assert(duplicateCheckIn.status === 403, 'User unexpectedly replaced a submitted check-in.');
+
+    const editedCheckIn = await firestoreCall(`checkIns/${checkInId}`, {
+      token: signedIn.data.idToken,
+      method: 'PATCH',
+      body: { fields: { usefulness: { integerValue: '1' } } },
+    });
+    assert(editedCheckIn.status === 403, 'User unexpectedly edited a submitted check-in.');
+
+    const invalidCheckIn = await firestoreCommit([
+      {
+        update: {
+          name: `projects/${projectId}/databases/(default)/documents/checkIns/${localId}_not-a-month`,
+          fields: {
+            ...checkInFields,
+            monthKey: { stringValue: 'not-a-month' },
+          },
+        },
+        updateTransforms: [
+          { fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' },
+        ],
+      },
+    ], signedIn.data.idToken);
+    assert(invalidCheckIn.status === 403, 'Firestore rules accepted an invalid check-in.');
+
+    const foreignWrite = await firestoreCall(`users/${runId}-another-user`, {
       token: signedIn.data.idToken,
       method: 'PATCH',
       body: {
@@ -111,9 +198,11 @@ async function main() {
     });
     assert(foreignWrite.status === 403, 'User unexpectedly wrote another user profile.');
 
-    console.log('PASS: unverified writes denied; verified owner write allowed; foreign write denied.');
+    console.log(
+      'PASS: verification required; owner profile and valid check-in allowed; foreign profile, invalid, duplicate, and edited check-ins denied.',
+    );
   } finally {
-    // Emulator-only endpoints clear all test documents and Auth accounts for this demo project.
+    // Clear all data only inside this run's disposable demo project.
     await request(`${firestoreBase}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {
       method: 'DELETE',
     });
