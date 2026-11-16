@@ -28,10 +28,15 @@ migrate_working_dir/
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins-dependencies
+.flutter-plugins
+.packages
 .pub-cache/
 .pub/
 /build/
 /coverage/
+
+# Firebase CLI local emulator state and generated caches
+/.firebase/
 
 # Local configuration
 .env

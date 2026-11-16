@@ -44,6 +44,13 @@
 - Font files are absent; obtain licensed assets from the team if IBM Plex is required.
 - Jonathan's implementation is recorded in local commits on the feature branch. Nothing was pushed, merged, or deployed to production.
 
+## Jonathan ERD and validation follow-up (16 Nov 2026)
+
+- Added a code-backed ERD draft and documented which entity fields still require their feature owners' confirmation.
+- Added a shared Cloudinary adapter for public images only; feature upload screens and Firestore URL persistence remain owner integration work. Private certificate uploads remain out of scope until a trusted signing endpoint exists.
+- Expanded the Auth/Firestore emulator rules smoke test to exercise verification, profile ownership, and valid/invalid/duplicate/edited check-ins. Each run uses a unique disposable `demo-*` project and clears its data.
+- Latest validation: 42 Flutter tests passed; Flutter analysis passed; Android debug APK built; the expanded disposable emulator rules test passed. Overall line coverage is 18.6%, below the assignment's 70% target. Android device launch, feature-owner data contracts, and production Auth Console settings remain unverified.
+
 ## Firebase workflow follow-up (13 Nov 2026)
 
 - Confirmed `firebase.json`, local Android config, and FlutterFire options use

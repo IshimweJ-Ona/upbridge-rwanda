@@ -58,8 +58,10 @@ Verify configuration with `firebase projects:list`, `firebase apps:list --projec
 
 The local emulator startup and Firestore rules parsing were verified on
 13 Nov 2026 with Firebase CLI 15.35.0 and Java 21. Enabled Authentication
-providers, verification-email template settings, and Storage configuration
-remain unverified in Firebase Console. Confirm Email/Password before live
-sign-in work. Firebase Storage is not currently a Flutter dependency. The
+providers and verification-email template settings remain unverified in
+Firebase Console. Confirm Email/Password before live sign-in work. Public
+profile/portfolio images can use the Cloudinary unsigned preset service after
+account setup; do not upload certificates or private documents through that
+client-side preset. See the README for required `--dart-define` values. The
 Firebase CLI project-list commands below are read-only; do not run deploy
 commands as part of local setup.
