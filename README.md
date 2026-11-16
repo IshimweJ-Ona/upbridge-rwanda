@@ -10,9 +10,9 @@ UpBridge Rwanda is a Flutter career development app for young people in Rwanda. 
 - Shared routing includes email-verification and role-area guards. Authentication screens and role provisioning still need their feature owner to connect real account flows.
 - Jonathan's home and admin integration includes Firestore read boundaries, monthly check-ins, notifications, route policy, and shared app components. Screens backed by `AppStore` remain demo data and are labeled as such.
 - Firestore rules and indexes are present locally. They have not been deployed to the development or production Firebase project.
-- Cloudinary's public-image uploader is implemented behind a provider, but needs your Cloudinary cloud name and a restricted unsigned image preset. It rejects documents and certificates; private files require a trusted signing service.
+- Cloudinary's public-image uploader uses the shared demo cloud name and `upbridge_public_images` preset by default. The preset must exist and be restricted to public images. It rejects documents and certificates; private files require a trusted signing service.
 
-Follow [`docs/cloudinary-setup.md`](docs/cloudinary-setup.md) to create the free-account image preset and pass its public settings to a local run.
+Follow [`docs/cloudinary-setup.md`](docs/cloudinary-setup.md) to create the restricted image preset; the shared demo defaults are already in the app.
 
 See [`docs/firestore-schema.md`](docs/firestore-schema.md) and [`docs/integration-guide.md`](docs/integration-guide.md) for contract ownership and handoffs.
 

@@ -5,6 +5,11 @@ It returns Cloudinary's HTTPS URL and asset metadata so a feature repository can
 store the URL in Firestore. No feature currently calls the adapter, so this is
 an integration point until the relevant feature owner wires it in.
 
+The shared demo defaults are cloud name `vbzq5ssu` and preset
+`upbridge_public_images`. Once that preset is created in this account, teammates
+can run the app without adding Cloudinary flags. These are public configuration
+values, not credentials.
+
 ## Configure a free account
 
 1. Create or sign in to a Cloudinary account and open the Console dashboard.
@@ -18,7 +23,13 @@ an integration point until the relevant feature owner wires it in.
    screenshot. Anyone who obtains an unsigned preset name can use it to upload,
    so keep this preset narrow and monitor usage in Cloudinary.
 
-Run the Flutter app with the two public values:
+The app is preconfigured for these values. Run it normally:
+
+```powershell
+flutter run
+```
+
+To override the defaults for another account or preset, pass public values:
 
 ```bash
 flutter run \
@@ -34,9 +45,9 @@ flutter run `
   --dart-define=CLOUDINARY_UNSIGNED_IMAGE_PRESET=upbridge_public_images
 ```
 
-Replace `your_cloud_name` with the dashboard value. After creating the account
-and preset, give Jonathan only the cloud name and preset name so the feature
-owners can wire their upload flows. Never send the API secret.
+Replace the example cloud name with the dashboard value. Never put or send the
+API secret. After creating the preset, teammates can use the same account by
+running `flutter run` without the override flags.
 
 ## Certificates and private files
 
