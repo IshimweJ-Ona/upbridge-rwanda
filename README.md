@@ -10,7 +10,9 @@ UpBridge Rwanda is a Flutter career development app for young people in Rwanda. 
 - Shared routing includes email-verification and role-area guards. Authentication screens and role provisioning still need their feature owner to connect real account flows.
 - Jonathan's home and admin integration includes Firestore read boundaries, monthly check-ins, notifications, route policy, and shared app components. Screens backed by `AppStore` remain demo data and are labeled as such.
 - Firestore rules and indexes are present locally. They have not been deployed to the development or production Firebase project.
-- Firebase Storage is not configured as a dependency; image selection is local until an upload backend is agreed.
+- Cloudinary's public-image uploader is implemented behind a provider, but needs your Cloudinary cloud name and a restricted unsigned image preset. It rejects documents and certificates; private files require a trusted signing service.
+
+Follow [`docs/cloudinary-setup.md`](docs/cloudinary-setup.md) to create the free-account image preset and pass its public settings to a local run.
 
 See [`docs/firestore-schema.md`](docs/firestore-schema.md) and [`docs/integration-guide.md`](docs/integration-guide.md) for contract ownership and handoffs.
 
@@ -90,10 +92,10 @@ The default ports are Auth `9099`, Firestore `8080`, and Emulator UI `4000`. And
 This check starts isolated demo emulators, verifies email through the Auth Emulator's local verification code, and exercises profile ownership rules. It deletes its temporary emulator accounts and documents when it finishes. Stop other emulators first so the default ports are available:
 
 ```powershell
-firebase emulators:exec --project demo-upbridge-jonathan --only auth,firestore "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_firebase_emulator_rules_smoke.ps1"
+.\scripts\test_firebase_emulator_rules.ps1
 ```
 
-The smoke test checks that unverified writes and cross-user profile writes are denied while a verified owner can create their own profile. It does not replace the remaining check-in, notification, or feature-owner authorization tests. Never use production data for tests.
+The smoke test starts isolated Auth and Firestore emulators under a unique `demo-*` project and checks email verification, profile ownership, and check-in rules. It shuts down afterward and removes temporary emulator data. Never use production data for tests.
 
 ## Tests
 
@@ -104,7 +106,7 @@ flutter analyze
 flutter test
 ```
 
-Current unit and widget coverage includes routing policy, splash behavior, shared Firebase helpers, Kigali time and formatting, check-in validation, admin listing validation, and demo-state labeling. The current full suite passes 36 tests. See [`test_plan.md`](test_plan.md) for coverage and known gaps.
+Current unit and widget coverage includes routing policy, splash behavior, shared Firebase helpers, Kigali time and formatting, check-in validation, admin listing validation, Cloudinary request validation, and demo-state labeling. See [`test_plan.md`](test_plan.md) for latest results and remaining gaps.
 
 ## Team ownership
 

@@ -7,7 +7,6 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
-import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/features/admin/presentation/pages/add_user_screen.dart';
 import 'package:upbridge/features/admin/presentation/pages/admin_jobs_screen.dart';
