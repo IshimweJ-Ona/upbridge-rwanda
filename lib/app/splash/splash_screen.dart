@@ -43,7 +43,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   )..forward();
   late final Timer _timer;
   bool _hasNavigated = false;
-  String? _pendingScreen;
 
   @override
   void initState() {
@@ -75,13 +74,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     } else {
       context.go(destination);
     }
-  }
-
-  // Keep auth entry points on the splash until their owner connects the flows.
-  void _showPendingScreen(String screen) {
-    if (!mounted) return;
-    _timer.cancel();
-    setState(() => _pendingScreen = screen);
   }
 
   @override
@@ -196,35 +188,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               AppButton(
                                 'Create free account',
                                 variant: ButtonVariant.onDark,
-                                onPressed: () =>
-                                    _showPendingScreen('registration'),
+                                onPressed: () => context.go('/signup'),
                               ),
                               const SizedBox(height: 10),
                               AppButton(
                                 'I already have an account',
                                 variant: ButtonVariant.outlineOnDark,
-                                onPressed: () => _showPendingScreen('login'),
+                                onPressed: () => context.go('/login'),
                               ),
-                              if (_pendingScreen case final pendingScreen?) ...[
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: Semantics(
-                                    liveRegion: true,
-                                    child: Text(
-                                      'Waiting for $pendingScreen screen',
-                                      key: const ValueKey(
-                                        'pending-auth-screen',
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      style: AppText.bodyS.copyWith(
-                                        color: AppColors.textInverse.withValues(
-                                          alpha: 0.85,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
                               const SizedBox(height: 14),
                               Center(
                                 child: Text(
