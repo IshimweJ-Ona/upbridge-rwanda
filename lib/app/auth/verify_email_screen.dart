@@ -2,9 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:upbridge/shared/services/firebase/firebase_failure_mapper.dart';
 import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
+import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
+import 'package:upbridge/features/profile/domain/entities/profile.dart';
+import 'package:upbridge/features/profile/presentation/providers/profile_providers.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
 
 class VerifyEmailScreen extends ConsumerStatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -18,6 +23,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   bool _checking = false;
   bool _sent = false;
   bool _verified = false;
+  bool _creatingProfile = false;
   String? _error;
 
   @override
@@ -56,6 +62,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
           _verified = verified;
           if (!verified) _error = 'We have not received confirmation yet.';
         });
+        if (verified) await _createProfile();
       }
     } catch (error) {
       if (mounted) setState(() => _error = _messageFor(error));
@@ -64,7 +71,35 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     }
   }
 
+  Future<void> _createProfile() async {
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user == null) return;
+    final draft = ref.read(registrationDraftProvider);
+    final profile = Profile(
+      uid: user.uid,
+      role: 'youth',
+      accountStatus: 'active',
+      displayName: draft?.displayName ?? user.displayName ?? '',
+      phone: draft?.phone ?? '',
+    );
+    if (mounted) setState(() => _creatingProfile = true);
+    try {
+      await ref.read(profileRepositoryProvider).createYouth(profile);
+      ref.read(appStoreProvider.notifier).setFirebaseProfile(profile);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = _messageFor(error));
+      }
+    } finally {
+      if (mounted) setState(() => _creatingProfile = false);
+    }
+  }
+
   String _messageFor(Object error) {
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      return 'Email verification succeeded, but Firebase denied profile creation. '
+          'Check that the deployed Firestore rules allow verified youth users to create users/{uid}.';
+    }
     final failure = mapFirebaseFailure(error);
     return switch (failure.code) {
       'network-request-failed' || 'unavailable' || 'deadline-exceeded' =>
@@ -121,14 +156,16 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _verified
-                        ? () => context.go('/welcome')
+                    onPressed: _verified && !_creatingProfile
+                        ? () => context.go('/onboarding/goal')
                         : _checking
                         ? null
                         : _checkVerification,
                     child: Text(
                       _verified
-                          ? 'Continue'
+                          ? _creatingProfile
+                                ? 'Setting up…'
+                                : 'Continue'
                           : _checking
                           ? 'Checking…'
                           : 'I verified my email',
