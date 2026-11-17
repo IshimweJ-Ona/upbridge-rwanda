@@ -5,16 +5,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:upbridge/shared/services/firebase/firestore_schema.dart';
 
 class UpBridgeRepository {
-  UpBridgeRepository({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
+  UpBridgeRepository({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _db;
 
   /// Profile. The first write must include role: 'youth' and accountStatus: 'active' (see firestore.rules).
   Future<void> saveProfile(String uid, Map<String, dynamic> data) {
-    return _db.collection(Fs.users).doc(uid).set(
-          {...data, 'updatedAt': FieldValue.serverTimestamp()},
-          SetOptions(merge: true),
-        );
+    return _db.collection(Fs.users).doc(uid).set({
+      ...data,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>> getProfile(String uid) {
+    return _db.collection(Fs.users).doc(uid).get();
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchProfile(String uid) {
@@ -23,14 +28,19 @@ class UpBridgeRepository {
 
   /// One task-progress document per youth per task: id = "{uid}_{taskId}".
   Future<void> setTaskStatus(String uid, String taskId, String status) {
-    return _db.collection(Fs.taskProgress).doc('${uid}_$taskId').set(
-      {'userId': uid, 'taskId': taskId, 'status': status, 'updatedAt': FieldValue.serverTimestamp()},
-      SetOptions(merge: true),
-    );
+    return _db.collection(Fs.taskProgress).doc('${uid}_$taskId').set({
+      'userId': uid,
+      'taskId': taskId,
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchProgress(String uid) {
-    return _db.collection(Fs.taskProgress).where('userId', isEqualTo: uid).snapshots();
+    return _db
+        .collection(Fs.taskProgress)
+        .where('userId', isEqualTo: uid)
+        .snapshots();
   }
 
   Future<String> addProject(String uid, Map<String, dynamic> data) async {
