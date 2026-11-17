@@ -1,13 +1,10 @@
-// Owner: Student 3 · Mentorship & mentor workspace
-// Maps `mentorSessions/{id}` documents to the shared `Session` model and builds
-// the exact field set written when a youth requests a session.
+// Converts mentorSessions documents to and from Session.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:upbridge/features/mentorship/data/models/mentor_model.dart';
 import 'package:upbridge/features/mentorship/domain/entities/session.dart';
 import 'package:upbridge/shared/services/firebase/firestore_converters.dart';
 
-/// Field names in `mentorSessions`.
 abstract final class SessionFields {
   static const requesterId = 'requesterId';
   static const requesterName = 'requesterName';
@@ -65,7 +62,6 @@ abstract final class SessionModel {
     );
   }
 
-  /// The document written for a new request. Only these keys are allowed.
   static Map<String, Object?> toCreateMap(SessionRequest request) => {
     SessionFields.requesterId: request.requesterId,
     SessionFields.requesterName: request.requesterName.trim(),
@@ -81,7 +77,6 @@ abstract final class SessionModel {
     SessionFields.updatedAt: FieldValue.serverTimestamp(),
   };
 
-  /// Soonest first; sessions without a time go last.
   static int compareByStart(Session a, Session b) {
     final left = a.startsAt;
     final right = b.startsAt;

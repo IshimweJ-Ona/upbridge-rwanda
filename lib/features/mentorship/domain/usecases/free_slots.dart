@@ -1,4 +1,3 @@
-// Owner: Student 3 · Mentorship & mentor workspace
 // Works out which of a mentor's offered slots a youth can still book.
 import 'package:upbridge/features/mentorship/domain/entities/session.dart';
 import 'package:upbridge/features/mentorship/domain/entities/session_slot.dart';
@@ -6,12 +5,9 @@ import 'package:upbridge/features/mentorship/domain/entities/session_slot.dart';
 class FreeSlots {
   const FreeSlots({this.minimumNotice = const Duration(hours: 12)});
 
-  /// Mentors need time to confirm, so slots closer than this are not offered.
   final Duration minimumNotice;
 
-  /// Keeps slots that have an exact time, start at least [minimumNotice] from
-  /// [now], and do not clash with the youth's own pending or upcoming sessions.
-  /// Results are sorted soonest first.
+  /// Future slots (12h+ away) the youth hasn't already booked, soonest first.
   List<SessionSlot> call({
     required List<SessionSlot> offered,
     required List<Session> mySessions,

@@ -1,7 +1,5 @@
-// Owner: Student 3 · Mentorship & mentor workspace
-// Implements the session lifecycle on `mentorSessions`: request, status changes
-// with ownership and transition checks, and withdrawal of a pending request.
-// These client checks mirror, but do not replace, the Firestore security rules.
+// Session lifecycle: request, status changes and withdraw.
+// These checks repeat the Firestore rules, they don't replace them.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:upbridge/core/errors/app_failure.dart';

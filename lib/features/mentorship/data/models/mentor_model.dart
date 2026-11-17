@@ -1,6 +1,4 @@
-// Owner: Student 3 · Mentorship & mentor workspace
-// Maps a `mentorProfiles/{mentorUid}` document to the shared `Mentor` model.
-// Every optional field has a safe default so a half-filled profile never crashes a screen.
+// Turns a mentorProfiles document into a Mentor, with defaults for missing fields.
 import 'package:intl/intl.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';
@@ -9,7 +7,7 @@ import 'package:upbridge/features/mentorship/domain/entities/mentor.dart';
 import 'package:upbridge/features/mentorship/domain/entities/session_slot.dart';
 import 'package:upbridge/shared/services/firebase/firestore_converters.dart';
 
-/// Field names in `mentorProfiles`. The document ID is the mentor's Firebase Auth UID.
+/// Doc ID = the mentor's Firebase Auth UID.
 abstract final class MentorFields {
   static const displayName = 'displayName';
   static const title = 'title';
@@ -31,7 +29,7 @@ abstract final class MentorFields {
   static const updatedAt = 'updatedAt';
 }
 
-/// Builds a display slot ("THU 22 OCT", "18:00") in Kigali time from a UTC instant.
+/// Slot label in Kigali time, e.g. THU 22 OCT · 18:00.
 SessionSlot slotFromInstant(DateTime instant) {
   final utc = instant.toUtc();
   final kigali = KigaliTime.fromUtc(utc);
@@ -42,7 +40,6 @@ SessionSlot slotFromInstant(DateTime instant) {
   );
 }
 
-/// "1.4 d" for a day or more, "5 h" below that, "New" when there is no data yet.
 String formatReplyTime(num? hours) {
   if (hours == null || hours <= 0) return 'New';
   if (hours < 24) return '${hours.round()} h';
@@ -85,7 +82,6 @@ abstract final class MentorModel {
     );
   }
 
-  /// A stable avatar colour per mentor so it does not change between launches.
   static Tone toneFor(String id) {
     final sum = id.codeUnits.fold<int>(0, (total, unit) => total + unit);
     return _tones[sum % _tones.length];

@@ -1,11 +1,8 @@
-// Owner: Student 3 · Mentorship & mentor workspace
-// Holds: the persisted session lifecycle (status values and allowed transitions)
-// and the validated request a youth sends. The display model is the shared `Session`.
+// Session statuses, allowed changes, and the request a youth sends.
 import 'package:upbridge/shared/models/models.dart';
 
 export 'package:upbridge/shared/models/models.dart' show Session, SessionState;
 
-/// Who is changing a session. UI checks only; Firestore rules must enforce the same.
 enum SessionActor { youth, mentor }
 
 /// Status values stored in `mentorSessions.status`.
@@ -18,15 +15,9 @@ abstract final class MentorSessionStatus {
 
   static const all = {requested, confirmed, declined, cancelled, completed};
 
-  /// Statuses that still hold a mentor's time slot.
   static const active = {requested, confirmed};
 
-  /// Every permitted change per actor. Anything not listed is rejected.
-  ///
-  /// - youth: cancels a pending or confirmed session (a pending one can also
-  ///   be withdrawn, which deletes the document instead).
-  /// - mentor: confirms or declines a pending request; completes or cancels a
-  ///   confirmed session.
+  /// Youth can only cancel. Mentor confirms/declines a request, then completes/cancels it.
   static bool canTransition({
     required String from,
     required String to,
@@ -43,8 +34,7 @@ abstract final class MentorSessionStatus {
     };
   }
 
-  /// Maps a stored status to the screen state. Cancelled or unknown statuses
-  /// return null so lists can hide them.
+  /// Cancelled sessions map to null so lists hide them.
   static SessionState? toState(String? status) => switch (status) {
     requested => SessionState.requested,
     confirmed => SessionState.upcoming,
@@ -54,7 +44,6 @@ abstract final class MentorSessionStatus {
   };
 }
 
-/// What a youth sends from "Request a session" (M3). Validated before any write.
 class SessionRequest {
   const SessionRequest({
     required this.requesterId,
@@ -80,7 +69,6 @@ class SessionRequest {
   final String note;
   final int durationMinutes;
 
-  /// Returns a user-facing message, or null when the request can be sent.
   String? validate({DateTime? now}) {
     if (requesterId.trim().isEmpty) {
       return 'Sign in before requesting a session.';

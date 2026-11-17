@@ -53,7 +53,7 @@ class SessionSlot {
   final String day;
   final String time;
 
-  /// The exact UTC instant when the slot comes from Firestore; null for demo slots.
+  /// Real start time (UTC) from Firestore, null for demo data.
   final DateTime? startsAt;
   String get label => '$day · $time';
 }
@@ -90,7 +90,7 @@ class Session {
   final String note;
   final String link;
 
-  /// The exact UTC start time when the session comes from Firestore; null for demo sessions.
+  /// Real start time (UTC) from Firestore, null for demo data.
   final DateTime? startsAt;
 
   Session copyWith({SessionState? state, String? day, String? time}) => Session(

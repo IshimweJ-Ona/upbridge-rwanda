@@ -1,6 +1,4 @@
-// Owner: Student 3 · Mentorship & mentor workspace
-// Reads and writes `mentorSessions`. Status changes and withdrawals run in a
-// transaction so the check and the write see the same document version.
+// Reads and writes mentorSessions. Updates and deletes run in a transaction.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:upbridge/features/mentorship/data/models/session_model.dart';
@@ -14,8 +12,7 @@ class SessionRemoteDataSource {
   CollectionReference<Map<String, dynamic>> get _sessions =>
       _firestore.collection(Fs.mentorSessions);
 
-  /// Single-field equality queries only, so no composite index is needed;
-  /// the repository sorts by start time on the client.
+  /// One where filter only, so no composite index is needed.
   Stream<QuerySnapshot<Map<String, dynamic>>> watchForYouth(String youthId) =>
       _sessions
           .where(SessionFields.requesterId, isEqualTo: youthId)
@@ -36,8 +33,7 @@ class SessionRemoteDataSource {
     return reference.id;
   }
 
-  /// Reads the current document and lets [buildUpdate] validate it and return
-  /// the fields to change. [buildUpdate] throws to abort without writing.
+  /// buildUpdate checks the current data and returns the changes, or throws.
   Future<void> update(
     String sessionId,
     Map<String, Object?> Function(Map<String, dynamic>? current) buildUpdate,
@@ -53,7 +49,6 @@ class SessionRemoteDataSource {
     });
   }
 
-  /// Deletes the document after [check] approves its current data.
   Future<void> delete(
     String sessionId,
     void Function(Map<String, dynamic>? current) check,

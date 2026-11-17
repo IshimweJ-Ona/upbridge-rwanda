@@ -1,4 +1,3 @@
-// Owner: Student 3 · Mentorship & mentor workspace
 // Maps verified `mentorProfiles` documents to `Mentor` and sorts them by name.
 import 'package:upbridge/features/mentorship/data/datasources/mentor_directory_data_source.dart';
 import 'package:upbridge/features/mentorship/data/models/mentor_model.dart';

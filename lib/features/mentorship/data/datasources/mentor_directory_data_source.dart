@@ -1,6 +1,4 @@
-// Owner: Student 3 · Mentorship & mentor workspace
-// Reads verified mentor profiles from `mentorProfiles`. Read-only: mentors edit
-// their own profile from the mentor workspace, and admins verify them.
+// Reads verified mentor profiles from mentorProfiles (read-only).
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:upbridge/features/mentorship/data/models/mentor_model.dart';
@@ -11,8 +9,7 @@ class MentorDirectoryDataSource {
 
   final FirebaseFirestore _firestore;
 
-  /// Single-field equality query, so no composite index is needed; the
-  /// repository sorts by name on the client.
+  /// One where filter only, so no composite index is needed.
   Stream<QuerySnapshot<Map<String, dynamic>>> watchVerified() => _firestore
       .collection(Fs.mentorProfiles)
       .where(MentorFields.verified, isEqualTo: true)
