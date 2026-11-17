@@ -57,19 +57,43 @@ class AppTextField extends StatefulWidget {
 }
 
 class _AppTextFieldState extends State<AppTextField> {
-  late final TextEditingController _controller = widget.controller ?? TextEditingController(text: widget.initialValue);
+  late TextEditingController _controller;
+  bool _ownsController = false;
   final FocusNode _focus = FocusNode();
   late bool _hidden = widget.obscure;
 
   @override
   void initState() {
     super.initState();
+    _setController(widget);
     _focus.addListener(() => setState(() {}));
+  }
+
+  void _setController(AppTextField field) {
+    if (field.controller != null) {
+      _controller = field.controller!;
+      _ownsController = false;
+    } else {
+      _controller = TextEditingController(text: field.initialValue);
+      _ownsController = true;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AppTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      if (_ownsController) _controller.dispose();
+      _setController(widget);
+    }
+    if (oldWidget.obscure != widget.obscure) {
+      _hidden = widget.obscure;
+    }
   }
 
   @override
   void dispose() {
-    if (widget.controller == null) _controller.dispose();
+    if (_ownsController) _controller.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -80,8 +104,8 @@ class _AppTextFieldState extends State<AppTextField> {
     final borderColor = hasError
         ? AppColors.dangerText
         : _focus.hasFocus
-            ? AppColors.focus
-            : AppColors.borderStrong;
+        ? AppColors.focus
+        : AppColors.borderStrong;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,7 +113,8 @@ class _AppTextFieldState extends State<AppTextField> {
         Row(
           children: [
             Expanded(child: Text(widget.label, style: AppText.bodySStrong)),
-            if (widget.trailingNote != null) Text(widget.trailingNote!, style: AppText.caption),
+            if (widget.trailingNote != null)
+              Text(widget.trailingNote!, style: AppText.caption),
           ],
         ),
         const SizedBox(height: 6),
@@ -99,7 +124,10 @@ class _AppTextFieldState extends State<AppTextField> {
           decoration: BoxDecoration(
             color: widget.readOnly ? AppColors.canvas : AppColors.surface,
             borderRadius: Radii.rMd,
-            border: Border.all(color: borderColor, width: (_focus.hasFocus || hasError) ? 1.6 : 1),
+            border: Border.all(
+              color: borderColor,
+              width: (_focus.hasFocus || hasError) ? 1.6 : 1,
+            ),
           ),
           child: TextField(
             controller: _controller,
@@ -122,16 +150,22 @@ class _AppTextFieldState extends State<AppTextField> {
               hintStyle: AppText.bodyM.copyWith(color: AppColors.textMuted),
               prefixText: widget.prefixText,
               prefixStyle: AppText.bodyM.copyWith(color: AppColors.textMuted),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 13,
+              ),
               suffixIcon: widget.obscure
                   ? IconButton(
                       tooltip: _hidden ? 'Show password' : 'Hide password',
                       onPressed: () => setState(() => _hidden = !_hidden),
                       icon: AnimatedSwitcher(
                         duration: Motion.fast,
-                        transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
+                        transitionBuilder: (child, a) =>
+                            ScaleTransition(scale: a, child: child),
                         child: Icon(
-                          _hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          _hidden
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
                           key: ValueKey(_hidden),
                           size: 20,
                           color: AppColors.textSecondary,
@@ -139,8 +173,12 @@ class _AppTextFieldState extends State<AppTextField> {
                       ),
                     )
                   : widget.suffixIcon == null
-                      ? null
-                      : Icon(widget.suffixIcon, size: 20, color: AppColors.textSecondary),
+                  ? null
+                  : Icon(
+                      widget.suffixIcon,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
             ),
           ),
         ),
@@ -156,19 +194,30 @@ class _AppTextFieldState extends State<AppTextField> {
                     children: [
                       const Padding(
                         padding: EdgeInsets.only(top: 1),
-                        child: Icon(Icons.error_outline_rounded, size: 15, color: AppColors.dangerText),
+                        child: Icon(
+                          Icons.error_outline_rounded,
+                          size: 15,
+                          color: AppColors.dangerText,
+                        ),
                       ),
                       const SizedBox(width: 6),
-                      Expanded(child: Text(widget.error!, style: AppText.caption.copyWith(color: AppColors.dangerText))),
+                      Expanded(
+                        child: Text(
+                          widget.error!,
+                          style: AppText.caption.copyWith(
+                            color: AppColors.dangerText,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 )
               : widget.helper == null
-                  ? const SizedBox(width: double.infinity)
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(widget.helper!, style: AppText.caption),
-                    ),
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(widget.helper!, style: AppText.caption),
+                ),
         ),
       ],
     );
@@ -177,7 +226,13 @@ class _AppTextFieldState extends State<AppTextField> {
 
 /// Six boxes for the SMS code; moves focus forward and back automatically.
 class OtpField extends StatefulWidget {
-  const OtpField({super.key, this.length = 6, this.initial = '', this.onChanged, this.hasError = false});
+  const OtpField({
+    super.key,
+    this.length = 6,
+    this.initial = '',
+    this.onChanged,
+    this.hasError = false,
+  });
 
   final int length;
   final String initial;
@@ -191,9 +246,14 @@ class OtpField extends StatefulWidget {
 class _OtpFieldState extends State<OtpField> {
   late final List<TextEditingController> _c = List.generate(
     widget.length,
-    (i) => TextEditingController(text: i < widget.initial.length ? widget.initial[i] : ''),
+    (i) => TextEditingController(
+      text: i < widget.initial.length ? widget.initial[i] : '',
+    ),
   );
-  late final List<FocusNode> _f = List.generate(widget.length, (_) => FocusNode());
+  late final List<FocusNode> _f = List.generate(
+    widget.length,
+    (_) => FocusNode(),
+  );
 
   @override
   void initState() {
@@ -253,8 +313,8 @@ class _OtpFieldState extends State<OtpField> {
                   color: widget.hasError
                       ? AppColors.dangerText
                       : _f[i].hasFocus
-                          ? AppColors.focus
-                          : AppColors.borderStrong,
+                      ? AppColors.focus
+                      : AppColors.borderStrong,
                   width: _f[i].hasFocus ? 1.6 : 1,
                 ),
               ),
@@ -266,7 +326,11 @@ class _OtpFieldState extends State<OtpField> {
                 textAlign: TextAlign.center,
                 style: AppText.dataMonoL,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(border: InputBorder.none, counterText: '', isDense: true),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  counterText: '',
+                  isDense: true,
+                ),
                 onChanged: (v) => _changed(i, v),
               ),
             ),
@@ -279,7 +343,14 @@ class _OtpFieldState extends State<OtpField> {
 
 /// Checkbox with a label; the box fills and the tick pops in.
 class CheckRow extends StatelessWidget {
-  const CheckRow({super.key, required this.label, required this.value, required this.onChanged, this.error, this.subtitle});
+  const CheckRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.error,
+    this.subtitle,
+  });
 
   final String label;
   final String? subtitle;
@@ -306,13 +377,24 @@ class CheckRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: value ? AppColors.actionPrimary : AppColors.surface,
                   borderRadius: Radii.rSm,
-                  border: Border.all(color: error != null ? AppColors.dangerText : (value ? AppColors.actionPrimary : AppColors.borderStrong), width: 1.4),
+                  border: Border.all(
+                    color: error != null
+                        ? AppColors.dangerText
+                        : (value
+                              ? AppColors.actionPrimary
+                              : AppColors.borderStrong),
+                    width: 1.4,
+                  ),
                 ),
                 child: AnimatedScale(
                   scale: value ? 1 : 0,
                   duration: Motion.base,
                   curve: Motion.emphasized,
-                  child: const Icon(Icons.check_rounded, size: 16, color: AppColors.onPrimary),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: AppColors.onPrimary,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -320,8 +402,14 @@ class CheckRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: AppText.bodyS.copyWith(color: AppColors.textPrimary)),
-                    if (subtitle != null) Text(subtitle!, style: AppText.caption),
+                    Text(
+                      label,
+                      style: AppText.bodyS.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(subtitle!, style: AppText.caption),
                   ],
                 ),
               ),
@@ -331,7 +419,10 @@ class CheckRow extends StatelessWidget {
         if (error != null)
           Padding(
             padding: const EdgeInsets.only(top: 6, left: 34),
-            child: Text(error!, style: AppText.caption.copyWith(color: AppColors.dangerText)),
+            child: Text(
+              error!,
+              style: AppText.caption.copyWith(color: AppColors.dangerText),
+            ),
           ),
       ],
     );
@@ -374,7 +465,13 @@ class AppSwitch extends StatelessWidget {
               decoration: const BoxDecoration(
                 color: AppColors.surface,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Color(0x2213294B), blurRadius: 3, offset: Offset(0, 1))],
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x2213294B),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
               ),
             ),
           ),
