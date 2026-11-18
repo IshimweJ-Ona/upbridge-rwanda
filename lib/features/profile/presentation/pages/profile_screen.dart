@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/features/profile/presentation/providers/profile_providers.dart';
-import 'package:upbridge/features/profile/domain/entities/profile.dart';
-import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
 import 'package:upbridge/shared/shared.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -20,9 +18,9 @@ class ProfileScreen extends ConsumerWidget {
           ? const Center(child: Text('Your profile is not available yet.'))
           : PageFrame(
               largeTitle: 'Profile',
-              eyebrow: value.phone,
               children: [
                 SurfaceCard(
+                  color: AppColors.surface,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -31,19 +29,50 @@ class ProfileScreen extends ConsumerWidget {
                           AppAvatar(
                             _initials(value.displayName),
                             tone: Tone.accent,
-                            size: 56,
+                            size: 72,
+                            imageUrl: value.photoUrl,
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 16),
                           Expanded(
-                            child: Text(
-                              value.displayName,
-                              style: AppText.titleM,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(value.displayName, style: AppText.titleL),
+                                const SizedBox(height: 4),
+                                StatusBadge(
+                                  'Youth account',
+                                  tone: Tone.success,
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
-                      Text(value.emailSafeLabel, style: AppText.bodyS),
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: AppColors.borderSubtle,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.phone_outlined,
+                            size: 18,
+                            color: AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              value.phone.isEmpty
+                                  ? 'Phone not added'
+                                  : value.phone,
+                              style: AppText.bodyS,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -53,42 +82,69 @@ class ProfileScreen extends ConsumerWidget {
                     ListRow(
                       leading: const IconTile(Icons.edit_outlined),
                       title: 'Edit profile',
+                      subtitle: 'Photo, name and phone',
                       onTap: () => context.push('/profile-edit'),
-                    ),
-                    ListRow(
-                      leading: const IconTile(Icons.flag_outlined),
-                      title: 'Learning goal',
-                      subtitle: value.learningGoal ?? 'Not selected',
-                      chevron: false,
-                    ),
-                    ListRow(
-                      leading: const IconTile(Icons.interests_outlined),
-                      title: 'Interests',
-                      subtitle: value.interests.isEmpty
-                          ? 'Not selected'
-                          : value.interests.join(', '),
-                      chevron: false,
                     ),
                   ],
                 ),
-                ListRow(
-                  leading: const IconTile(
-                    Icons.logout_rounded,
-                    tone: Tone.danger,
+                const SectionLabel('Learning'),
+                SurfaceCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const IconTile(Icons.flag_outlined),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Learning goal',
+                                  style: AppText.bodySStrong,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  value.learningGoal ?? 'Not selected',
+                                  style: AppText.bodyS.copyWith(
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Text('Interests', style: AppText.bodySStrong),
+                      const SizedBox(height: 8),
+                      value.interests.isEmpty
+                          ? Text(
+                              'Not selected',
+                              style: AppText.bodyS.copyWith(
+                                color: AppColors.textMuted,
+                              ),
+                            )
+                          : TagWrap(value.interests, tone: Tone.accent),
+                    ],
                   ),
-                  title: 'Log out',
-                  onTap: () => ref.read(authServiceProvider).signOut(),
+                ),
+                const SizedBox(height: 8),
+                SurfaceCard(
+                  child: ListRow(
+                    leading: const IconTile(
+                      Icons.logout_rounded,
+                      tone: Tone.danger,
+                    ),
+                    title: 'Log out',
+                    onTap: () => ref.read(authServiceProvider).signOut(),
+                  ),
                 ),
               ],
             ),
     );
   }
-}
-
-extension on Profile {
-  String get emailSafeLabel => phone.isEmpty
-      ? 'Email managed by Firebase Authentication'
-      : 'Phone verified for account contact';
 }
 
 String _initials(String name) {
