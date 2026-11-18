@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+const _unset = Object();
+
 class Profile {
   const Profile({
     required this.uid,
@@ -73,7 +75,7 @@ class Profile {
   Profile copyWith({
     String? displayName,
     String? phone,
-    String? photoUrl,
+    Object? photoUrl = _unset,
     List<String>? interests,
     String? learningGoal,
     bool? onboarded,
@@ -83,7 +85,7 @@ class Profile {
     accountStatus: accountStatus,
     displayName: displayName ?? this.displayName,
     phone: phone ?? this.phone,
-    photoUrl: photoUrl ?? this.photoUrl,
+    photoUrl: identical(photoUrl, _unset) ? this.photoUrl : photoUrl as String?,
     interests: interests ?? this.interests,
     learningGoal: learningGoal ?? this.learningGoal,
     onboarded: onboarded ?? this.onboarded,

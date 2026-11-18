@@ -20,10 +20,8 @@ import 'package:upbridge/features/admin/presentation/pages/reported_listing_scre
 import 'package:upbridge/features/admin/presentation/pages/verify_mentor_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/forgot_password_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/login_screen.dart';
-import 'package:upbridge/features/auth/presentation/pages/new_password_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/password_updated_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/sign_up_screen.dart';
-import 'package:upbridge/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/welcome_screen.dart';
 import 'package:upbridge/app/auth/verify_email_screen.dart';
 import 'package:upbridge/app/splash/splash_screen.dart';
@@ -77,8 +75,6 @@ const _publicRoutes = {
   AppRoutes.signup,
   AppRoutes.login,
   AppRoutes.forgotPassword,
-  AppRoutes.verifyCode,
-  AppRoutes.newPassword,
   AppRoutes.passwordUpdated,
   AppRoutes.verifyEmail,
 };
@@ -184,8 +180,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       _route('/signup', slidePage, (_) => const SignUpScreen()),
       _route('/login', slidePage, (_) => const LoginScreen()),
       _route('/forgot', slidePage, (_) => const ForgotPasswordScreen()),
-      _route('/verify', slidePage, (_) => const VerifyCodeScreen()),
-      _route('/new-password', slidePage, (_) => const NewPasswordScreen()),
       _route(
         '/password-updated',
         scalePage,

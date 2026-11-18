@@ -24,6 +24,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   bool _sent = false;
   bool _verified = false;
   bool _creatingProfile = false;
+  bool _profileCreated = false;
   String? _error;
 
   @override
@@ -86,9 +87,13 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     try {
       await ref.read(profileRepositoryProvider).createYouth(profile);
       ref.read(appStoreProvider.notifier).setFirebaseProfile(profile);
+      if (mounted) setState(() => _profileCreated = true);
     } catch (error) {
       if (mounted) {
-        setState(() => _error = _messageFor(error));
+        setState(() {
+          _profileCreated = false;
+          _error = _messageFor(error);
+        });
       }
     } finally {
       if (mounted) setState(() => _creatingProfile = false);
@@ -156,7 +161,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _verified && !_creatingProfile
+                    onPressed: _verified && _profileCreated && !_creatingProfile
                         ? () => context.go('/onboarding/goal')
                         : _checking
                         ? null
