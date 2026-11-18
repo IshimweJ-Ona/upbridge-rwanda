@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/shared.dart';
 
-/// P1 · Portfolio (projects) and P5 · About me, as two tabs.
+/// P1 · My portfolio (projects) and P5 · About me, as two tabs.
 class PortfolioScreen extends ConsumerStatefulWidget {
   const PortfolioScreen({super.key, this.initialTab = 0});
 
@@ -30,134 +30,205 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
   Widget build(BuildContext context) {
     final data = ref.watch(appStoreProvider);
     final user = data.user;
-    if (user == null) return const SizedBox.shrink();
+    if (user == null) {
+      return const DetailPage(
+        title: 'My portfolio',
+        backFallback: '/profile',
+        children: [
+          SizedBox(height: 24),
+          EmptyState(icon: Icons.person_off_outlined, title: 'You’re signed out', body: 'Sign in to see your portfolio.'),
+        ],
+      );
+    }
     final projects = data.projects;
-    final verified = projects.where((p) => p.verified).length;
-    final slug = user.name.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '-');
-    final shareUrl = 'upbridge.rw/p/$slug';
+    final shareUrl = portfolioShareUrl(user.name);
 
     return PageFrame(
-      title: 'My portfolio',
       showBack: true,
       backFallback: '/profile',
-      actions: [
-        CircleIconButton(icon: Icons.ios_share_rounded, tooltip: 'Share', onTap: () => copyText(context, 'https://$shareUrl', message: 'Portfolio link copied')),
-        const SizedBox(width: 4),
+      footer: [
+        AppButton('Add a new project', leadingIcon: Icons.add_rounded, onPressed: () => context.push('/project-new')),
       ],
       children: [
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            AppAvatar(user.initials, tone: Tone.accent, size: 64),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(user.name, style: AppText.titleL),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      const Icon(Icons.place_outlined, size: 15, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Text(user.location, style: AppText.bodyS),
-                    ],
-                  ),
-                ],
+        Text('My Portfolio', style: AppText.titleM, textAlign: TextAlign.center),
+        const SizedBox(height: 4),
+        Center(
+          child: Semantics(
+            button: true,
+            label: 'Copy portfolio link $shareUrl',
+            excludeSemantics: true,
+            child: Pressable(
+              onTap: () => copyText(context, 'https://$shareUrl', message: 'Portfolio link copied'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('https://$shareUrl', style: AppText.caption),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.copy_rounded, size: 14, color: AppColors.link),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(user.headline, style: AppText.bodyM),
-        const SizedBox(height: 14),
-        Pressable(
-          onTap: () => copyText(context, 'https://$shareUrl', message: 'Portfolio link copied'),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(color: AppColors.sunken, borderRadius: Radii.rMd),
-            child: Row(
-              children: [
-                const Icon(Icons.link_rounded, size: 18, color: AppColors.textSecondary),
-                const SizedBox(width: 8),
-                Expanded(child: Text(shareUrl, style: AppText.dataMono)),
-                const Icon(Icons.copy_rounded, size: 16, color: AppColors.link),
-                const SizedBox(width: 4),
-                Text('Copy', style: AppText.bodySStrong.copyWith(color: AppColors.link)),
-              ],
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        const NoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Demo preview',
+          body: 'Projects here are sample data and are kept for this session only, not saved to your account.',
+        ),
+        const SizedBox(height: 8),
         SegmentedTabs(
-          tabs: const ['Projects', 'About me'],
-          counts: [projects.length, null],
+          tabs: const ['Projects', 'About Me'],
           index: _tab,
           onChanged: (i) => setState(() => _tab = i),
         ),
         const SizedBox(height: 16),
         TabBodySwitcher(
           index: _tab,
-          child: _tab == 0 ? _projects(context, projects, verified) : _about(context, data, user),
+          child: _tab == 0 ? _ProjectsTab(projects: projects) : _AboutTab(user: user, projects: projects, interests: data.interests),
         ),
       ],
     );
   }
+}
 
-  Widget _projects(BuildContext context, List<Project> projects, int verified) {
+/// Public link for a youth's portfolio, built from their name.
+String portfolioShareUrl(String name) {
+  final slug = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+  return 'upbridge.rw/p/${slug.isEmpty ? 'me' : slug}';
+}
+
+class _ProjectsTab extends StatelessWidget {
+  const _ProjectsTab({required this.projects});
+
+  final List<Project> projects;
+
+  @override
+  Widget build(BuildContext context) {
+    if (projects.isEmpty) {
+      return const EmptyState(
+        icon: Icons.folder_open_outlined,
+        title: 'No projects yet',
+        body: 'Approved tasks and projects you add yourself appear here.',
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NoticeCard(
-          tone: Tone.success,
-          icon: Icons.verified_outlined,
-          title: '$verified of ${projects.length} projects are mentor-approved',
-          body: 'Employers see who reviewed each one and which criteria it met.',
-        ),
-        const SizedBox(height: 14),
         for (var i = 0; i < projects.length; i++)
           Reveal(
             index: i,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: ProjectTile(
+              child: PortfolioProjectCard(
                 project: projects[i],
-                heroTag: 'project-${projects[i].id}',
-                onTap: () => context.push('/project/${projects[i].id}', extra: 'project-${projects[i].id}'),
+                onTap: () => context.push('/project/${projects[i].id}'),
               ),
             ),
           ),
-        AppButton('Add a project', variant: ButtonVariant.secondary, leadingIcon: Icons.add_rounded, onPressed: () => context.push('/project-new')),
       ],
     );
   }
+}
 
-  Widget _about(BuildContext context, AppData data, AppUser user) {
-    final skills = <String>{for (final p in data.projects) ...p.skills}.toList();
+/// Project card used in the Projects tab and on the "Project saved" screen.
+class PortfolioProjectCard extends StatelessWidget {
+  const PortfolioProjectCard({super.key, required this.project, this.onTap});
+
+  final Project project;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = project;
+    return SurfaceCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(p.icon, size: 20, color: AppColors.textPrimary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(p.title, style: AppText.bodyMStrong, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              if (p.skills.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    p.skills.take(2).join(' • '),
+                    style: AppText.caption.copyWith(color: AppColors.brandOrange, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(p.summary, style: AppText.bodyS, maxLines: 3, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (onTap != null) ...[
+                Text('View project', style: AppText.bodySStrong.copyWith(color: AppColors.link)),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.link),
+              ],
+              const Spacer(),
+              if (p.verified)
+                const StatusBadge('Mentor-approved', tone: Tone.success, icon: Icons.verified_outlined)
+              else
+                const StatusBadge('Self-added'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutTab extends StatelessWidget {
+  const _AboutTab({required this.user, required this.projects, required this.interests});
+
+  final AppUser user;
+  final List<Project> projects;
+  final List<String> interests;
+
+  @override
+  Widget build(BuildContext context) {
+    final skills = <String>{for (final p in projects) ...p.skills}.toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(user.about.isEmpty ? 'Add a short introduction so employers know who you are.' : user.about, style: AppText.bodyM),
-        const SectionLabel('Skills with evidence'),
-        skills.isEmpty ? Text('Skills appear here as your work is approved.', style: AppText.bodyS) : TagWrap(skills, tone: Tone.info),
-        const SectionLabel('Learning'),
-        ListGroup(
-          children: [
-            ListRow(
-              leading: const IconTile(Icons.code_rounded, tone: Tone.accent),
-              title: 'Web Development Foundations',
-              subtitle: '${data.approvedCount} of ${data.tasks.length} tasks approved',
-              onTap: () => context.go('/learn'),
-            ),
-          ],
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const MonoLabel('BIO'),
+              const SizedBox(height: 6),
+              Text(
+                user.about.isEmpty ? 'Add a short introduction so mentors and employers know who you are.' : user.about,
+                style: AppText.bodyM.copyWith(color: user.about.isEmpty ? AppColors.textMuted : AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              const MonoLabel('SKILLS'),
+              const SizedBox(height: 8),
+              skills.isEmpty
+                  ? Text('Skills appear here as you add projects.', style: AppText.bodyS)
+                  : TagWrap(skills, tone: Tone.info),
+              const SizedBox(height: 16),
+              const MonoLabel('INTERESTS'),
+              const SizedBox(height: 8),
+              interests.isEmpty
+                  ? Text('Pick interests during onboarding to show them here.', style: AppText.bodyS)
+                  : TagWrap(interests, tone: Tone.accent),
+            ],
+          ),
         ),
-        const SectionLabel('Details'),
-        KeyValueTable([
-          ('Location', user.location),
-          ('Languages', 'Kinyarwanda, English, French'),
-          ('Contact', 'Shared with employers when you apply'),
-        ]),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
         AppButton('Edit profile', variant: ButtonVariant.secondary, leadingIcon: Icons.edit_outlined, onPressed: () => context.push('/profile-edit')),
       ],
     );
