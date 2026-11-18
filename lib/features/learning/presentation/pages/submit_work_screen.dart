@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:upbridge/features/learning/presentation/providers/learn_providers.dart';
 import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
@@ -65,6 +66,7 @@ class _SubmitWorkScreenState extends ConsumerState<SubmitWorkScreen> {
   int get _errorCount => [_liveError, _repoError, _noteError, _checkError].where((e) => e != null).length;
 
   Future<void> _submit() async {
+    if (_sending) return;
     FocusScope.of(context).unfocus();
     setState(() => _tried = true);
     if (_errorCount > 0) {
@@ -76,6 +78,7 @@ class _SubmitWorkScreenState extends ConsumerState<SubmitWorkScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     ref.read(appStoreProvider.notifier).submitWork(widget.taskId, live: _live.text.trim(), repo: _repo.text.trim(), note: _note.text.trim());
+    ref.read(taskProgressProvider.notifier).clear(widget.taskId);
     context.pushReplacement('/task-submitted/${widget.taskId}');
   }
 
