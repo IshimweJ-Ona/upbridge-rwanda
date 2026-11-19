@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:upbridge/core/errors/app_failure.dart';
+import 'package:upbridge/features/applications/presentation/providers/application_providers.dart';
+import 'package:upbridge/features/applications/presentation/state/failure_message.dart';
+import 'package:upbridge/features/opportunities/domain/usecases/filter_opportunities.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
 
 /// J1 · Opportunities, J1a · loading (shimmer) and J1b · offline.
@@ -16,23 +20,29 @@ class OpportunitiesScreen extends ConsumerStatefulWidget {
 }
 
 class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
-  static const _filters = ['All', 'Internships', 'Jobs', 'Gigs', 'Trainee'];
   String _filter = 'All';
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
-    final feed = ref.watch(feedProvider);
-    final data = ref.watch(appStoreProvider);
-    final loading = feed.isLoading && !feed.hasValue;
-    final offline = feed.hasError && !feed.isLoading && !feed.hasValue;
+    final listings = ref.watch(opportunitiesProvider);
+    final mine = ref.watch(myApplicationsProvider).value ?? const <Application>[];
+    final loading = listings.isLoading && !listings.hasValue;
+    final failed = listings.hasError && !listings.hasValue;
 
     final Widget body;
     if (loading) {
       body = const _LoadingList(key: ValueKey('loading'));
-    } else if (offline) {
-      body = _Offline(key: const ValueKey('offline'), onRetry: () => ref.invalidate(feedProvider), applications: data.myApplications.length);
+    } else if (failed) {
+      final error = listings.error!;
+      body = _LoadFailed(
+        key: const ValueKey('failed'),
+        offline: error is NetworkFailure,
+        message: failureMessage(error),
+        onRetry: () => ref.invalidate(opportunitiesProvider),
+      );
     } else {
-      body = KeyedSubtree(key: const ValueKey('list'), child: _list(context, data));
+      body = KeyedSubtree(key: const ValueKey('list'), child: _list(context, listings.value ?? const <Opportunity>[], mine));
     }
 
     return PageFrame(
@@ -42,7 +52,12 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
         CircleIconButton(icon: Icons.inventory_2_outlined, tooltip: 'My applications', onTap: () => context.go('/jobs/applications')),
         const SizedBox(width: 4),
       ],
-      onRefresh: feed.hasValue ? () => ref.refresh(feedProvider.future) : null,
+      onRefresh: listings.hasValue
+          ? () async {
+              ref.invalidate(opportunitiesProvider);
+              await ref.read(opportunitiesProvider.future);
+            }
+          : null,
       children: [
         const SizedBox(height: 14),
         AnimatedSwitcher(
@@ -56,11 +71,19 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
     );
   }
 
-  Widget _list(BuildContext context, AppData data) {
-    final open = data.openOpportunities.where((o) => _filter == 'All' || o.category == _filter).toList();
+  Widget _list(BuildContext context, List<Opportunity> all, List<Application> mine) {
+    final open = filterOpportunities(all, category: _filter, search: _search);
     final matched = open.where((o) => o.matched).toList();
     final rest = open.where((o) => !o.matched).toList();
-    final apps = data.myApplications.where((a) => a.status.isActive).toList();
+    final apps = mine.where((a) => a.status.isActive).toList();
+
+    // A withdrawn application does not count as applied
+    AppStatus? appliedStatus(String oppId) {
+      for (final a in mine) {
+        if (a.oppId == oppId && a.status != AppStatus.withdrawn) return a.status;
+      }
+      return null;
+    }
 
     Widget card(Opportunity o, int i) {
       final tag = 'opp-${o.id}-jobs';
@@ -71,7 +94,7 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
           child: OpportunityCard(
             opportunity: o,
             heroTag: tag,
-            applied: data.applicationFor(o.id)?.status,
+            applied: appliedStatus(o.id),
             onTap: () => context.push('/opportunity/${o.id}', extra: tag),
           ),
         ),
@@ -101,7 +124,14 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        ChipBar(options: _filters, selected: _filter, padding: EdgeInsets.zero, onSelected: (v) => setState(() => _filter = v)),
+        AppTextField(
+          label: 'Search',
+          hint: 'Title, employer or category',
+          suffixIcon: Icons.search_rounded,
+          onChanged: (v) => setState(() => _search = v),
+        ),
+        const SizedBox(height: 12),
+        ChipBar(options: opportunityCategories, selected: _filter, padding: EdgeInsets.zero, onSelected: (v) => setState(() => _filter = v)),
         const SizedBox(height: 4),
         AnimatedSwitcher(
           duration: Motion.base,
@@ -110,9 +140,13 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (open.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16),
-                  child: EmptyState(icon: Icons.work_off_outlined, title: 'Nothing here right now', body: 'New listings are checked by an admin before they appear. Pull down to refresh.'),
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: EmptyState(
+                    icon: Icons.work_off_outlined,
+                    title: 'Nothing here right now',
+                    body: _search.trim().isEmpty ? 'New listings are checked by an admin before they appear. Pull down to refresh.' : 'No listing matches your search. Try another word or filter.',
+                  ),
                 ),
               if (matched.isNotEmpty) ...[
                 const SectionLabel('Matched to your evidence', top: 18),
@@ -194,11 +228,12 @@ class _LoadingList extends StatelessWidget {
   }
 }
 
-class _Offline extends StatelessWidget {
-  const _Offline({super.key, required this.onRetry, required this.applications});
+class _LoadFailed extends StatelessWidget {
+  const _LoadFailed({super.key, required this.offline, required this.message, required this.onRetry});
 
+  final bool offline;
+  final String message;
   final VoidCallback onRetry;
-  final int applications;
 
   @override
   Widget build(BuildContext context) {
@@ -207,9 +242,9 @@ class _Offline extends StatelessWidget {
       children: [
         const SizedBox(height: 12),
         EmptyState(
-          icon: Icons.wifi_off_rounded,
-          title: 'You’re offline',
-          body: 'Opportunities need a connection to load. Check your mobile data or Wi-Fi.',
+          icon: offline ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
+          title: offline ? 'You’re offline' : 'Couldn’t load opportunities',
+          body: message,
           action: 'Try again',
           onAction: onRetry,
         ),
@@ -219,7 +254,7 @@ class _Offline extends StatelessWidget {
             ListRow(
               leading: const IconTile(Icons.inventory_2_outlined, tone: Tone.info),
               title: 'My applications',
-              subtitle: '$applications saved on this phone · available offline',
+              subtitle: 'Track what you have sent',
               onTap: () => context.go('/jobs/applications'),
             ),
           ],

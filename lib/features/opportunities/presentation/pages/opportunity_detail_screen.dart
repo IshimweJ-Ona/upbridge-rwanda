@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/applications/presentation/providers/application_providers.dart';
+import 'package:upbridge/features/applications/presentation/state/failure_message.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
 
 /// J2 · Opportunity detail with an evidence match.
@@ -30,21 +32,29 @@ class _OpportunityDetailScreenState extends ConsumerState<OpportunityDetailScree
       destructive: true,
       icon: Icons.flag_outlined,
     );
-    if (ok && mounted) showToast(context, 'Thanks — an admin will check “${o.title}”', icon: Icons.flag_outlined, tone: Tone.warning);
+    if (ok && mounted) showToast(context, 'Thanks, an admin will check “${o.title}”', icon: Icons.flag_outlined, tone: Tone.warning);
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = ref.watch(appStoreProvider);
-    final o = data.opportunity(widget.oppId);
+    final listing = ref.watch(opportunityProvider(widget.oppId));
+    final o = listing.value;
     if (o == null) {
-      return const DetailPage(
+      return DetailPage(
         title: 'Opportunity',
         backFallback: '/jobs',
-        children: [SizedBox(height: 24), EmptyState(icon: Icons.work_off_outlined, title: 'This listing was removed', body: 'It may have closed or been taken down by an admin.')],
+        children: [
+          const SizedBox(height: 24),
+          if (listing.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (listing.hasError)
+            EmptyState(icon: Icons.error_outline_rounded, title: 'Couldn’t load this listing', body: failureMessage(listing.error!))
+          else
+            const EmptyState(icon: Icons.work_off_outlined, title: 'This listing was removed', body: 'It may have closed or been taken down by an admin.'),
+        ],
       );
     }
-    final app = data.applicationFor(o.id);
+    final app = ref.watch(applicationForProvider(o.id));
     final closed = o.state != ListingState.open;
     final tile = OrgTile(opportunity: o, size: 60);
 
@@ -57,7 +67,7 @@ class _OpportunityDetailScreenState extends ConsumerState<OpportunityDetailScree
           tooltip: _saved ? 'Saved' : 'Save',
           onTap: () {
             setState(() => _saved = !_saved);
-            showToast(context, _saved ? 'Saved — we’ll remind you before it closes' : 'Removed from saved', icon: Icons.bookmark_rounded);
+            showToast(context, _saved ? 'Saved. We’ll remind you before it closes' : 'Removed from saved', icon: Icons.bookmark_rounded);
           },
         ),
         const SizedBox(width: 4),
@@ -106,8 +116,8 @@ class _OpportunityDetailScreenState extends ConsumerState<OpportunityDetailScree
           children: [
             if (o.matched) const StatusBadge('Matched to your evidence', tone: Tone.success, icon: Icons.auto_awesome_rounded),
             if (app != null) StatusBadge(app.status.label, tone: app.status.tone),
-            StatusBadge(o.posted),
-            StatusBadge('${o.applicants} applicants', icon: Icons.people_outline_rounded),
+            if (o.posted.isNotEmpty) StatusBadge(o.posted),
+            if (o.applicants > 0) StatusBadge('${o.applicants} applicants', icon: Icons.people_outline_rounded),
           ],
         ),
         const SizedBox(height: 18),
@@ -120,7 +130,7 @@ class _OpportunityDetailScreenState extends ConsumerState<OpportunityDetailScree
           ('Starts', o.starts),
         ]),
         if (o.requirements.isNotEmpty) ...[
-          SectionLabel('How your evidence matches · ${o.metCount} of ${o.requirements.length}'),
+          SectionLabel('What the employer asks for · ${o.requirements.length}'),
           ListGroup(children: [for (final r in o.requirements) _RequirementRow(r)]),
         ],
         const SectionLabel('About the role'),
