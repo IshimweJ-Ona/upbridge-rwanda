@@ -1,22 +1,54 @@
-// Displays a user notification feed with read actions.
+// Displays live Firestore notifications or demo notifications with read actions.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/home/presentation/providers/notification_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/services/error_messages.dart';
+import 'package:upbridge/shared/shared.dart';
 
 /// H3 · Notifications — each one opens the screen it's about.
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
-  static const _tabRoots = ['/home', '/learn', '/mentors', '/jobs', '/profile'];
+  @override
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
 
-  void _open(BuildContext context, WidgetRef ref, AppNotification n) {
-    ref.read(appStoreProvider.notifier).markRead(n.id);
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  static const _tabRoots = ['/home', '/learn', '/mentors', '/jobs', '/profile'];
+  bool _markingAll = false;
+
+  Future<void> _open(
+    BuildContext context,
+    AppNotification n, {
+    String? liveUid,
+  }) async {
+    if (liveUid != null) {
+      if (n.unread) {
+        try {
+          await ref
+              .read(notificationRepositoryProvider)
+              .markRead(liveUid, n.id);
+        } catch (error) {
+          if (context.mounted) {
+            showToast(
+              context,
+              errorMessage(error),
+              icon: Icons.warning_amber_rounded,
+              tone: Tone.warning,
+            );
+          }
+        }
+      }
+    } else {
+      ref.read(appStoreProvider.notifier).markRead(n.id);
+    }
     final route = n.route;
-    if (route == null) return;
+    if (route == null || !context.mounted) return;
     if (_tabRoots.any(route.startsWith)) {
       context.go(route);
     } else {
@@ -24,12 +56,92 @@ class NotificationsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _markAllRead(BuildContext context, {String? liveUid}) async {
+    if (_markingAll) return;
+    if (liveUid == null) {
+      ref.read(appStoreProvider.notifier).markAllRead();
+      return;
+    }
+    setState(() => _markingAll = true);
+    try {
+      await ref.read(notificationRepositoryProvider).markAllRead(liveUid);
+    } catch (error) {
+      if (context.mounted) {
+        showToast(
+          context,
+          errorMessage(error),
+          icon: Icons.warning_amber_rounded,
+          tone: Tone.warning,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _markingAll = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final session = ref.watch(verifiedSessionProvider).asData?.value;
+    final liveUid =
+        session != null &&
+            session.firebaseInitialized &&
+            session.signedIn &&
+            session.emailVerified
+        ? session.uid
+        : null;
+
+    if (liveUid != null) {
+      final notificationsAsync = ref.watch(userNotificationsProvider(liveUid));
+      final list =
+          notificationsAsync.asData?.value ?? const <AppNotification>[];
+      final unread = list.where((n) => n.unread).length;
+
+      return DetailPage(
+        title: 'Notifications',
+        backFallback: '/home',
+        actions: [
+          AnimatedOpacity(
+            opacity: unread > 0 ? 1 : 0,
+            duration: Motion.base,
+            child: TextLink(
+              _markingAll ? 'Marking…' : 'Mark all read',
+              onTap: unread > 0 && !_markingAll
+                  ? () => _markAllRead(context, liveUid: liveUid)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+        children: [
+          notificationsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: EmptyState(
+                icon: Icons.cloud_off_outlined,
+                title: 'Could not load notifications',
+                body: errorMessage(error),
+                action: 'Try again',
+                onAction: () =>
+                    ref.invalidate(userNotificationsProvider(liveUid)),
+              ),
+            ),
+            data: (items) => _notificationList(
+              context,
+              items,
+              liveUid: liveUid,
+              isDemo: false,
+            ),
+          ),
+        ],
+      );
+    }
+
     final list = ref.watch(appStoreProvider.select((s) => s.notifications));
     final unread = list.where((n) => n.unread).length;
-    final today = list.where((n) => n.today).toList();
-    final earlier = list.where((n) => !n.today).toList();
 
     return DetailPage(
       title: 'Notifications',
@@ -40,14 +152,36 @@ class NotificationsScreen extends ConsumerWidget {
           duration: Motion.base,
           child: TextLink(
             'Mark all read',
-            onTap: unread > 0
-                ? () => ref.read(appStoreProvider.notifier).markAllRead()
-                : null,
+            onTap: unread > 0 ? () => _markAllRead(context) : null,
           ),
         ),
         const SizedBox(width: 12),
       ],
+      children: [_notificationList(context, list, isDemo: true)],
+    );
+  }
+
+  Widget _notificationList(
+    BuildContext context,
+    List<AppNotification> list, {
+    String? liveUid,
+    required bool isDemo,
+  }) {
+    final unread = list.where((n) => n.unread).length;
+    final today = list.where((n) => n.today).toList();
+    final earlier = list.where((n) => !n.today).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (isDemo) ...[
+          const SizedBox(height: 8),
+          const NoticeCard(
+            icon: Icons.info_outline_rounded,
+            title: 'Demo preview',
+            body: 'Showing sample notifications, not live Firestore alerts.',
+          ),
+        ],
         if (list.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 24),
@@ -62,7 +196,10 @@ class NotificationsScreen extends ConsumerWidget {
           ListGroup(
             children: [
               for (final n in today)
-                _NotificationRow(n: n, onTap: () => _open(context, ref, n)),
+                _NotificationRow(
+                  n: n,
+                  onTap: () => _open(context, n, liveUid: liveUid),
+                ),
             ],
           ),
         ],
@@ -71,7 +208,10 @@ class NotificationsScreen extends ConsumerWidget {
           ListGroup(
             children: [
               for (final n in earlier)
-                _NotificationRow(n: n, onTap: () => _open(context, ref, n)),
+                _NotificationRow(
+                  n: n,
+                  onTap: () => _open(context, n, liveUid: liveUid),
+                ),
             ],
           ),
         ],

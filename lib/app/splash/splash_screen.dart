@@ -9,8 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/app/router/route_guards.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/core/constants/app_constants.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/shared.dart';
 
 const splashDuration = AppConstants.splashDuration;
@@ -43,7 +44,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   )..forward();
   late final Timer _timer;
   bool _hasNavigated = false;
-  String? _pendingScreen;
 
   @override
   void initState() {
@@ -55,11 +55,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted || _hasNavigated) return;
 
     final initialized = Firebase.apps.isNotEmpty;
+    final session = initialized
+        ? ref.read(verifiedSessionProvider).asData?.value
+        : null;
     final firebaseUser = initialized ? FirebaseAuth.instance.currentUser : null;
+
     final destination = splashDestination(
       firebaseInitialized: initialized,
-      firebaseSignedIn: firebaseUser != null,
-      emailVerified: firebaseUser?.emailVerified ?? false,
+      firebaseSignedIn: session?.signedIn ?? (firebaseUser != null),
+      emailVerified:
+          session?.emailVerified ?? (firebaseUser?.emailVerified ?? false),
+      firebaseRole: session?.role,
+      firebaseOnboarded: session?.onboarded,
+      firebaseProfileExists:
+          !(session?.profileLoaded ?? false) ||
+          (session?.profileExists ?? true),
       appUser: ref.read(appStoreProvider).user,
     );
     _navigateOnce(destination);
@@ -75,13 +85,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     } else {
       context.go(destination);
     }
-  }
-
-  // Keep auth entry points on the splash until their owner connects the flows.
-  void _showPendingScreen(String screen) {
-    if (!mounted) return;
-    _timer.cancel();
-    setState(() => _pendingScreen = screen);
   }
 
   @override
@@ -197,38 +200,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 'Create free account',
                                 variant: ButtonVariant.onDark,
                                 onPressed: () =>
-                                    _showPendingScreen('registration'),
+                                    _navigateOnce(AppRoutes.signup),
                               ),
                               const SizedBox(height: 10),
                               AppButton(
                                 'I already have an account',
                                 variant: ButtonVariant.outlineOnDark,
-                                onPressed: () => _showPendingScreen('login'),
+                                onPressed: () => _navigateOnce(AppRoutes.login),
                               ),
-                              if (_pendingScreen case final pendingScreen?) ...[
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: Semantics(
-                                    liveRegion: true,
-                                    child: Text(
-                                      'Waiting for $pendingScreen screen',
-                                      key: const ValueKey(
-                                        'pending-auth-screen',
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      style: AppText.bodyS.copyWith(
-                                        color: AppColors.textInverse.withValues(
-                                          alpha: 0.85,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
                               const SizedBox(height: 14),
                               Center(
                                 child: Text(
-                                  'PROTOTYPE  ·  ALL DATA IS SAMPLE DATA',
+                                  'Kigali Convention Centre at night',
                                   textAlign: TextAlign.center,
                                   style: AppText.caption.copyWith(
                                     color: AppColors.textInverse.withValues(
