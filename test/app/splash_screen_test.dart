@@ -1,8 +1,10 @@
+// Tests bundled splash asset, viewport layout, auto-routing, and real auth button navigation.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/app/splash/splash_screen.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
 
 void main() {
   testWidgets('bundled splash photograph is available offline', (tester) async {
@@ -51,13 +53,13 @@ void main() {
     expect(destinations, isEmpty);
 
     await tester.pump(const Duration(milliseconds: 250));
-    expect(destinations, ['/welcome']);
+    expect(destinations, [AppRoutes.welcome]);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(destinations, ['/welcome']);
+    expect(destinations, [AppRoutes.welcome]);
   });
 
-  testWidgets('registration button shows its pending screen message', (
+  testWidgets('registration button navigates directly to signup', (
     tester,
   ) async {
     final destinations = <String>[];
@@ -74,13 +76,15 @@ void main() {
 
     await tester.tap(find.text('Create free account'));
     await tester.pump();
-    expect(find.text('Waiting for registration screen'), findsOneWidget);
+
+    expect(find.text('Waiting for registration screen'), findsNothing);
+    expect(destinations, [AppRoutes.signup]);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(destinations, isEmpty);
+    expect(destinations, [AppRoutes.signup]);
   });
 
-  testWidgets('login button shows its pending screen message', (tester) async {
+  testWidgets('login button navigates directly to login', (tester) async {
     final destinations = <String>[];
     await tester.pumpWidget(
       ProviderScope(
@@ -95,9 +99,11 @@ void main() {
 
     await tester.tap(find.text('I already have an account'));
     await tester.pump();
-    expect(find.text('Waiting for login screen'), findsOneWidget);
+
+    expect(find.text('Waiting for login screen'), findsNothing);
+    expect(destinations, [AppRoutes.login]);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(destinations, isEmpty);
+    expect(destinations, [AppRoutes.login]);
   });
 }

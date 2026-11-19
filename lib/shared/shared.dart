@@ -18,6 +18,7 @@ export 'package:upbridge/shared/widgets/choice.dart';
 export 'package:upbridge/shared/widgets/domain_cards.dart';
 export 'package:upbridge/shared/widgets/feedback.dart';
 export 'package:upbridge/shared/widgets/fields.dart';
+export 'package:upbridge/shared/widgets/image_picker_field.dart';
 export 'package:upbridge/shared/widgets/logo.dart';
 export 'package:upbridge/shared/widgets/scaffolds.dart';
 export 'package:upbridge/shared/widgets/surfaces.dart';

@@ -1,12 +1,13 @@
-// Shows the admin pilot overview with clearly labeled sample statistics.
+// Shows the admin pilot overview with clearly labeled sample statistics and live user count when authenticated.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/admin/presentation/providers/admin_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:upbridge/shared/shared.dart';
 
 /// AD1 · Pilot overview — objectives and what needs attention.
 class AdminOverviewScreen extends ConsumerWidget {
@@ -15,6 +16,17 @@ class AdminOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(appStoreProvider);
+    final session = ref.watch(verifiedSessionProvider).asData?.value;
+    final isLiveAdmin =
+        session != null &&
+        session.firebaseInitialized &&
+        session.signedIn &&
+        session.emailVerified &&
+        session.role == Role.admin;
+    final liveUserCountAsync = isLiveAdmin
+        ? ref.watch(adminUserCountProvider)
+        : null;
+
     final pendingMentors = data.applicants
         .where((a) => a.state == ApplicantState.pending)
         .length;
@@ -37,7 +49,12 @@ class AdminOverviewScreen extends ConsumerWidget {
     return PageFrame(
       largeTitle: 'Pilot overview',
       eyebrow: 'Day ${SampleData.pilotDay} of ${SampleData.pilotDays}',
-      onRefresh: () => Future<void>.delayed(const Duration(milliseconds: 900)),
+      onRefresh: () async {
+        if (isLiveAdmin) {
+          ref.invalidate(adminUserCountProvider);
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      },
       children: [
         const SizedBox(height: 14),
         const NoticeCard(
@@ -45,6 +62,28 @@ class AdminOverviewScreen extends ConsumerWidget {
           title: 'Demonstration data',
           body: 'These sample figures are not live platform statistics.',
         ),
+        if (isLiveAdmin) ...[
+          const SizedBox(height: 12),
+          ListGroup(
+            children: [
+              ListRow(
+                leading: const IconTile(
+                  Icons.cloud_done_outlined,
+                  tone: Tone.info,
+                ),
+                title: 'Live Firestore accounts',
+                subtitle: switch (liveUserCountAsync) {
+                  AsyncData(:final value) =>
+                    '$value registered users currently stored in Firestore',
+                  AsyncError() => 'Could not fetch live Firestore user count',
+                  _ => 'Loading live Firestore user count…',
+                },
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.go('/a/users'),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         Row(
           children: [
@@ -105,7 +144,7 @@ class AdminOverviewScreen extends ConsumerWidget {
             for (final o in SampleData.objectives) ObjectiveMeter(objective: o),
           ],
         ),
-        const SectionLabel('People and listings'),
+        const SectionLabel('People and listings (sample)'),
         Row(
           children: [
             Expanded(
@@ -145,7 +184,7 @@ class AdminOverviewScreen extends ConsumerWidget {
             Expanded(
               child: MetricTile(
                 value: youth + mentors + 3,
-                label: 'All users',
+                label: 'All users (sample)',
                 icon: Icons.groups_outlined,
                 onTap: () => context.go('/a/users'),
               ),
@@ -155,7 +194,7 @@ class AdminOverviewScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         Center(
           child: Text(
-            'Figures update hourly · last update 08:00',
+            'Sample figures shown above for pilot walkthrough',
             style: AppText.caption,
           ),
         ),
