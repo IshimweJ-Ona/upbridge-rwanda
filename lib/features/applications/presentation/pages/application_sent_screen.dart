@@ -4,7 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/applications/presentation/providers/application_providers.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 
 /// J6 · Application sent, with a reference number.
 class ApplicationSentScreen extends ConsumerWidget {
@@ -14,9 +15,26 @@ class ApplicationSentScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(appStoreProvider);
-    final app = data.application(appId);
-    final o = app == null ? null : data.opportunity(app.oppId);
+    final application = ref.watch(applicationProvider(appId));
+    final app = application.value;
+    final o = app == null ? null : ref.watch(opportunityProvider(app.oppId)).value;
+
+    // Never say "sent" for an application we cannot find
+    if (app == null) {
+      return DetailPage(
+        title: '',
+        closeIcon: true,
+        backFallback: '/jobs',
+        onBack: () => context.go('/jobs'),
+        children: [
+          const SizedBox(height: 24),
+          if (application.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            const EmptyState(icon: Icons.search_off_rounded, title: 'Application not found', body: 'Open My applications to see what you have sent.'),
+        ],
+      );
+    }
 
     return DetailPage(
       title: '',
@@ -33,9 +51,9 @@ class ApplicationSentScreen extends ConsumerWidget {
           title: o == null ? 'Application sent' : 'Sent to ${o.org}',
           body: o == null
               ? 'We’ll keep you posted.'
-              : 'An UpBridge admin checks your evidence first — usually within a working day — then forwards it. ${o.org} has committed to reply by ${o.repliesBy}.',
+              : 'An UpBridge admin checks your evidence first, usually within a working day, then forwards it. ${o.org} has committed to reply by ${o.repliesBy}.',
         ),
-        if (app != null && o != null) ...[
+        if (o != null) ...[
           Pressable(
             onTap: () => copyText(context, app.ref, message: 'Reference copied'),
             child: Container(
