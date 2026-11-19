@@ -1,35 +1,26 @@
-// Owner: Student 3 · Mentorship & mentor workspace
+// M3 Request a session: saves a requested session to mentorSessions.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/mentorship/presentation/providers/mentorship_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/shared.dart';
 
-/// M3 · Request a session — pick a slot and a topic.
 class RequestSessionScreen extends ConsumerStatefulWidget {
   const RequestSessionScreen({super.key, required this.mentorId});
 
   final String mentorId;
 
   @override
-  ConsumerState<RequestSessionScreen> createState() => _RequestSessionScreenState();
+  ConsumerState<RequestSessionScreen> createState() =>
+      _RequestSessionScreenState();
 }
 
+// Stateful only to own the message controller; choices live in requestFormProvider.
 class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
-  SessionSlot? _slot;
-  String? _topic;
   final _note = TextEditingController();
-  bool _sending = false;
-
-  static const _topics = [
-    RadioOption(value: 'Review my work', title: 'Review my work', subtitle: 'Go through a task or project together', icon: Icons.rate_review_outlined),
-    RadioOption(value: 'Portfolio feedback', title: 'Portfolio feedback', subtitle: 'Get it ready to send to employers', icon: Icons.folder_special_outlined),
-    RadioOption(value: 'Career advice', title: 'Career advice', subtitle: 'Choosing roles, CVs, first-job questions', icon: Icons.explore_outlined),
-    RadioOption(value: 'Interview practice', title: 'Interview practice', subtitle: 'A short mock interview with feedback', icon: Icons.record_voice_over_outlined),
-  ];
 
   @override
   void dispose() {
@@ -37,97 +28,163 @@ class _RequestSessionScreenState extends ConsumerState<RequestSessionScreen> {
     super.dispose();
   }
 
-  Future<void> _send() async {
-    setState(() => _sending = true);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    final id = ref.read(appStoreProvider.notifier).requestSession(mentorId: widget.mentorId, slot: _slot!, topic: _topic!, note: _note.text.trim());
-    context.pushReplacement('/request-sent/$id');
+  List<RadioOption<String>> _topics(String first) => [
+    RadioOption(
+      value: 'Feedback on a project',
+      title: 'Feedback on a project',
+      subtitle: '$first reviews something you built',
+    ),
+    const RadioOption(
+      value: 'Career advice',
+      title: 'Career advice',
+      subtitle: 'Next steps, CV, interviews',
+    ),
+    const RadioOption(
+      value: 'Help when stuck',
+      title: 'Help when stuck',
+      subtitle: 'A specific technical problem',
+    ),
+  ];
+
+  Future<void> _send(Mentor mentor) async {
+    try {
+      final id = await ref
+          .read(requestFormProvider(widget.mentorId).notifier)
+          .send(mentor: mentor, note: _note.text);
+      if (id != null && mounted) context.pushReplacement('/request-sent/$id');
+    } catch (error) {
+      if (!mounted) return;
+      showToast(
+        context,
+        mentorshipErrorText(error),
+        icon: Icons.error_outline_rounded,
+        tone: Tone.danger,
+      );
+    }
+  }
+
+  void _retry() {
+    ref.invalidate(mentorProvider(widget.mentorId));
+    ref.invalidate(mySessionsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
-    final m = ref.watch(appStoreProvider.select((s) => s.mentor(widget.mentorId)));
-    final first = m.name.split(' ').first;
-    final days = <String, List<SessionSlot>>{};
-    for (final s in m.slots) {
-      days.putIfAbsent(s.day, () => []).add(s);
+    final mentorAsync = ref.watch(mentorProvider(widget.mentorId));
+    final slotsAsync = ref.watch(freeSlotsForMentorProvider(widget.mentorId));
+    final form = ref.watch(requestFormProvider(widget.mentorId));
+    final formNotifier = ref.read(
+      requestFormProvider(widget.mentorId).notifier,
+    );
+    final mentor = mentorAsync.value;
+
+    if (mentor == null) {
+      return DetailPage(
+        title: 'Request a session',
+        backFallback: '/mentors',
+        children: [
+          const SizedBox(height: 16),
+          if (mentorAsync.hasValue)
+            const EmptyState(
+              icon: Icons.person_off_outlined,
+              title: 'Mentor not found',
+              body: 'This profile is no longer available.',
+            )
+          else if (mentorAsync.hasError)
+            EmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Could not load this mentor',
+              body: mentorshipErrorText(mentorAsync.error!),
+              action: 'Try again',
+              onAction: _retry,
+            )
+          else
+            const Shimmer(child: SkeletonBox(height: 320, radius: Radii.lg)),
+        ],
+      );
     }
+
+    final first = mentor.name.split(' ').first;
+    final slots = slotsAsync.value ?? const <SessionSlot>[];
+    // A slot can disappear while the form is open, so re-match it on every build.
+    final selected = slots
+        .where((s) => s.startsAt == form.slot?.startsAt)
+        .firstOrNull;
+    final canSend = selected != null && form.topic != null;
 
     return DetailPage(
       title: 'Request a session',
-      backFallback: '/mentor/${m.id}',
-      footerNote: AnimatedSwitcher(
-        duration: Motion.base,
-        child: Text(
-          _slot == null ? 'Choose a time and a topic' : '${_slot!.label} · ${_topic ?? 'choose a topic'}',
-          key: ValueKey('${_slot?.label}$_topic'),
-          style: AppText.bodySStrong,
-          textAlign: TextAlign.center,
+      backFallback: '/mentor/${mentor.id}',
+      footer: [
+        AppButton(
+          'Send request',
+          loading: form.sending,
+          onPressed: canSend && !form.sending ? () => _send(mentor) : null,
         ),
-      ),
-      footer: [AppButton('Send request', icon: Icons.send_rounded, loading: _sending, onPressed: _slot != null && _topic != null ? _send : null)],
+      ],
       children: [
         const SizedBox(height: 8),
         Row(
           children: [
-            AppAvatar(m.initials, tone: m.tone, size: 48),
-            const SizedBox(width: 12),
+            AppAvatar(mentor.initials, tone: mentor.tone, size: 32),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('With ${m.name}', style: AppText.titleS),
-                  const SizedBox(height: 2),
-                  MonoLabel(m.availability),
-                ],
+              child: Text(
+                'With ${mentor.name} · 30 minutes',
+                style: AppText.bodyS,
               ),
             ),
           ],
         ),
-        const SectionLabel('Choose a time'),
-        for (final entry in days.entries) ...[
-          MonoLabel(entry.key, color: AppColors.textSecondary),
-          const SizedBox(height: 8),
+        const SectionLabel('What do you need?'),
+        RadioCards<String>(
+          options: _topics(first),
+          value: form.topic,
+          onChanged: (topic) {
+            HapticFeedback.selectionClick();
+            formNotifier.pickTopic(topic);
+          },
+        ),
+        const SectionLabel('Pick a time'),
+        if (slotsAsync.hasValue && slots.isEmpty)
+          EmptyState(
+            icon: Icons.event_busy_outlined,
+            title: 'No open times right now',
+            body: '$first has no free slots. Check back soon.',
+          )
+        else if (slotsAsync.hasValue) ...[
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final s in entry.value)
+              for (final slot in slots)
                 SelectChip(
-                  label: s.time,
-                  icon: Icons.schedule_rounded,
-                  selected: _slot == s,
-                  onTap: () => setState(() => _slot = s),
+                  label: slot.label,
+                  selected: slot.startsAt == selected?.startsAt,
+                  onTap: () => formNotifier.pickSlot(slot),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
-        ],
-        const SectionLabel('What do you want to talk about?', top: 8),
-        RadioCards<String>(
-          options: _topics,
-          value: _topic,
-          onChanged: (v) {
-            HapticFeedback.selectionClick();
-            setState(() => _topic = v);
-          },
-        ),
+          const SizedBox(height: 8),
+          const MonoLabel('Times are in Kigali time (CAT).'),
+        ] else if (slotsAsync.hasError)
+          EmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Could not load times',
+            body: mentorshipErrorText(slotsAsync.error!),
+            action: 'Try again',
+            onAction: _retry,
+          )
+        else
+          const Shimmer(child: SkeletonBox(height: 96, radius: Radii.lg)),
         const SizedBox(height: 20),
         AppTextField(
-          label: 'Anything $first should know?',
+          label: 'Message to $first',
           trailingNote: 'Optional',
           controller: _note,
           maxLines: 4,
           minLines: 3,
-          hint: 'e.g. I want to apply to Irembo and would like feedback on my homepage first.',
-        ),
-        const SizedBox(height: 16),
-        NoticeCard(
-          tone: Tone.info,
-          icon: Icons.videocam_outlined,
-          title: '30 minutes on Google Meet',
-          body: '$first confirms within a day. You’ll get the link by SMS and in the app.',
+          hint: 'What would you like to go through?',
         ),
       ],
     );

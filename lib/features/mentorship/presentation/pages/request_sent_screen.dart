@@ -1,12 +1,11 @@
-// Owner: Student 3 · Mentorship & mentor workspace
+// M4 Request sent: shows the saved session, so success is only claimed once it exists.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:upbridge/features/mentorship/presentation/providers/mentorship_providers.dart';
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 
-/// M4 · Request sent.
 class RequestSentScreen extends ConsumerWidget {
   const RequestSentScreen({super.key, required this.sessionId});
 
@@ -14,48 +13,52 @@ class RequestSentScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(appStoreProvider.select((s) => s.sessions));
-    final matches = sessions.where((s) => s.id == sessionId).toList();
-    final session = matches.isEmpty ? null : matches.first;
-    final first = session?.mentorName.split(' ').first ?? 'Your mentor';
+    final sessionAsync = ref.watch(sessionProvider(sessionId));
+    final session = sessionAsync.value;
 
     return DetailPage(
-      title: '',
-      closeIcon: true,
+      title: 'Request a session',
       backFallback: '/mentors',
       onBack: () => context.go('/mentors'),
       footer: [
-        AppButton('Go to my mentorship', onPressed: () => context.pushReplacement('/my-mentorship')),
-        AppButton('Back to mentors', variant: ButtonVariant.secondary, onPressed: () => context.go('/mentors')),
+        AppButton(
+          'Go to my mentorship',
+          onPressed: () => context.pushReplacement('/my-mentorship'),
+        ),
+        AppButton(
+          'Back to mentors',
+          variant: ButtonVariant.secondary,
+          onPressed: () => context.go('/mentors'),
+        ),
       ],
       children: [
-        SuccessBlock(
-          eyebrow: 'Session request',
-          title: 'Request sent to $first',
-          body: '$first usually replies within a day. We’ll text you when the session is confirmed, with the Google Meet link.',
-        ),
-        if (session != null)
+        if (session != null) ...[
+          SuccessBlock(
+            title: 'Request sent to ${session.mentorName.split(' ').first}',
+            body: 'Your mentor will reply here in the app. The Google Meet link appears in My mentorship once the session is confirmed.',
+          ),
           KeyValueTable([
-            ('Mentor', session.mentorName),
-            ('When', '${_title(session.day)} · ${session.time}'),
-            ('Topic', session.topic),
-            ('Where', 'Google Meet · 30 min'),
+            ('Session', session.topic),
+            ('When', '${session.day} · ${session.time} (CAT)'),
+            ('Where', 'Google Meet, link sent once confirmed'),
           ]),
-        const SizedBox(height: 16),
-        const NoticeCard(
-          icon: Icons.tips_and_updates_outlined,
-          title: 'Make the most of it',
-          body: 'Share your live link before the session and write down two questions you want answered.',
-        ),
+        ] else if (sessionAsync.hasValue)
+          const EmptyState(
+            icon: Icons.search_off_rounded,
+            title: 'Request not found',
+            body: 'It may have been withdrawn. Check My mentorship.',
+          )
+        else if (sessionAsync.hasError)
+          EmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Could not load your request',
+            body: mentorshipErrorText(sessionAsync.error!),
+            action: 'Try again',
+            onAction: () => ref.invalidate(sessionProvider(sessionId)),
+          )
+        else
+          const Shimmer(child: SkeletonBox(height: 280, radius: Radii.lg)),
       ],
     );
-  }
-
-  static String _title(String day) {
-    final parts = day.split(' ');
-    if (parts.length < 3) return day;
-    final d = parts[0];
-    final m = parts[2];
-    return '${d[0]}${d.substring(1).toLowerCase()} ${parts[1]} ${m[0]}${m.substring(1).toLowerCase()}';
   }
 }
