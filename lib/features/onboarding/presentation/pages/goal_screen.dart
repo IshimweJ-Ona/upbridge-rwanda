@@ -1,16 +1,14 @@
-// Owner: Student 1 · Auth, onboarding & profile
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/profile/presentation/providers/profile_providers.dart';
+import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:upbridge/shared/shared.dart';
 
-/// O1 · Onboarding step 1 — what the person wants from UpBridge.
 class GoalScreen extends ConsumerStatefulWidget {
   const GoalScreen({super.key});
-
   @override
   ConsumerState<GoalScreen> createState() => _GoalScreenState();
 }
@@ -20,17 +18,22 @@ class _GoalScreenState extends ConsumerState<GoalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = ref.watch(appStoreProvider.select((s) => s.user?.firstName)) ?? '';
+    final profile = ref.watch(currentProfileProvider).value;
     return PageFrame(
       actions: [
-        TextLink('Log out', color: AppColors.textMuted, onTap: () => ref.read(appStoreProvider.notifier).logout()),
-        const SizedBox(width: 10),
+        TextLink(
+          'Log out',
+          color: AppColors.textMuted,
+          onTap: () => ref.read(authServiceProvider).signOut(),
+        ),
       ],
       footer: [
         AppButton(
           'Continue',
           icon: Icons.arrow_forward_rounded,
-          onPressed: _goal == null ? null : () => context.push('/onboarding/interests?goal=$_goal'),
+          onPressed: _goal == null
+              ? null
+              : () => context.push('/onboarding/interests?goal=$_goal'),
         ),
       ],
       children: [
@@ -38,14 +41,20 @@ class _GoalScreenState extends ConsumerState<GoalScreen> {
         const SizedBox(height: 20),
         PageHeading(
           eyebrow: 'Step 1 of 2',
-          title: name.isEmpty ? 'What do you want UpBridge to help with?' : 'Muraho, $name. What do you want UpBridge to help with?',
-          body: 'We’ll suggest a learning path and opportunities that fit. You can change this later.',
+          title: 'What do you want UpBridge to help with?',
+          body: 'We’ll suggest a learning path and opportunities that fit.',
         ),
         RadioCards<String>(
-          value: _goal,
-          onChanged: (v) => setState(() => _goal = v),
+          value: _goal ?? profile?.learningGoal,
+          onChanged: (value) => setState(() => _goal = value),
           options: [
-            for (final g in SampleData.goals) RadioOption(value: g.$1, title: g.$2, subtitle: g.$3, icon: g.$4),
+            for (final goal in SampleData.goals)
+              RadioOption(
+                value: goal.$1,
+                title: goal.$2,
+                subtitle: goal.$3,
+                icon: goal.$4,
+              ),
           ],
         ),
       ],
