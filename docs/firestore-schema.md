@@ -7,13 +7,14 @@ This document describes the shared names in `Fs` and the operations currently im
 | Collection | Purpose / document ID | Current known fields and ownership |
 |---|---|---|
 | `users` | User profile; Firebase UID | `role`, `accountStatus`, profile fields, `updatedAt`; user owns safe profile edits; admin is custom-claim controlled |
-| `mentorProfiles` | Public mentor directory; feature-defined ID | Feature owner must confirm fields; verified records are readable by signed-in users |
+| `mentorProfiles` | Public mentor directory; doc ID = mentor's Auth UID | Admins create and verify. Signed-in users read. The mentor may update only `accepting`, `availability`, `availabilityWindows`, `openSlots`, `meetingLink` (https), `menteeLimit` (1–10) and `updatedAt` |
 | `learningPaths`, `learningTasks` | Published learning catalog; feature-defined ID | Lisa to confirm fields, publication states, and authoring permissions |
 | `taskProgress` | One user's task progress; `{uid}_{taskId}` | `userId`, `taskId`, `status`, `updatedAt`; learner-owned |
 | `submissions` | Work submitted for review; generated ID | `userId`, `status`, `submittedAt`, `updatedAt`, feature submission fields; learner-owned, mentor access contract pending |
 | `reviews` | Review feedback; feature-defined ID | Boaz/Lisa to confirm reviewer and submission linkage and immutable status rules |
 | `projects` | Portfolio project; generated ID | `ownerId`, `visibility`, `createdAt`, `updatedAt`, project fields; owner-controlled |
-| `mentorshipRequests`, `mentorSessions` | Mentorship lifecycle; feature-defined ID | Boaz to confirm requester/mentor IDs, allowed transitions, and access |
+| `mentorSessions` | Mentorship sessions; auto ID; `requesterId` = youth UID, `mentorId` = mentor UID | Only the youth and the mentor read it. Youth create `requested` sessions with a verified, accepting mentor at a future time. Mentor: `requested`→`confirmed`/`declined` (link only on confirm), `confirmed`→`completed`/`cancelled`. Youth: `requested`/`confirmed`→`cancelled`, or delete while `requested`. Tested by `scripts/test_mentorship_rules.ps1` |
+| `mentorshipRequests` | Not used | Requests are `mentorSessions` with status `requested` |
 | `opportunities` | Published opportunities; feature-defined ID | Kellen to confirm publisher, moderation state, fields, and admin operations |
 | `applications` | Youth application; feature-defined ID | Kellen to confirm applicant ownership and status transitions |
 | `notifications` | Per-user notification; feature-defined ID | `userId`, `title`, `body`, optional `route`, `createdAt`, `isRead`, and `readAt`; the recipient can only mark a notification read |

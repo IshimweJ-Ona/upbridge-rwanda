@@ -144,6 +144,18 @@ void main() {
       expect((slots.first as Timestamp).toDate().toUtc(), DateTime.utc(2026, 10, 20, 16));
     });
 
+    test('caps open slots at the limit firestore.rules allows', () {
+      final everyDay = [
+        for (var d = 1; d <= 7; d++)
+          AvailabilityWindow(weekday: d, startMinutes: 6 * 60, endMinutes: 22 * 60),
+      ];
+      final map = MentorProfileRepositoryImpl.toUpdateMap(
+        MentorProfile(id: 'a', name: 'A', windows: everyDay),
+        now: DateTime.utc(2026, 10, 19, 0),
+      );
+      expect(map[MentorFields.openSlots]! as List, hasLength(MentorProfileFields.maxOpenSlots));
+    });
+
     test('save rejects an invalid profile before touching Firestore', () async {
       final repo = MentorProfileRepositoryImpl(_NoFirestore());
       await expectLater(

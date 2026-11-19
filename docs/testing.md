@@ -13,3 +13,11 @@ The helper selects an installed Node binary directly, creates a unique `demo-*` 
 For interactive Firebase-backed development, start Auth and Firestore with `scripts/start_firebase_emulators.ps1`, then launch Flutter with `--dart-define=USE_FIREBASE_EMULATORS=true`. Physical Android devices also need `--dart-define=FIREBASE_EMULATOR_HOST=<computer-LAN-IP>`.
 
 Cloudinary adapter unit tests use a mocked HTTP transport because an account and upload preset have not been configured. They are not Firebase integration tests. Do not run integration tests against production.
+
+## Mentorship rules (emulator)
+
+```powershell
+.\scripts\test_mentorship_rules.ps1
+```
+
+Checks `mentorSessions` and `mentorProfiles` rules: who can read, create, change status, withdraw, and which profile fields a mentor may edit. Needs Node.js, Java 11+ and `firebase-tools`. Uses a throwaway `demo-*` project and deletes its data afterwards.
