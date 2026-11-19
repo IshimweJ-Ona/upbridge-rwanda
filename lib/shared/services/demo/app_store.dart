@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';
-import 'package:upbridge/shared/widgets/feedback.dart';
 import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:upbridge/shared/widgets/feedback.dart';
 import 'package:upbridge/features/profile/domain/entities/profile.dart';
 
 /// Everything the demo shows, held in one immutable snapshot.
@@ -68,6 +68,7 @@ class AppData {
     List<LearningTask>? tasks,
     List<Review>? reviews,
     List<Submission>? submissions,
+    List<Mentor>? mentors,
     List<Session>? sessions,
     List<Opportunity>? opportunities,
     List<Application>? applications,
@@ -90,7 +91,7 @@ class AppData {
     tasks: tasks ?? this.tasks,
     reviews: reviews ?? this.reviews,
     submissions: submissions ?? this.submissions,
-    mentors: mentors,
+    mentors: mentors ?? this.mentors,
     sessions: sessions ?? this.sessions,
     opportunities: opportunities ?? this.opportunities,
     applications: applications ?? this.applications,
@@ -224,10 +225,12 @@ class AppStore extends Notifier<AppData> {
   Future<String?> login(String phone, String password) async {
     await Future<void>.delayed(const Duration(milliseconds: 650));
     final user = SampleData.accounts[_key(phone)];
-    if (user == null)
+    if (user == null) {
       return 'No account uses this number. Check it, or create a free account.';
-    if (password != SampleData.demoPassword)
+    }
+    if (password != SampleData.demoPassword) {
       return 'That password doesn’t match this number. Try again or reset it.';
+    }
     _signIn(user);
     return null;
   }
