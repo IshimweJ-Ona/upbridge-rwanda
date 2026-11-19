@@ -17,7 +17,7 @@ class CloudinaryConfig {
   factory CloudinaryConfig.fromEnvironment() => const CloudinaryConfig(
     cloudName: String.fromEnvironment(
       'CLOUDINARY_CLOUD_NAME',
-      defaultValue: 'vbzq5ssu',
+      defaultValue: 'gcfuhayr',
     ),
     unsignedImagePreset: String.fromEnvironment(
       'CLOUDINARY_UNSIGNED_IMAGE_PRESET',

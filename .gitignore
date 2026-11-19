@@ -34,6 +34,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+analysis-output.txt
 
 # Firebase CLI local emulator state and generated caches
 /.firebase/

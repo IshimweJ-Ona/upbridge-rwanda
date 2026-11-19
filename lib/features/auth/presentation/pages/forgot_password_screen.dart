@@ -5,31 +5,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/features/auth/domain/validators.dart';
+import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
+import 'package:upbridge/shared/services/error_messages.dart';
 
-/// A5 · Forgot password — request an SMS code.
+/// A5 · Forgot password — send a Firebase password-reset email.
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
-  final _phone = TextEditingController(text: '788 123 456');
+  final _email = TextEditingController();
   String? _error;
   bool _loading = false;
   int _shake = 0;
 
   @override
   void dispose() {
-    _phone.dispose();
+    _email.dispose();
     super.dispose();
   }
 
   Future<void> _send() async {
-    final error = Validators.phone(_phone.text);
+    final error = Validators.email(_email.text);
     setState(() => _error = error);
     if (error != null) {
       HapticFeedback.mediumImpact();
@@ -37,10 +39,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       return;
     }
     setState(() => _loading = true);
-    await ref.read(appStoreProvider.notifier).requestReset('+250 ${_phone.text.trim()}');
-    if (!mounted) return;
-    setState(() => _loading = false);
-    context.push('/verify');
+    try {
+      await ref.read(authRepositoryProvider).sendPasswordReset(_email.text);
+      if (mounted) context.go('/password-updated');
+    } catch (error) {
+      if (mounted) setState(() => _error = errorMessage(error));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -48,21 +54,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     return DetailPage(
       title: 'Reset password',
       backFallback: '/login',
-      footer: [AppButton('Send code', loading: _loading, onPressed: _send)],
+      footer: [
+        AppButton('Send reset email', loading: _loading, onPressed: _send),
+      ],
       children: [
         const PageHeading(
           title: 'Reset your password',
-          body: 'Enter the phone number on your account. We’ll text you a 6-digit code to confirm it’s you.',
+          body: 'Enter the email address on your account. We’ll send you a secure reset link.',
         ),
         Shake(
           trigger: _shake,
           child: AppTextField(
-            label: 'Phone number',
-            controller: _phone,
-            prefixText: '+250 ',
-            keyboardType: TextInputType.phone,
+            label: 'Email address',
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
             error: _error,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')), LengthLimitingTextInputFormatter(11)],
             onChanged: (_) {
               if (_error != null) setState(() => _error = null);
             },
@@ -70,9 +76,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 20),
         const NoticeCard(
-          icon: Icons.sms_outlined,
-          title: 'No SMS after 2 minutes?',
-          body: 'Check the number, then tap “Resend code” on the next screen. Codes expire after 10 minutes.',
+          icon: Icons.mark_email_unread_outlined,
+          title: 'No email ?',
+          body: 'Check your spam folder and confirm that the email address is correct.',
         ),
       ],
     );

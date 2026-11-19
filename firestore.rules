@@ -1,4 +1,4 @@
-// Requires verified Firebase email claims; feature writes stay closed until reviewed.
+// Requires verified Firebase email claims and enforces per-feature ownership and state rules.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,14 +11,27 @@ service cloud.firestore {
       return signedIn() && request.auth.token.role == 'admin';
     }
 
+    function isMentor() {
+      return signedIn() && request.auth.token.role == 'mentor';
+    }
+
     function owns(field) {
       return signedIn() && resource.data[field] == request.auth.uid;
     }
 
     function isGenericCollection(collection) {
       return !(collection in [
-        'users', 'auditLogs', 'appSettings', 'learningPaths',
-        'learningTasks', 'opportunities'
+        'users',
+        'mentorProfiles',
+        'mentorSessions',
+        'applications',
+        'checkIns',
+        'notifications',
+        'auditLogs',
+        'appSettings',
+        'learningPaths',
+        'learningTasks',
+        'opportunities'
       ]);
     }
 
@@ -34,6 +47,94 @@ service cloud.firestore {
           'displayName', 'photoUrl', 'phone', 'interests', 'learningGoal',
           'onboarded', 'updatedAt'
         ]));
+      allow delete: if isAdmin();
+    }
+
+    match /mentorProfiles/{mentorId} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isMentor()
+        && request.auth.uid == mentorId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'meetingLink', 'menteeLimit', 'availabilityWindows',
+          'accepting', 'availability', 'openSlots', 'updatedAt'
+        ])
+        && request.resource.data.updatedAt == request.time);
+    }
+
+    match /mentorSessions/{sessionId} {
+      allow read: if isAdmin() || (signedIn()
+        && (resource.data.requesterId == request.auth.uid
+          || resource.data.mentorId == request.auth.uid));
+      allow create: if signedIn()
+        && request.resource.data.requesterId == request.auth.uid
+        && request.resource.data.status == 'requested'
+        && request.resource.data.keys().hasOnly([
+          'requesterId', 'requesterName', 'mentorId', 'mentorName',
+          'topic', 'note', 'startsAt', 'durationMinutes', 'mode',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() || (signedIn() && (
+        (resource.data.requesterId == request.auth.uid
+          && resource.data.status in ['requested', 'confirmed']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.updatedAt == request.time)
+        || (isMentor()
+          && resource.data.mentorId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'meetingLink', 'updatedAt'
+          ])
+          && ((resource.data.status == 'requested'
+                && request.resource.data.status in ['confirmed', 'declined'])
+              || (resource.data.status == 'confirmed'
+                && request.resource.data.status in ['completed', 'cancelled']))
+          && request.resource.data.updatedAt == request.time)
+      ));
+      allow delete: if isAdmin() || (signedIn()
+        && resource.data.requesterId == request.auth.uid
+        && resource.data.status == 'requested');
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isAdmin() || owns('userId');
+      allow create: if signedIn()
+        && applicationId == request.auth.uid + '_' + request.resource.data.opportunityId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'sent'
+        && request.resource.data.keys().hasOnly([
+          'userId', 'userName', 'opportunityId', 'projectIds',
+          'note', 'status', 'ref', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.projectIds is list
+        && request.resource.data.projectIds.size() >= 1
+        && request.resource.data.note is string
+        && request.resource.data.note.size() >= 60
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() || (signedIn()
+        && resource.data.userId == request.auth.uid
+        && (
+          (resource.data.status in ['sent', 'underReview']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && request.resource.data.status == 'withdrawn'
+            && request.resource.data.updatedAt == request.time)
+          || (resource.data.status == 'withdrawn'
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.opportunityId == resource.data.opportunityId
+            && request.resource.data.status == 'sent'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'userName', 'projectIds', 'note', 'status', 'ref', 'createdAt', 'updatedAt'
+            ])
+            && request.resource.data.projectIds is list
+            && request.resource.data.projectIds.size() >= 1
+            && request.resource.data.note is string
+            && request.resource.data.note.size() >= 60
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time)
+        ));
       allow delete: if isAdmin();
     }
 
@@ -59,6 +160,7 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, delete: if false;
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])
@@ -186,12 +288,11 @@ service cloud.firestore {
     match /{collection}/{documentId} {
       allow read: if isGenericCollection(collection)
         && (isAdmin()
-          || (collection == 'mentorProfiles' && signedIn())
           || owns('userId')
           || owns('ownerId')
           || owns('requesterId'));
-      // Feature-owned writes stay closed until their field validation and
-      // permitted status transitions are reviewed with each feature owner.
+      // Unfinalized feature writes (learning/portfolio) stay closed until
+      // their field validation and permitted transitions are reviewed.
       allow create, update, delete: if isGenericCollection(collection)
         && isAdmin();
     }

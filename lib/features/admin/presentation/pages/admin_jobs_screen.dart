@@ -1,11 +1,11 @@
-// Groups listing moderation, reports, and forwarding work for admins.
+// Groups listing moderation, reports, and forwarding work using clearly labeled sample data.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/shared.dart';
 
 /// AD6 · Listings, AD9 · applications to forward, plus reported listings.
 class AdminJobsScreen extends ConsumerStatefulWidget {
@@ -29,10 +29,14 @@ class _AdminJobsScreenState extends ConsumerState<AdminJobsScreen> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(appStoreProvider);
-    final listings = data.opportunities.where((o) => o.state != ListingState.reported).toList();
+    final listings = data.opportunities
+        .where((o) => o.state != ListingState.reported)
+        .toList();
     final forwards = data.forwards;
     final waiting = forwards.where((f) => !f.forwarded).length;
-    final reported = data.opportunities.where((o) => o.state == ListingState.reported).toList();
+    final reported = data.opportunities
+        .where((o) => o.state == ListingState.reported)
+        .toList();
 
     final Widget body = switch (_tab) {
       0 => _Listings(listings: listings),
@@ -42,12 +46,23 @@ class _AdminJobsScreenState extends ConsumerState<AdminJobsScreen> {
 
     return PageFrame(
       largeTitle: 'Jobs',
-      eyebrow: '${listings.where((o) => o.state == ListingState.open).length} shown of 27 open · $waiting to forward',
+      eyebrow:
+          'Sample listings · ${listings.where((o) => o.state == ListingState.open).length} open · $waiting to forward',
       actions: [
-        CircleIconButton(icon: Icons.add_rounded, tooltip: 'Add listing', onTap: () => context.push('/a-new-listing')),
+        CircleIconButton(
+          icon: Icons.add_rounded,
+          tooltip: 'Add listing',
+          onTap: () => context.push('/a-new-listing'),
+        ),
         const SizedBox(width: 4),
       ],
       children: [
+        const SizedBox(height: 10),
+        const NoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Demonstration data',
+          body: 'Listings, applications, and reports below are sample records awaiting final opportunity contracts.',
+        ),
         const SizedBox(height: 12),
         SegmentedTabs(
           tabs: const ['Listings', 'To forward', 'Reported'],
@@ -99,7 +114,12 @@ class _Listings extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        AppButton('Add listing', variant: ButtonVariant.secondary, leadingIcon: Icons.add_rounded, onPressed: () => context.push('/a-new-listing')),
+        AppButton(
+          'Add listing',
+          variant: ButtonVariant.secondary,
+          leadingIcon: Icons.add_rounded,
+          onPressed: () => context.push('/a-new-listing'),
+        ),
       ],
     );
   }
@@ -114,7 +134,11 @@ class _Forwards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const EmptyState(icon: Icons.forward_to_inbox_outlined, title: 'Nothing to forward', body: 'Applications appear here after youth send them.');
+      return const EmptyState(
+        icon: Icons.forward_to_inbox_outlined,
+        title: 'Nothing to forward',
+        body: 'Applications appear here after youth send them.',
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -131,7 +155,10 @@ class _Forwards extends StatelessWidget {
             index: i,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _ForwardCard(f: items[i], opp: data.opportunity(items[i].oppId)),
+              child: _ForwardCard(
+                f: items[i],
+                opp: data.opportunity(items[i].oppId),
+              ),
             ),
           ),
       ],
@@ -150,7 +177,11 @@ class _ForwardCard extends StatelessWidget {
     final passed = f.checks.where((c) => c.passed).length;
     return SurfaceCard(
       onTap: () => context.push('/a-forward/${f.id}'),
-      accentEdge: f.forwarded ? AppColors.successText : (passed == f.checks.length ? AppColors.infoText : AppColors.warningText),
+      accentEdge: f.forwarded
+          ? AppColors.successText
+          : (passed == f.checks.length
+                ? AppColors.infoText
+                : AppColors.warningText),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -163,13 +194,22 @@ class _ForwardCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(f.youthName, style: AppText.bodyMStrong),
-                    Text('→ ${opp?.org ?? ''} · ${opp?.title ?? ''}', style: AppText.bodyS, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      '→ ${opp?.org ?? ''} · ${opp?.title ?? ''}',
+                      style: AppText.bodyS,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
               StatusBadge(
-                f.forwarded ? 'Forwarded' : (passed == f.checks.length ? 'Ready' : 'Check needed'),
-                tone: f.forwarded ? Tone.success : (passed == f.checks.length ? Tone.info : Tone.warning),
+                f.forwarded
+                    ? 'Forwarded'
+                    : (passed == f.checks.length ? 'Ready' : 'Check needed'),
+                tone: f.forwarded
+                    ? Tone.success
+                    : (passed == f.checks.length ? Tone.info : Tone.warning),
               ),
             ],
           ),
@@ -191,7 +231,11 @@ class _Reported extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const EmptyState(icon: Icons.verified_user_outlined, title: 'No reported listings', body: 'Youth can report a listing from its detail page.');
+      return const EmptyState(
+        icon: Icons.verified_user_outlined,
+        title: 'No reported listings',
+        body: 'Youth can report a listing from its detail page.',
+      );
     }
     return Column(
       children: [
@@ -210,11 +254,17 @@ class _Reported extends StatelessWidget {
                       Text(o.title, style: AppText.bodyMStrong),
                       Text(o.org, style: AppText.bodyS),
                       const SizedBox(height: 4),
-                      MonoLabel('${o.reports} reports · ${o.applicants} applicants', color: AppColors.dangerText),
+                      MonoLabel(
+                        '${o.reports} reports · ${o.applicants} applicants',
+                        color: AppColors.dangerText,
+                      ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textMuted,
+                ),
               ],
             ),
           ),
