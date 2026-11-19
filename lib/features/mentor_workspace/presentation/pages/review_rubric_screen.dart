@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/features/mentor_workspace/domain/usecases/send_review.dart';
+import 'package:upbridge/features/mentor_workspace/presentation/providers/mentor_providers.dart';
 
 /// MR3 · Review against the rubric: Met / Partly / Not yet + a note each.
 class ReviewRubricScreen extends ConsumerStatefulWidget {
@@ -45,20 +47,25 @@ class _ReviewRubricScreenState extends ConsumerState<ReviewRubricScreen> {
     });
   }
 
-  Future<void> _send(Submission s, LearningTask task, bool approve) async {
+  ReviewDraft _draft(Submission s, LearningTask task) => ReviewDraft(
+    submissionId: s.id,
+    criteria: [for (final c in task.criteria) c.title],
+    verdicts: {for (final e in _choice.entries) e.key: _verdicts[e.value]},
+    notes: {for (final i in _choice.keys) i: _noteFor(i).text},
+    summary: _summary.text,
+  );
+
+  Future<void> _send(ReviewDraft draft) async {
+    if (_sending) return;
     setState(() => _sending = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    final results = [
-      for (var i = 0; i < task.criteria.length; i++)
-        CriterionResult(
-          task.criteria[i].title,
-          _verdicts[_choice[i]!],
-          _noteFor(i).text.trim().isEmpty ? 'Met.' : _noteFor(i).text.trim(),
-        ),
-    ];
-    ref.read(appStoreProvider.notifier).sendReview(s.id, results, _summary.text.trim());
-    context.pushReplacement('/m-review-sent/${s.id}?approved=$approve');
+    try {
+      final approved = await ref.read(sendReviewProvider)(draft);
+      if (mounted) context.pushReplacement('/m-review-sent/${draft.submissionId}?approved=$approved');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      showToast(context, mentorshipErrorText(error), icon: Icons.error_outline_rounded, tone: Tone.danger);
+    }
   }
 
   @override
@@ -69,15 +76,13 @@ class _ReviewRubricScreenState extends ConsumerState<ReviewRubricScreen> {
     final task = data.task(s.taskId);
     final n = task.criteria.length;
     final first = s.youthName.split(' ').first;
-    final chosen = _choice.length;
-    final allChosen = chosen == n;
-    final approve = allChosen && _choice.values.every((v) => v == 0);
-    var missingNotes = 0;
-    _choice.forEach((i, v) {
-      if (v != 0 && _noteFor(i).text.trim().length < 10) missingNotes++;
-    });
-    final summaryOk = _summary.text.trim().length >= 20;
-    final ready = allChosen && missingNotes == 0 && summaryOk;
+    final draft = _draft(s, task);
+    final chosen = draft.markedCount;
+    final allChosen = draft.allMarked;
+    final approve = draft.approves;
+    final missingNotes = draft.missingNotes;
+    final summaryOk = draft.summaryOk;
+    final ready = draft.validate() == null;
 
     final hint = !allChosen
         ? '$chosen of $n criteria marked'
@@ -107,7 +112,7 @@ class _ReviewRubricScreenState extends ConsumerState<ReviewRubricScreen> {
           variant: approve || !allChosen ? ButtonVariant.primary : ButtonVariant.secondary,
           icon: Icons.send_rounded,
           loading: _sending,
-          onPressed: ready ? () => _send(s, task, approve) : null,
+          onPressed: ready && !_sending ? () => _send(draft) : null,
         ),
       ],
       children: [
