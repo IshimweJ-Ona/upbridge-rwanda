@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/applications/presentation/providers/application_providers.dart';
+import 'package:upbridge/features/applications/presentation/state/failure_message.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
 
 /// J7 · My applications (Active / Closed).
@@ -20,8 +22,8 @@ class _MyApplicationsScreenState extends ConsumerState<MyApplicationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final data = ref.watch(appStoreProvider);
-    final all = data.myApplications;
+    final applications = ref.watch(myApplicationsProvider);
+    final all = applications.value ?? const <Application>[];
     final active = all.where((a) => a.status.isActive).toList();
     final closed = all.where((a) => !a.status.isActive).toList();
     final list = _tab == 0 ? active : closed;
@@ -36,7 +38,18 @@ class _MyApplicationsScreenState extends ConsumerState<MyApplicationsScreen> {
         const SizedBox(height: 12),
         SegmentedTabs(tabs: const ['Active', 'Closed'], counts: [active.length, closed.length], index: _tab, onChanged: (i) => setState(() => _tab = i)),
         const SizedBox(height: 16),
-        TabBodySwitcher(
+        if (applications.isLoading && !applications.hasValue)
+          const Padding(padding: EdgeInsets.only(top: 32), child: Center(child: CircularProgressIndicator()))
+        else if (applications.hasError && !applications.hasValue)
+          EmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Couldn’t load your applications',
+            body: failureMessage(applications.error!),
+            action: 'Try again',
+            onAction: () => ref.invalidate(myApplicationsProvider),
+          )
+        else
+          TabBodySwitcher(
           index: _tab,
           child: list.isEmpty
               ? EmptyState(
@@ -53,7 +66,7 @@ class _MyApplicationsScreenState extends ConsumerState<MyApplicationsScreen> {
                         index: i,
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: _ApplicationCard(app: list[i], opp: data.opportunity(list[i].oppId)),
+                          child: _ApplicationCard(app: list[i], opp: ref.watch(opportunityProvider(list[i].oppId)).value),
                         ),
                       ),
                   ],

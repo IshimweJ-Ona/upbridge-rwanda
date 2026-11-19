@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/features/applications/domain/usecases/submit_application.dart';
 import 'package:upbridge/features/applications/presentation/state/apply_draft.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 
 /// J3 · Apply: choose evidence, and J4 · the same with errors.
 class ApplyScreen extends ConsumerStatefulWidget {
@@ -30,9 +32,7 @@ class _ApplyScreenState extends ConsumerState<ApplyScreen> {
   void initState() {
     super.initState();
     final draft = ref.read(applyDraftsProvider)[widget.oppId];
-    final data = ref.read(appStoreProvider);
-    final home = data.project('p-homepage');
-    _picked = draft?.projectIds.toList() ?? [if (home != null) home.id];
+    _picked = draft?.projectIds.toList() ?? [];
     _note = TextEditingController(text: draft?.note ?? '');
     _consent = draft?.consent ?? false;
   }
@@ -44,7 +44,7 @@ class _ApplyScreenState extends ConsumerState<ApplyScreen> {
   }
 
   String? get _evidenceError => _tried && _picked.isEmpty ? 'Choose at least one project.' : null;
-  String? get _noteError => _tried && _note.text.trim().length < 30 ? 'Write two or three sentences — employers read this first.' : null;
+  String? get _noteError => _tried && _note.text.trim().length < SubmitApplication.minNoteLength ? 'Write at least ${SubmitApplication.minNoteLength} characters. Employers read this first.' : null;
   String? get _consentError => _tried && !_consent ? 'The employer needs a way to reach you for an interview.' : null;
   int get _errors => [_evidenceError, _noteError, _consentError].where((e) => e != null).length;
 
@@ -76,7 +76,7 @@ class _ApplyScreenState extends ConsumerState<ApplyScreen> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(appStoreProvider);
-    final o = data.opportunity(widget.oppId);
+    final o = ref.watch(opportunityProvider(widget.oppId)).value;
     if (o == null) return const SizedBox.shrink();
     final projects = [...data.projects.where((p) => p.verified), ...data.projects.where((p) => !p.verified)];
     final question = o.requirements.where((r) => r.evidence.startsWith('Confirm')).toList();
@@ -151,6 +151,7 @@ class _ApplyScreenState extends ConsumerState<ApplyScreen> {
                 controller: _note,
                 maxLines: 6,
                 minLines: 4,
+                helper: 'At least ${SubmitApplication.minNoteLength} characters',
                 trailingNote: '${_note.text.length}/600',
                 inputFormatters: [LengthLimitingTextInputFormatter(600)],
                 hint: 'Why this role, and what you’d bring. Answer any question in the listing.',

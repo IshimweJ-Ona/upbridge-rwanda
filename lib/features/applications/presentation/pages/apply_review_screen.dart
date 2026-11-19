@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
+import 'package:upbridge/core/errors/app_failure.dart';
+import 'package:upbridge/features/applications/presentation/providers/application_providers.dart';
+import 'package:upbridge/features/applications/presentation/state/failure_message.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/features/applications/presentation/state/apply_draft.dart';
@@ -23,18 +27,34 @@ class _ApplyReviewScreenState extends ConsumerState<ApplyReviewScreen> {
 
   Future<void> _send(ApplyDraft draft) async {
     setState(() => _sending = true);
-    await Future<void>.delayed(const Duration(milliseconds: 1100));
-    if (!mounted) return;
-    final id = ref.read(appStoreProvider.notifier).submitApplication(oppId: widget.oppId, projectIds: draft.projectIds, note: draft.note);
-    ref.read(applyDraftsProvider.notifier).clear(widget.oppId);
-    context.go('/application-sent/$id');
+    try {
+      final account = ref.read(firebaseAuthProvider).currentUser;
+      if (account == null) throw const PermissionFailure('no-current-user');
+      // The id comes from Firebase Auth, the display name from the profile
+      final name = ref.read(appStoreProvider).user?.name ?? account.displayName ?? '';
+      final sent = await ref.read(submitApplicationProvider)(
+        userId: account.uid,
+        userName: name,
+        opportunityId: widget.oppId,
+        projectIds: draft.projectIds,
+        note: draft.note,
+        consent: draft.consent,
+      );
+      if (!mounted) return;
+      ref.read(applyDraftsProvider.notifier).clear(widget.oppId);
+      context.go('/application-sent/${sent.id}');
+    } on AppFailure catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      showToast(context, failureMessage(e), icon: Icons.error_outline_rounded, tone: Tone.danger);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(appStoreProvider);
     final draft = ref.watch(applyDraftsProvider)[widget.oppId];
-    final o = data.opportunity(widget.oppId);
+    final o = ref.watch(opportunityProvider(widget.oppId)).value;
     final user = data.user;
     if (o == null || user == null || draft == null) {
       return DetailPage(
