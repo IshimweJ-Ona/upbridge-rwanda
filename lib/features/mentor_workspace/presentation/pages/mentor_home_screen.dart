@@ -7,6 +7,7 @@ import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:upbridge/features/mentor_workspace/presentation/providers/mentor_providers.dart';
 import 'package:upbridge/features/mentor_workspace/presentation/widgets/mentor_widgets.dart';
 
 /// MH1 · Mentor home (Alice) and MH0 · newly verified mentor (Claudine).
@@ -20,22 +21,26 @@ class MentorHomeScreen extends ConsumerWidget {
     if (user == null) return const SizedBox.shrink();
     if (user.isNewMentor) return _FirstDay(name: user.firstName);
 
+    // Review queue: demo store until the submissions contract exists.
     final queue = data.queue;
-    final requests = data.mentorSessions.where((s) => s.state == SessionState.requested).toList();
-    final upcoming = data.mentorSessions.where((s) => s.state == SessionState.upcoming).toList();
+    // Sessions: mentorSessions in Firestore.
+    final sessionsAsync = ref.watch(mentorSessionsProvider);
+    final groups = MentorSessionGroups(sessionsAsync.value ?? const <Session>[]);
+    final requests = groups.requests;
+    final upcoming = groups.upcoming;
     final urgent = queue.where((s) => s.urgent).toList();
     final first = urgent.isNotEmpty ? urgent.first : (queue.isEmpty ? null : queue.first);
 
     return PageFrame(
       largeTitle: 'Muraho, ${user.firstName}',
       eyebrow: '${SampleData.today} · Mentor',
-      onRefresh: () => Future<void>.delayed(const Duration(milliseconds: 800)),
+      onRefresh: () async => ref.invalidate(mentorSessionsProvider),
       children: [
         const SizedBox(height: 14),
         StatStrip([
           StatItem('', 'Reviews sent this month', countTo: 9 + (data.reviewedCount - 46)),
           const StatItem('1.2 d', 'Median reply'),
-          StatItem('', 'Sessions held', countTo: data.mentorSessions.where((s) => s.state == SessionState.done).length + 2),
+          StatItem('', 'Sessions held', countTo: groups.past.length),
         ]),
         const SizedBox(height: 18),
         if (first != null)
@@ -70,17 +75,29 @@ class MentorHomeScreen extends ConsumerWidget {
           ),
         ],
         SectionLabel('Upcoming sessions', action: 'All sessions', onAction: () => context.go('/m/sessions')),
-        ListGroup(
-          children: [
-            for (final s in upcoming)
-              ListRow(
-                leading: const IconTile(Icons.videocam_outlined, tone: Tone.info),
-                title: '${s.youthName} · ${s.topic}',
-                meta: '${s.day} · ${s.time} · ${s.mode}',
-                onTap: () => context.go('/m/sessions'),
-              ),
-          ],
-        ),
+        if (!sessionsAsync.hasValue && sessionsAsync.hasError)
+          NoticeCard(
+            tone: Tone.danger,
+            icon: Icons.cloud_off_rounded,
+            title: 'Could not load your sessions',
+            body: mentorshipErrorText(sessionsAsync.error!),
+          )
+        else if (!sessionsAsync.hasValue)
+          const Shimmer(child: SkeletonBox(height: 72, radius: Radii.lg))
+        else if (upcoming.isEmpty)
+          const NoticeCard(icon: Icons.event_outlined, title: 'No upcoming sessions')
+        else
+          ListGroup(
+            children: [
+              for (final s in upcoming)
+                ListRow(
+                  leading: const IconTile(Icons.videocam_outlined, tone: Tone.info),
+                  title: '${s.youthName} · ${s.topic}',
+                  meta: '${s.day} · ${s.time} · ${s.mode}',
+                  onTap: () => context.go('/m/sessions'),
+                ),
+            ],
+          ),
       ],
     );
   }

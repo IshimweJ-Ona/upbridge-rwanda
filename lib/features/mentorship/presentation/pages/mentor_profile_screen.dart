@@ -1,12 +1,12 @@
-// Owner: Student 3 · Mentorship & mentor workspace
+// M2 Mentor profile, read from mentorProfiles.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:upbridge/features/mentorship/presentation/providers/mentorship_providers.dart';
+import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 
-/// M2 · Mentor profile (Alice Uwimana).
 class MentorProfileScreen extends ConsumerWidget {
   const MentorProfileScreen({super.key, required this.mentorId, this.heroTag});
 
@@ -15,88 +15,97 @@ class MentorProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(appStoreProvider);
-    final m = data.mentor(mentorId);
-    final isYours = m.isYours && !data.isFirstDay;
-    final avatar = AppAvatar(m.initials, tone: m.tone, size: 76);
+    final mentorAsync = ref.watch(mentorProvider(mentorId));
+    final sessions = ref.watch(mySessionsProvider).value ?? const <Session>[];
+    final mentor = mentorAsync.value;
 
+    if (mentor == null) {
+      return DetailPage(
+        title: 'Mentor',
+        backFallback: '/mentors',
+        children: [
+          const SizedBox(height: 16),
+          if (mentorAsync.hasValue)
+            const EmptyState(
+              icon: Icons.person_off_outlined,
+              title: 'Mentor not found',
+              body: 'This profile is no longer available.',
+            )
+          else if (mentorAsync.hasError)
+            EmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Could not load this mentor',
+              body: mentorshipErrorText(mentorAsync.error!),
+              action: 'Try again',
+              onAction: () => ref.invalidate(mentorProvider(mentorId)),
+            )
+          else
+            const Shimmer(child: SkeletonBox(height: 320, radius: Radii.lg)),
+        ],
+      );
+    }
+
+    final avatar = AppAvatar(mentor.initials, tone: mentor.tone, size: 76);
     return DetailPage(
-      title: m.name,
+      title: 'Mentor',
       backFallback: '/mentors',
-      footer: m.accepting
-          ? [AppButton('Request a session', icon: Icons.event_available_rounded, onPressed: () => context.push('/mentor-request/${m.id}'))]
-          : [
-              const AppButton('Full until November', onPressed: null),
-              AppButton(
-                'Tell me when there’s space',
-                variant: ButtonVariant.secondary,
-                onPressed: () => showToast(context, 'We’ll notify you when ${m.name.split(' ').first} has space', icon: Icons.notifications_active_outlined),
-              ),
-            ],
+      footer: [
+        if (mentor.accepting)
+          AppButton(
+            'Request a session',
+            onPressed: () => context.push('/mentor-request/${mentor.id}'),
+          )
+        else
+          const AppButton('Not taking requests right now'),
+      ],
       children: [
         const SizedBox(height: 12),
-        Center(child: heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar)),
+        heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar),
         const SizedBox(height: 14),
-        Center(child: Text(m.name, style: AppText.titleL, textAlign: TextAlign.center)),
+        Text(mentor.name, style: AppText.titleL),
         const SizedBox(height: 4),
-        Center(child: Text('${m.title} · ${m.employer}', style: AppText.bodyM, textAlign: TextAlign.center)),
+        Text(
+          [
+            mentor.title,
+            if (mentor.years > 0) '${mentor.years} years',
+            mentor.city,
+          ].join(' · '),
+          style: AppText.bodyM,
+        ),
         const SizedBox(height: 10),
-        Center(
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              StatusBadge('${m.years} yrs experience', icon: Icons.work_history_outlined),
-              StatusBadge(m.city, icon: Icons.place_outlined),
-              if (isYours) const StatusBadge('Your mentor', tone: Tone.accent, icon: Icons.favorite_border_rounded),
-            ],
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            const StatusBadge('Verified mentor', tone: Tone.success),
+            if (yourMentorId(sessions) == mentor.id)
+              const StatusBadge('Your mentor', tone: Tone.accent),
+          ],
         ),
         const SizedBox(height: 20),
         StatStrip([
-          StatItem('', 'Reviews given', countTo: m.reviews),
-          StatItem(m.replyTime, 'Median reply'),
-          StatItem('', 'Mentees', countTo: m.mentees),
+          StatItem('', 'tasks reviewed', countTo: mentor.reviews),
+          StatItem(mentor.replyTime, 'median reply'),
+          StatItem('', 'mentees now', countTo: mentor.mentees),
         ]),
-        const SectionLabel('About'),
-        Text(m.bio, style: AppText.bodyM),
-        const SectionLabel('Helps with'),
-        TagWrap(m.helpsWith, tone: Tone.info),
-        const SectionLabel('Skills'),
-        TagWrap(m.skills),
-        const SectionLabel('Availability'),
-        ListGroup(
-          children: [
-            ListRow(
-              leading: const IconTile(Icons.schedule_rounded, tone: Tone.info),
-              title: m.availability,
-              subtitle: '30-minute sessions on Google Meet',
-            ),
-            ListRow(
-              leading: const IconTile(Icons.translate_rounded),
-              title: m.languages,
-              subtitle: 'Languages',
-            ),
-          ],
-        ),
-        if (m.id == 'alice') ...[
-          const SectionLabel('How Alice gives feedback'),
-          SurfaceCard(
-            accentEdge: AppColors.accent,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '“Below 400 px the footer links run off the right edge. Let them wrap: flex-wrap: wrap on the footer list fixes it.”',
-                  style: AppText.bodyM.copyWith(color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
-                const MonoLabel('From a Task 3 review · shared with permission'),
-              ],
-            ),
-          ),
+        if (mentor.bio.isNotEmpty) ...[
+          const SectionLabel('About'),
+          Text(mentor.bio, style: AppText.bodyM),
         ],
+        if (mentor.helpsWith.isNotEmpty) ...[
+          const SectionLabel('Helps with'),
+          TagWrap(mentor.helpsWith),
+        ],
+        if (mentor.skills.isNotEmpty) ...[
+          const SectionLabel('Skills'),
+          TagWrap(mentor.skills),
+        ],
+        const SectionLabel('Availability'),
+        KeyValueTable([
+          ('When', mentor.availability),
+          ('How', 'Google Meet, 30 min'),
+          if (mentor.languages.isNotEmpty) ('Languages', mentor.languages),
+        ]),
       ],
     );
   }
