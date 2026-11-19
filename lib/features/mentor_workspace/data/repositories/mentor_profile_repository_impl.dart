@@ -25,6 +25,9 @@ abstract final class MentorProfileFields {
   static const startMinutes = 'startMinutes';
   static const endMinutes = 'endMinutes';
 
+  /// firestore.rules rejects more than this many open slots.
+  static const maxOpenSlots = 300;
+
   /// Everything [MentorProfileRepositoryImpl.save] may change.
   static const editable = {
     meetingLink,
@@ -140,7 +143,10 @@ class MentorProfileRepositoryImpl implements MentorProfileRepository {
       ],
       MentorFields.accepting: profile.accepting,
       MentorFields.availability: profile.availabilityLabel,
-      MentorFields.openSlots: [for (final s in starts) Timestamp.fromDate(s)],
+      MentorFields.openSlots: [
+        for (final s in starts.take(MentorProfileFields.maxOpenSlots))
+          Timestamp.fromDate(s),
+      ],
       MentorFields.updatedAt: FieldValue.serverTimestamp(),
     };
   }

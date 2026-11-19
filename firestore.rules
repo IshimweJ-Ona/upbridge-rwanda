@@ -66,6 +66,116 @@ service cloud.firestore {
         && request.resource.data.readAt == request.time;
     }
 
+    // ── Mentorship (owner: Boaz) ──
+    // Mirrors MentorSessionStatus.canTransition and SessionModel in the app.
+
+    function mentorProfile(mentorId) {
+      return get(/databases/$(database)/documents/mentorProfiles/$(mentorId));
+    }
+
+    function isBookableMentor(mentorId) {
+      return exists(/databases/$(database)/documents/mentorProfiles/$(mentorId))
+        && mentorProfile(mentorId).data.get('verified', false) == true
+        && mentorProfile(mentorId).data.get('accepting', true) != false;
+    }
+
+    function isText(value, maxSize) {
+      return value is string && value.size() <= maxSize;
+    }
+
+    function isMeetingLink(value) {
+      return value is string && value.size() <= 300
+        && (value.size() == 0 || value.matches('^https://[^\\s]+$'));
+    }
+
+    function sessionChangeOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    match /mentorSessions/{sessionId} {
+      allow read: if signedIn()
+        && (resource.data.requesterId == request.auth.uid
+          || resource.data.mentorId == request.auth.uid);
+
+      // A youth requests a session with a verified mentor who is accepting.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'requesterId', 'requesterName', 'mentorId', 'mentorName', 'topic',
+          'note', 'startsAt', 'durationMinutes', 'mode', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'requesterId', 'mentorId', 'topic', 'startsAt', 'durationMinutes',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.requesterId == request.auth.uid
+        && request.resource.data.mentorId is string
+        && request.resource.data.mentorId != request.auth.uid
+        && isBookableMentor(request.resource.data.mentorId)
+        && request.resource.data.status == 'requested'
+        && isText(request.resource.data.topic, 80)
+        && request.resource.data.topic.size() > 0
+        && isText(request.resource.data.get('note', ''), 500)
+        && isText(request.resource.data.get('requesterName', ''), 100)
+        && isText(request.resource.data.get('mentorName', ''), 100)
+        && isText(request.resource.data.get('mode', ''), 40)
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.startsAt > request.time
+        && request.resource.data.durationMinutes is int
+        && request.resource.data.durationMinutes >= 1
+        && request.resource.data.durationMinutes <= 120
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && request.resource.data.updatedAt == request.time
+        && (
+          // Youth: cancel a pending or confirmed session.
+          (resource.data.requesterId == request.auth.uid
+            && sessionChangeOnly(['status', 'updatedAt'])
+            && resource.data.status in ['requested', 'confirmed']
+            && request.resource.data.status == 'cancelled')
+          ||
+          // Mentor: answer a request, then complete or cancel it.
+          (resource.data.mentorId == request.auth.uid
+            && sessionChangeOnly(['status', 'meetingLink', 'updatedAt'])
+            && ((resource.data.status == 'requested'
+                  && request.resource.data.status in ['confirmed', 'declined'])
+              || (resource.data.status == 'confirmed'
+                  && request.resource.data.status in ['completed', 'cancelled']))
+            && (request.resource.data.get('meetingLink', '') == resource.data.get('meetingLink', '')
+              || (request.resource.data.status == 'confirmed'
+                  && isMeetingLink(request.resource.data.meetingLink))))
+        );
+
+      // A youth may withdraw a request nobody has answered yet.
+      allow delete: if signedIn()
+        && resource.data.requesterId == request.auth.uid
+        && resource.data.status == 'requested';
+    }
+
+    // Profiles are created and verified by admins. A mentor edits only their
+    // availability, meeting link and whether they accept new mentees.
+    match /mentorProfiles/{mentorId} {
+      allow update: if signedIn()
+        && request.auth.uid == mentorId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'meetingLink', 'menteeLimit', 'availabilityWindows', 'accepting',
+          'availability', 'openSlots', 'updatedAt'
+        ])
+        && isMeetingLink(request.resource.data.get('meetingLink', ''))
+        && request.resource.data.get('menteeLimit', 5) is int
+        && request.resource.data.get('menteeLimit', 5) >= 1
+        && request.resource.data.get('menteeLimit', 5) <= 10
+        && request.resource.data.get('availabilityWindows', []) is list
+        && request.resource.data.get('availabilityWindows', []).size() <= 21
+        && request.resource.data.get('accepting', false) is bool
+        && isText(request.resource.data.get('availability', ''), 1500)
+        && request.resource.data.get('openSlots', []) is list
+        && request.resource.data.get('openSlots', []).size() <= 300
+        && request.resource.data.updatedAt == request.time;
+    }
+
     match /{catalog}/{documentId} {
       allow read: if catalog in ['learningPaths', 'learningTasks', 'opportunities']
         && resource.data.status == 'published' && signedIn();
