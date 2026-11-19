@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:upbridge/core/themes/app_colors.dart';
-import 'package:upbridge/shared/widgets/feedback.dart';
 import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:upbridge/shared/widgets/feedback.dart';
 
 /// Everything the demo shows, held in one immutable snapshot.
 class AppData {
@@ -67,6 +67,7 @@ class AppData {
     List<LearningTask>? tasks,
     List<Review>? reviews,
     List<Submission>? submissions,
+    List<Mentor>? mentors,
     List<Session>? sessions,
     List<Opportunity>? opportunities,
     List<Application>? applications,
@@ -83,61 +84,80 @@ class AppData {
     bool? checkInDone,
     int? reviewedCount,
     String? resetPhone,
-  }) =>
-      AppData(
-        user: identical(user, _keep) ? this.user : user as AppUser?,
-        youthId: youthId ?? this.youthId,
-        tasks: tasks ?? this.tasks,
-        reviews: reviews ?? this.reviews,
-        submissions: submissions ?? this.submissions,
-        mentors: mentors,
-        sessions: sessions ?? this.sessions,
-        opportunities: opportunities ?? this.opportunities,
-        applications: applications ?? this.applications,
-        projects: projects ?? this.projects,
-        notifications: notifications ?? this.notifications,
-        mentees: mentees ?? this.mentees,
-        platformUsers: platformUsers ?? this.platformUsers,
-        applicants: applicants ?? this.applicants,
-        forwards: forwards ?? this.forwards,
-        settings: settings ?? this.settings,
-        goal: goal ?? this.goal,
-        interests: interests ?? this.interests,
-        language: language ?? this.language,
-        checkInDone: checkInDone ?? this.checkInDone,
-        reviewedCount: reviewedCount ?? this.reviewedCount,
-        resetPhone: resetPhone ?? this.resetPhone,
-      );
+  }) => AppData(
+    user: identical(user, _keep) ? this.user : user as AppUser?,
+    youthId: youthId ?? this.youthId,
+    tasks: tasks ?? this.tasks,
+    reviews: reviews ?? this.reviews,
+    submissions: submissions ?? this.submissions,
+    mentors: mentors ?? this.mentors,
+    sessions: sessions ?? this.sessions,
+    opportunities: opportunities ?? this.opportunities,
+    applications: applications ?? this.applications,
+    projects: projects ?? this.projects,
+    notifications: notifications ?? this.notifications,
+    mentees: mentees ?? this.mentees,
+    platformUsers: platformUsers ?? this.platformUsers,
+    applicants: applicants ?? this.applicants,
+    forwards: forwards ?? this.forwards,
+    settings: settings ?? this.settings,
+    goal: goal ?? this.goal,
+    interests: interests ?? this.interests,
+    language: language ?? this.language,
+    checkInDone: checkInDone ?? this.checkInDone,
+    reviewedCount: reviewedCount ?? this.reviewedCount,
+    resetPhone: resetPhone ?? this.resetPhone,
+  );
 
   // ── lookups ──
-  LearningTask task(String id) => tasks.firstWhere((t) => t.id == id, orElse: () => tasks.first);
-  Opportunity? opportunity(String id) => _find(opportunities, (o) => o.id == id);
-  Mentor mentor(String id) => mentors.firstWhere((m) => m.id == id, orElse: () => mentors.first);
+  LearningTask task(String id) =>
+      tasks.firstWhere((t) => t.id == id, orElse: () => tasks.first);
+  Opportunity? opportunity(String id) =>
+      _find(opportunities, (o) => o.id == id);
+  Mentor mentor(String id) =>
+      mentors.firstWhere((m) => m.id == id, orElse: () => mentors.first);
   Project? project(String id) => _find(projects, (p) => p.id == id);
   Application? application(String id) => _find(applications, (a) => a.id == id);
-  Application? applicationFor(String oppId) => _find(applications, (a) => a.oppId == oppId && a.youthId == user?.id && a.status != AppStatus.withdrawn);
+  Application? applicationFor(String oppId) => _find(
+    applications,
+    (a) =>
+        a.oppId == oppId &&
+        a.youthId == user?.id &&
+        a.status != AppStatus.withdrawn,
+  );
   Submission? submission(String id) => _find(submissions, (s) => s.id == id);
   Mentee? mentee(String id) => _find(mentees, (m) => m.id == id);
   MentorApplicant? applicant(String id) => _find(applicants, (a) => a.id == id);
   ForwardItem? forward(String id) => _find(forwards, (f) => f.id == id);
-  Project? projectForTask(String taskId) => _find(projects, (p) => p.taskId == taskId);
+  Project? projectForTask(String taskId) =>
+      _find(projects, (p) => p.taskId == taskId);
 
-  List<Review> reviewsFor(String taskId) => reviews.where((r) => r.taskId == taskId).toList();
+  List<Review> reviewsFor(String taskId) =>
+      reviews.where((r) => r.taskId == taskId).toList();
   Review? latestReview(String taskId) {
     final list = reviewsFor(taskId);
     return list.isEmpty ? null : list.first;
   }
 
-  int get approvedCount => tasks.where((t) => t.status == TaskStatus.approved).length;
+  int get approvedCount =>
+      tasks.where((t) => t.status == TaskStatus.approved).length;
   bool get isFirstDay => approvedCount == 0;
   int get unreadCount => notifications.where((n) => n.unread).length;
-  List<Application> get myApplications => applications.where((a) => a.youthId == user?.id).toList();
-  List<Session> get mySessions => sessions.where((s) => s.youthId == user?.id).toList();
-  List<Session> get mentorSessions => sessions.where((s) => s.mentorId == user?.id).toList();
+  List<Application> get myApplications =>
+      applications.where((a) => a.youthId == user?.id).toList();
+  List<Session> get mySessions =>
+      sessions.where((s) => s.youthId == user?.id).toList();
+  List<Session> get mentorSessions =>
+      sessions.where((s) => s.mentorId == user?.id).toList();
   List<Submission> get queue => submissions.where((s) => !s.reviewed).toList();
-  List<Opportunity> get openOpportunities => opportunities.where((o) => o.state == ListingState.open).toList();
+  List<Opportunity> get openOpportunities =>
+      opportunities.where((o) => o.state == ListingState.open).toList();
   LearningTask? get currentTask {
-    for (final s in [TaskStatus.changesRequested, TaskStatus.available, TaskStatus.inReview]) {
+    for (final s in [
+      TaskStatus.changesRequested,
+      TaskStatus.available,
+      TaskStatus.inReview,
+    ]) {
       for (final t in tasks) {
         if (t.status == s) return t;
       }
@@ -156,22 +176,22 @@ class AppData {
 class AppStore extends Notifier<AppData> {
   @override
   AppData build() => AppData(
-        youthId: 'jean',
-        tasks: SampleData.jeanTasks(),
-        reviews: SampleData.jeanReviews(),
-        submissions: List.of(SampleData.submissions),
-        mentors: SampleData.mentors,
-        sessions: List.of(SampleData.sessions),
-        opportunities: List.of(SampleData.opportunities),
-        applications: List.of(SampleData.applications),
-        projects: SampleData.jeanProjects(),
-        notifications: List.of(SampleData.jeanNotifications),
-        mentees: List.of(SampleData.mentees),
-        platformUsers: List.of(SampleData.platformUsers),
-        applicants: List.of(SampleData.applicants),
-        forwards: List.of(SampleData.forwards.where((f) => f.id != 'f-jean')),
-        settings: Map.of(SampleData.settings),
-      );
+    youthId: 'jean',
+    tasks: SampleData.jeanTasks(),
+    reviews: SampleData.jeanReviews(),
+    submissions: List.of(SampleData.submissions),
+    mentors: SampleData.mentors,
+    sessions: List.of(SampleData.sessions),
+    opportunities: List.of(SampleData.opportunities),
+    applications: List.of(SampleData.applications),
+    projects: SampleData.jeanProjects(),
+    notifications: List.of(SampleData.jeanNotifications),
+    mentees: List.of(SampleData.mentees),
+    platformUsers: List.of(SampleData.platformUsers),
+    applicants: List.of(SampleData.applicants),
+    forwards: List.of(SampleData.forwards.where((f) => f.id != 'f-jean')),
+    settings: Map.of(SampleData.settings),
+  );
 
   // ───────────────────────────── Auth ─────────────────────────────
 
@@ -184,8 +204,12 @@ class AppStore extends Notifier<AppData> {
   Future<String?> login(String phone, String password) async {
     await Future<void>.delayed(const Duration(milliseconds: 650));
     final user = SampleData.accounts[_key(phone)];
-    if (user == null) return 'No account uses this number. Check it, or create a free account.';
-    if (password != SampleData.demoPassword) return 'That password doesn’t match this number. Try again or reset it.';
+    if (user == null) {
+      return 'No account uses this number. Check it, or create a free account.';
+    }
+    if (password != SampleData.demoPassword) {
+      return 'That password doesn’t match this number. Try again or reset it.';
+    }
     _signIn(user);
     return null;
   }
@@ -212,7 +236,8 @@ class AppStore extends Notifier<AppData> {
         checkInDone: false,
       );
     }
-    if (user.role == Role.admin && !next.forwards.any((f) => f.applicationId == 'app-irembo')) {
+    if (user.role == Role.admin &&
+        !next.forwards.any((f) => f.applicationId == 'app-irembo')) {
       final seeded = SampleData.forwards.first;
       next = next.copyWith(
         forwards: [seeded, ...next.forwards],
@@ -231,10 +256,28 @@ class AppStore extends Notifier<AppData> {
                   note: 'I can start full-time on 1 December. My homepage was approved by my mentor and works on a 360 px phone.',
                   statusNote: 'An UpBridge admin checks your evidence matches the listing, then forwards it to Irembo.',
                   timeline: [
-                    TimelineEvent('Sent', 'SAT 17 OCT', detail: 'Profile, 2 projects and your note'),
-                    TimelineEvent('Checked by UpBridge', 'BY MON 19 OCT', detail: 'An admin confirms your evidence', done: false, current: true),
-                    TimelineEvent('Forwarded to Irembo', 'AFTER THE CHECK', done: false),
-                    TimelineEvent('Irembo replies', 'BY FRI 20 NOV', done: false),
+                    TimelineEvent(
+                      'Sent',
+                      'SAT 17 OCT',
+                      detail: 'Profile, 2 projects and your note',
+                    ),
+                    TimelineEvent(
+                      'Checked by UpBridge',
+                      'BY MON 19 OCT',
+                      detail: 'An admin confirms your evidence',
+                      done: false,
+                      current: true,
+                    ),
+                    TimelineEvent(
+                      'Forwarded to Irembo',
+                      'AFTER THE CHECK',
+                      done: false,
+                    ),
+                    TimelineEvent(
+                      'Irembo replies',
+                      'BY FRI 20 NOV',
+                      done: false,
+                    ),
                   ],
                 ),
                 ...next.applications,
@@ -248,7 +291,15 @@ class AppStore extends Notifier<AppData> {
     await Future<void>.delayed(const Duration(milliseconds: 700));
     final id = 'youth-${_key(phone)}';
     state = state.copyWith(
-      user: AppUser(id: id, name: name.trim(), phone: phone, role: Role.youth, onboarded: false, headline: 'New on UpBridge', location: 'Rwanda'),
+      user: AppUser(
+        id: id,
+        name: name.trim(),
+        phone: phone,
+        role: Role.youth,
+        onboarded: false,
+        headline: 'New on UpBridge',
+        location: 'Rwanda',
+      ),
       youthId: id,
       tasks: SampleData.freshTasks(),
       reviews: const [],
@@ -258,11 +309,20 @@ class AppStore extends Notifier<AppData> {
     );
   }
 
-  void finishOnboarding({required String goal, required List<String> interests}) {
+  void finishOnboarding({
+    required String goal,
+    required List<String> interests,
+  }) {
     final u = state.user;
     if (u == null) return;
-    final headline = interests.isEmpty ? 'Learning on UpBridge' : 'Learning ${interests.first.toLowerCase()} on UpBridge';
-    state = state.copyWith(user: u.copyWith(onboarded: true, headline: headline), goal: goal, interests: interests);
+    final headline = interests.isEmpty
+        ? 'Learning on UpBridge'
+        : 'Learning ${interests.first.toLowerCase()} on UpBridge';
+    state = state.copyWith(
+      user: u.copyWith(onboarded: true, headline: headline),
+      goal: goal,
+      interests: interests,
+    );
   }
 
   Future<bool> requestReset(String phone) async {
@@ -276,22 +336,36 @@ class AppStore extends Notifier<AppData> {
     return code.length == 6 && code != '000000';
   }
 
-  Future<void> setNewPassword(String password) => Future<void>.delayed(const Duration(milliseconds: 600));
+  Future<void> setNewPassword(String password) =>
+      Future<void>.delayed(const Duration(milliseconds: 600));
 
   void logout() => state = state.copyWith(user: null);
 
   // ───────────────────────────── Youth: learning ─────────────────────────────
 
-  void submitWork(String taskId, {required String live, required String repo, required String note}) {
+  void submitWork(
+    String taskId, {
+    required String live,
+    required String repo,
+    required String note,
+  }) {
     final task = state.task(taskId);
     final isResubmission = task.status == TaskStatus.changesRequested;
-    _setTask(taskId, TaskStatus.inReview, isResubmission ? 'Resubmitted today · 10:05' : 'Sent today · a mentor replies within 48 h');
+    _setTask(
+      taskId,
+      TaskStatus.inReview,
+      isResubmission
+          ? 'Resubmitted today · 10:05'
+          : 'Sent today · a mentor replies within 48 h',
+    );
     if (isResubmission && state.youthId == 'jean') {
       final youth = state.youthId;
       Timer(const Duration(seconds: 3), () {
         if (state.youthId != youth) return;
         _approve(taskId, SampleData.t3Approval);
-        ref.read(bannerProvider.notifier).show(
+        ref
+            .read(bannerProvider.notifier)
+            .show(
               const AppBanner(
                 title: 'Alice approved your homepage',
                 body: 'All 4 criteria met. Add it to your portfolio.',
@@ -304,7 +378,12 @@ class AppStore extends Notifier<AppData> {
   }
 
   void _setTask(String id, TaskStatus status, String note) {
-    state = state.copyWith(tasks: [for (final t in state.tasks) t.id == id ? t.copyWith(status: status, statusNote: note) : t]);
+    state = state.copyWith(
+      tasks: [
+        for (final t in state.tasks)
+          t.id == id ? t.copyWith(status: status, statusNote: note) : t,
+      ],
+    );
   }
 
   void _approve(String taskId, Review review) {
@@ -312,10 +391,17 @@ class AppStore extends Notifier<AppData> {
     var unlockNext = false;
     for (final t in state.tasks) {
       if (t.id == taskId) {
-        tasks.add(t.copyWith(status: TaskStatus.approved, statusNote: 'Approved today'));
+        tasks.add(
+          t.copyWith(status: TaskStatus.approved, statusNote: 'Approved today'),
+        );
         unlockNext = true;
       } else if (unlockNext && t.status == TaskStatus.locked) {
-        tasks.add(t.copyWith(status: TaskStatus.available, statusNote: 'Ready to start'));
+        tasks.add(
+          t.copyWith(
+            status: TaskStatus.available,
+            statusNote: 'Ready to start',
+          ),
+        );
         unlockNext = false;
       } else {
         tasks.add(t);
@@ -365,75 +451,115 @@ class AppStore extends Notifier<AppData> {
 
   // ───────────────────────────── Youth: portfolio & profile ─────────────────────────────
 
-  String addProject({required String title, required String summary, required String link, required List<String> skills}) {
+  String addProject({
+    required String title,
+    required String summary,
+    required String link,
+    required List<String> skills,
+  }) {
     final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
-    state = state.copyWith(projects: [
-      Project(
-        id: id,
-        title: title.trim(),
-        summary: summary.trim(),
-        skills: skills,
-        addedOn: '17 Oct 2026',
-        liveUrl: link.trim(),
-        whatIDid: const [],
-        icon: Icons.folder_open_rounded,
-        tone: Tone.neutral,
-      ),
-      ...state.projects,
-    ]);
+    state = state.copyWith(
+      projects: [
+        Project(
+          id: id,
+          title: title.trim(),
+          summary: summary.trim(),
+          skills: skills,
+          addedOn: '17 Oct 2026',
+          liveUrl: link.trim(),
+          whatIDid: const [],
+          icon: Icons.folder_open_rounded,
+          tone: Tone.neutral,
+        ),
+        ...state.projects,
+      ],
+    );
     return id;
   }
 
-  void updateProfile({required String name, required String headline, required String location, required String about}) {
+  void updateProfile({
+    required String name,
+    required String headline,
+    required String location,
+    required String about,
+  }) {
     final u = state.user;
     if (u == null) return;
-    state = state.copyWith(user: u.copyWith(name: name.trim(), headline: headline.trim(), location: location.trim(), about: about.trim()));
+    state = state.copyWith(
+      user: u.copyWith(
+        name: name.trim(),
+        headline: headline.trim(),
+        location: location.trim(),
+        about: about.trim(),
+      ),
+    );
   }
 
   void setLanguage(String code) => state = state.copyWith(language: code);
 
-  void markAllRead() => state = state.copyWith(notifications: [for (final n in state.notifications) n.read()]);
+  void markAllRead() => state = state.copyWith(
+    notifications: [for (final n in state.notifications) n.read()],
+  );
 
-  void markRead(String id) => state = state.copyWith(notifications: [for (final n in state.notifications) n.id == id ? n.read() : n]);
+  void markRead(String id) => state = state.copyWith(
+    notifications: [
+      for (final n in state.notifications) n.id == id ? n.read() : n,
+    ],
+  );
 
   void completeCheckIn() => state = state.copyWith(
-        checkInDone: true,
-        notifications: [for (final n in state.notifications) n.id == 'n-checkin' ? n.read() : n],
-      );
+    checkInDone: true,
+    notifications: [
+      for (final n in state.notifications) n.id == 'n-checkin' ? n.read() : n,
+    ],
+  );
 
   // ───────────────────────────── Youth: mentorship ─────────────────────────────
 
-  String requestSession({required String mentorId, required SessionSlot slot, required String topic, required String note}) {
+  String requestSession({
+    required String mentorId,
+    required SessionSlot slot,
+    required String topic,
+    required String note,
+  }) {
     final u = state.user!;
     final m = state.mentor(mentorId);
     final id = 's-${DateTime.now().millisecondsSinceEpoch}';
-    state = state.copyWith(sessions: [
-      Session(
-        id: id,
-        mentorId: mentorId,
-        mentorName: m.name,
-        youthId: u.id,
-        youthName: u.name,
-        day: slot.day,
-        time: slot.time,
-        topic: topic,
-        note: note,
-        state: SessionState.requested,
-      ),
-      ...state.sessions,
-    ]);
+    state = state.copyWith(
+      sessions: [
+        Session(
+          id: id,
+          mentorId: mentorId,
+          mentorName: m.name,
+          youthId: u.id,
+          youthName: u.name,
+          day: slot.day,
+          time: slot.time,
+          topic: topic,
+          note: note,
+          state: SessionState.requested,
+        ),
+        ...state.sessions,
+      ],
+    );
     return id;
   }
 
   // ───────────────────────────── Youth: opportunities ─────────────────────────────
 
-  String submitApplication({required String oppId, required List<String> projectIds, required String note}) {
+  String submitApplication({
+    required String oppId,
+    required List<String> projectIds,
+    required String note,
+  }) {
     final u = state.user!;
     final opp = state.opportunity(oppId)!;
     final id = 'app-$oppId';
     final app = Application(
       id: id,
-      ref: oppId == 'irembo' ? 'UB-2026-04817' : 'UB-2026-0${4818 + state.applications.length}',
+      ref: oppId == 'irembo'
+          ? 'UB-2026-04817'
+          : 'UB-2026-0${4818 + state.applications.length}',
       oppId: oppId,
       youthId: u.id,
       youthName: u.name,
@@ -441,18 +567,41 @@ class AppStore extends Notifier<AppData> {
       sentOn: 'Sent today',
       projectIds: projectIds,
       note: note,
-      statusNote: 'An UpBridge admin checks your evidence matches the listing, then forwards it to ${opp.org}.',
+      statusNote:
+          'An UpBridge admin checks your evidence matches the listing, then forwards it to ${opp.org}.',
       timeline: [
-        TimelineEvent('Sent', 'SAT 17 OCT', detail: 'Profile, ${projectIds.length} project${projectIds.length == 1 ? '' : 's'} and your note'),
-        const TimelineEvent('Checked by UpBridge', 'BY MON 19 OCT', detail: 'An admin confirms your evidence', done: false, current: true),
-        TimelineEvent('Forwarded to ${opp.org}', 'AFTER THE CHECK', done: false),
-        TimelineEvent('${opp.org} replies', 'BY ${opp.repliesBy.toUpperCase()}', done: false),
+        TimelineEvent(
+          'Sent',
+          'SAT 17 OCT',
+          detail:
+              'Profile, ${projectIds.length} project${projectIds.length == 1 ? '' : 's'} and your note',
+        ),
+        const TimelineEvent(
+          'Checked by UpBridge',
+          'BY MON 19 OCT',
+          detail: 'An admin confirms your evidence',
+          done: false,
+          current: true,
+        ),
+        TimelineEvent(
+          'Forwarded to ${opp.org}',
+          'AFTER THE CHECK',
+          done: false,
+        ),
+        TimelineEvent(
+          '${opp.org} replies',
+          'BY ${opp.repliesBy.toUpperCase()}',
+          done: false,
+        ),
       ],
     );
     final hasForward = state.forwards.any((f) => f.applicationId == id);
     state = state.copyWith(
       applications: [app, ...state.applications.where((a) => a.id != id)],
-      opportunities: [for (final o in state.opportunities) o.id == oppId ? o.copyWith(applicants: o.applicants + 1) : o],
+      opportunities: [
+        for (final o in state.opportunities)
+          o.id == oppId ? o.copyWith(applicants: o.applicants + 1) : o,
+      ],
       forwards: hasForward
           ? state.forwards
           : [
@@ -461,13 +610,22 @@ class AppStore extends Notifier<AppData> {
                 youthName: u.name,
                 oppId: oppId,
                 sentOn: 'Sent today',
-                evidence: '${state.approvedCount} approved tasks · ${projectIds.length} project${projectIds.length == 1 ? '' : 's'} attached',
+                evidence:
+                    '${state.approvedCount} approved tasks · ${projectIds.length} project${projectIds.length == 1 ? '' : 's'} attached',
                 applicationId: id,
                 checks: oppId == 'irembo' && u.id == 'jean'
                     ? SampleData.forwards.first.checks
                     : [
-                        Check('Evidence approved by a mentor', state.approvedCount > 0, '${state.approvedCount} tasks approved'),
-                        const Check('Contact details confirmed', true, 'Phone verified at sign-up'),
+                        Check(
+                          'Evidence approved by a mentor',
+                          state.approvedCount > 0,
+                          '${state.approvedCount} tasks approved',
+                        ),
+                        const Check(
+                          'Contact details confirmed',
+                          true,
+                          'Phone verified at sign-up',
+                        ),
                       ],
               ),
               ...state.forwards,
@@ -477,26 +635,47 @@ class AppStore extends Notifier<AppData> {
   }
 
   void withdraw(String appId) {
-    state = state.copyWith(applications: [
-      for (final a in state.applications)
-        a.id == appId
-            ? a.copyWith(
-                status: AppStatus.withdrawn,
-                statusNote: 'You withdrew this application on 17 Oct. The employer won’t see it.',
-                timeline: [...a.timeline.where((e) => e.done).map((e) => TimelineEvent(e.title, e.date, detail: e.detail)), const TimelineEvent('Withdrawn', 'SAT 17 OCT', detail: 'By you')],
-              )
-            : a,
-    ]);
+    state = state.copyWith(
+      applications: [
+        for (final a in state.applications)
+          a.id == appId
+              ? a.copyWith(
+                  status: AppStatus.withdrawn,
+                  statusNote: 'You withdrew this application on 17 Oct. The employer won’t see it.',
+                  timeline: [
+                    ...a.timeline
+                        .where((e) => e.done)
+                        .map(
+                          (e) =>
+                              TimelineEvent(e.title, e.date, detail: e.detail),
+                        ),
+                    const TimelineEvent(
+                      'Withdrawn',
+                      'SAT 17 OCT',
+                      detail: 'By you',
+                    ),
+                  ],
+                )
+              : a,
+      ],
+    );
   }
 
   // ───────────────────────────── Mentor ─────────────────────────────
 
-  void sendReview(String submissionId, List<CriterionResult> results, String summary) {
+  void sendReview(
+    String submissionId,
+    List<CriterionResult> results,
+    String summary,
+  ) {
     final sub = state.submission(submissionId);
     if (sub == null) return;
     final approved = results.every((r) => r.verdict == Verdict.met);
     state = state.copyWith(
-      submissions: [for (final s in state.submissions) s.id == submissionId ? s.copyWith(reviewed: true) : s],
+      submissions: [
+        for (final s in state.submissions)
+          s.id == submissionId ? s.copyWith(reviewed: true) : s,
+      ],
       reviewedCount: state.reviewedCount + 1,
       mentees: [
         for (final m in state.mentees)
@@ -508,14 +687,17 @@ class AppStore extends Notifier<AppData> {
                   approved: approved ? m.approved + 1 : m.approved,
                   total: m.total,
                   lastActive: m.lastActive,
-                  status: approved ? 'Task ${sub.taskNumber} approved today' : 'Changes requested today',
+                  status: approved
+                      ? 'Task ${sub.taskNumber} approved today'
+                      : 'Changes requested today',
                   tone: approved ? Tone.success : Tone.warning,
                   district: m.district,
                 )
               : m,
       ],
     );
-    if (sub.youthId == state.youthId && state.task(sub.taskId).status != TaskStatus.approved) {
+    if (sub.youthId == state.youthId &&
+        state.task(sub.taskId).status != TaskStatus.approved) {
       final review = Review(
         id: 'r-${sub.taskId}-${DateTime.now().millisecondsSinceEpoch}',
         taskId: sub.taskId,
@@ -535,9 +717,16 @@ class AppStore extends Notifier<AppData> {
   }
 
   void respondToSession(String id, {required bool accept}) {
-    state = state.copyWith(sessions: [
-      for (final s in state.sessions) s.id == id ? s.copyWith(state: accept ? SessionState.upcoming : SessionState.declined) : s,
-    ]);
+    state = state.copyWith(
+      sessions: [
+        for (final s in state.sessions)
+          s.id == id
+              ? s.copyWith(
+                  state: accept ? SessionState.upcoming : SessionState.declined,
+                )
+              : s,
+      ],
+    );
   }
 
   // ───────────────────────────── Admin ─────────────────────────────
@@ -546,11 +735,28 @@ class AppStore extends Notifier<AppData> {
     final a = state.applicant(id);
     if (a == null) return;
     state = state.copyWith(
-      applicants: [for (final x in state.applicants) x.id == id ? x.copyWith(state: approve ? ApplicantState.approved : ApplicantState.declined) : x],
+      applicants: [
+        for (final x in state.applicants)
+          x.id == id
+              ? x.copyWith(
+                  state: approve
+                      ? ApplicantState.approved
+                      : ApplicantState.declined,
+                )
+              : x,
+      ],
       platformUsers: approve
           ? [
               ...state.platformUsers,
-              PlatformUser(id: 'u-${a.id}', name: a.name, role: Role.mentor, phone: a.phone, district: a.city, joined: 'Verified today', detail: 'New · no mentees yet'),
+              PlatformUser(
+                id: 'u-${a.id}',
+                name: a.name,
+                role: Role.mentor,
+                phone: a.phone,
+                district: a.city,
+                joined: 'Verified today',
+                detail: 'New · no mentees yet',
+              ),
             ]
           : state.platformUsers,
     );
@@ -561,18 +767,34 @@ class AppStore extends Notifier<AppData> {
     if (f == null) return;
     final opp = state.opportunity(f.oppId);
     state = state.copyWith(
-      forwards: [for (final x in state.forwards) x.id == id ? x.copyWith(forwarded: true) : x],
+      forwards: [
+        for (final x in state.forwards)
+          x.id == id ? x.copyWith(forwarded: true) : x,
+      ],
       applications: [
         for (final a in state.applications)
           a.id == f.applicationId
               ? a.copyWith(
                   status: AppStatus.forwarded,
-                  statusNote: '${opp?.org ?? 'The employer'} has your application. They’ve committed to reply by ${opp?.repliesBy ?? 'the reply-by date'}.',
+                  statusNote:
+                      '${opp?.org ?? 'The employer'} has your application. They’ve committed to reply by ${opp?.repliesBy ?? 'the reply-by date'}.',
                   timeline: [
                     a.timeline.first,
-                    const TimelineEvent('Checked by UpBridge', 'SAT 17 OCT', detail: 'Evidence confirmed'),
-                    TimelineEvent('Forwarded to ${opp?.org ?? 'employer'}', 'SAT 17 OCT', current: true),
-                    TimelineEvent('${opp?.org ?? 'Employer'} replies', 'BY ${(opp?.repliesBy ?? '').toUpperCase()}', done: false),
+                    const TimelineEvent(
+                      'Checked by UpBridge',
+                      'SAT 17 OCT',
+                      detail: 'Evidence confirmed',
+                    ),
+                    TimelineEvent(
+                      'Forwarded to ${opp?.org ?? 'employer'}',
+                      'SAT 17 OCT',
+                      current: true,
+                    ),
+                    TimelineEvent(
+                      '${opp?.org ?? 'Employer'} replies',
+                      'BY ${(opp?.repliesBy ?? '').toUpperCase()}',
+                      done: false,
+                    ),
                   ],
                 )
               : a,
@@ -581,12 +803,19 @@ class AppStore extends Notifier<AppData> {
   }
 
   void setListingState(String id, ListingState s) {
-    state = state.copyWith(opportunities: [for (final o in state.opportunities) o.id == id ? o.copyWith(state: s) : o]);
+    state = state.copyWith(
+      opportunities: [
+        for (final o in state.opportunities)
+          o.id == id ? o.copyWith(state: s) : o,
+      ],
+    );
   }
 
-  void publishListing(Opportunity o) => state = state.copyWith(opportunities: [o, ...state.opportunities]);
+  void publishListing(Opportunity o) =>
+      state = state.copyWith(opportunities: [o, ...state.opportunities]);
 
-  void addUser(PlatformUser u) => state = state.copyWith(platformUsers: [u, ...state.platformUsers]);
+  void addUser(PlatformUser u) =>
+      state = state.copyWith(platformUsers: [u, ...state.platformUsers]);
 
   void toggleSetting(String key) {
     final next = Map.of(state.settings);

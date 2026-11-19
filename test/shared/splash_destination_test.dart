@@ -1,3 +1,4 @@
+// Tests launch destination resolution across Firebase claims and demo fallback state.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/shared/models/models.dart';
@@ -34,7 +35,69 @@ void main() {
     );
   });
 
-  test('onboarding users return to their next onboarding step', () {
+  test(
+    'verified Firebase session routes from trusted role and onboarding flag',
+    () {
+      expect(
+        splashDestination(
+          firebaseInitialized: true,
+          firebaseSignedIn: true,
+          emailVerified: true,
+          firebaseRole: Role.youth,
+          firebaseOnboarded: false,
+          appUser: null,
+        ),
+        '/onboarding/goal',
+      );
+      expect(
+        splashDestination(
+          firebaseInitialized: true,
+          firebaseSignedIn: true,
+          emailVerified: true,
+          firebaseRole: Role.youth,
+          firebaseOnboarded: true,
+          appUser: null,
+        ),
+        '/home',
+      );
+      expect(
+        splashDestination(
+          firebaseInitialized: true,
+          firebaseSignedIn: true,
+          emailVerified: true,
+          firebaseRole: Role.mentor,
+          firebaseOnboarded: false,
+          appUser: null,
+        ),
+        '/m/home',
+      );
+      expect(
+        splashDestination(
+          firebaseInitialized: true,
+          firebaseSignedIn: true,
+          emailVerified: true,
+          firebaseRole: Role.youth,
+          firebaseOnboarded: false,
+          firebaseProfileExists: false,
+          appUser: null,
+        ),
+        '/verify-email',
+      );
+      expect(
+        splashDestination(
+          firebaseInitialized: true,
+          firebaseSignedIn: true,
+          emailVerified: true,
+          firebaseRole: Role.admin,
+          firebaseOnboarded: false,
+          appUser: null,
+        ),
+        '/a/overview',
+      );
+    },
+  );
+
+  test('demo onboarding users return to their next onboarding step', () {
     expect(
       splashDestination(
         firebaseInitialized: false,
@@ -46,7 +109,7 @@ void main() {
     );
   });
 
-  test('verified users with a role return to the role home', () {
+  test('verified users with fallback AppUser return to role home', () {
     expect(
       splashDestination(
         firebaseInitialized: true,
