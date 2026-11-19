@@ -1,12 +1,24 @@
-// Shows the youth dashboard with sample learning and opportunity summaries.
+// Shows either the live Firestore youth summary or clearly labeled demo dashboard data.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/core/utils/kigali_time.dart';
+import 'package:upbridge/features/home/domain/entities/home_summary.dart';
+import 'package:upbridge/features/home/domain/entities/next_step.dart';
+import 'package:upbridge/features/home/presentation/providers/home_providers.dart';
+import 'package:upbridge/features/home/presentation/providers/notification_providers.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:upbridge/shared/services/error_messages.dart';
+import 'package:upbridge/shared/shared.dart';
+
+String currentKigaliMonthKey([DateTime? nowUtc]) {
+  final kigali = KigaliTime.fromUtc((nowUtc ?? DateTime.now()).toUtc());
+  final month = kigali.month.toString().padLeft(2, '0');
+  return '${kigali.year}-$month';
+}
 
 /// H1 · first-day home, and H2 · returning home ("next step").
 class HomeScreen extends ConsumerWidget {
@@ -14,9 +26,34 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(verifiedSessionProvider).asData?.value;
+    final liveUid =
+        session != null &&
+            session.firebaseInitialized &&
+            session.signedIn &&
+            session.emailVerified
+        ? session.uid
+        : null;
+
+    if (liveUid != null) {
+      return _LiveHomeView(session: session!, uid: liveUid);
+    }
+
     final data = ref.watch(appStoreProvider);
     final user = data.user;
-    if (user == null) return const SizedBox.shrink();
+    if (user == null) {
+      return PageFrame(
+        largeTitle: 'Home',
+        children: [
+          const SizedBox(height: 16),
+          const NoticeCard(
+            icon: Icons.info_outline_rounded,
+            title: 'Sign in required',
+            body: 'Log in or pick a demo account to view your dashboard.',
+          ),
+        ],
+      );
+    }
 
     final bell = CircleIconButton(
       icon: Icons.notifications_none_rounded,
@@ -170,7 +207,7 @@ class HomeScreen extends ConsumerWidget {
             const ListRow(
               leading: IconTile(Icons.check_rounded, tone: Tone.success),
               title: 'Check-in sent — thank you',
-              meta: 'Next one opens 17 Nov',
+              meta: 'Next one opens next month',
             ),
         ],
       ),
@@ -231,6 +268,136 @@ class HomeScreen extends ConsumerWidget {
           onAction: () => context.push('/task/${task.id}'),
         );
     }
+  }
+}
+
+class _LiveHomeView extends ConsumerWidget {
+  const _LiveHomeView({required this.session, required this.uid});
+
+  final VerifiedSession session;
+  final String uid;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final monthKey = currentKigaliMonthKey();
+    final summaryAsync = ref.watch(homeSummaryProvider(uid));
+    final checkInAsync = ref.watch(
+      monthlyCheckInProvider((userId: uid, monthKey: monthKey)),
+    );
+    final unreadCount =
+        ref.watch(unreadNotificationCountProvider(uid)).asData?.value ?? 0;
+
+    final bell = CircleIconButton(
+      icon: Icons.notifications_none_rounded,
+      badge: unreadCount > 0,
+      tooltip: 'Notifications',
+      onTap: () => context.push('/notifications'),
+    );
+
+    return PageFrame(
+      largeTitle: 'Muraho, ${session.firstName}',
+      eyebrow: 'Your UpBridge workspace',
+      actions: [bell, const SizedBox(width: 4)],
+      onRefresh: () async {
+        ref.invalidate(homeSummaryProvider(uid));
+        ref.invalidate(
+          monthlyCheckInProvider((userId: uid, monthKey: monthKey)),
+        );
+      },
+      children: [
+        const SizedBox(height: 12),
+        summaryAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (error, _) => NoticeCard(
+            tone: Tone.warning,
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load your summary',
+            body: errorMessage(error),
+          ),
+          data: (summary) =>
+              _liveBody(context, summary, checkInAsync, monthKey),
+        ),
+      ],
+    );
+  }
+
+  Widget _liveBody(
+    BuildContext context,
+    HomeSummary summary,
+    AsyncValue<dynamic> checkInAsync,
+    String monthKey,
+  ) {
+    final nextStep = summary.nextStep;
+    final submittedThisMonth = checkInAsync.asData?.value != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (nextStep != null)
+          NextStepCard(
+            eyebrow: 'Next step',
+            title: nextStep.title,
+            body: nextStep.message,
+            action: nextStep.kind == NextStepKind.reviseTask
+                ? 'Open task'
+                : 'View learning path',
+            onAction: () => context.go(nextStep.route ?? '/learn'),
+          )
+        else
+          NextStepCard(
+            eyebrow: 'Start learning',
+            title: 'Build practical proof of your skills',
+            body: 'Complete learning tasks, collect mentor feedback, and publish projects to your portfolio.',
+            action: 'Open learning path',
+            onAction: () => context.go('/learn'),
+          ),
+        const SectionLabel('Your progress'),
+        StatStrip([
+          StatItem('', 'Approved tasks', countTo: summary.approvedTasks),
+          StatItem('', 'In review', countTo: summary.pendingReviews),
+          StatItem('', 'Projects', countTo: summary.projectCount),
+        ]),
+        const SectionLabel('This month'),
+        ListGroup(
+          children: [
+            ListRow(
+              leading: IconTile(
+                submittedThisMonth
+                    ? Icons.check_rounded
+                    : Icons.fact_check_outlined,
+                tone: Tone.success,
+              ),
+              title: submittedThisMonth
+                  ? 'Monthly check-in sent'
+                  : 'Monthly check-in',
+              meta: submittedThisMonth
+                  ? 'Recorded for $monthKey'
+                  : '3 questions · 2 min',
+              onTap: submittedThisMonth
+                  ? null
+                  : () => context.push('/check-in'),
+            ),
+            ListRow(
+              leading: const IconTile(
+                Icons.work_outline_rounded,
+                tone: Tone.info,
+              ),
+              title: 'Published opportunities',
+              meta: '${summary.publishedOpportunityCount} open listings',
+              onTap: () => context.go('/jobs'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const NoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Live Firebase summary',
+          body: 'Counts above come from your Firestore records. Feature screens still marked as demo preview remain sample-only until their owners connect Firestore.',
+        ),
+      ],
+    );
   }
 }
 
