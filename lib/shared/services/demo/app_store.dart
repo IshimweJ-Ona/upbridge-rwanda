@@ -8,6 +8,7 @@ import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/shared/models/models.dart';
 import 'package:upbridge/shared/services/demo/sample_data.dart';
 import 'package:upbridge/shared/widgets/feedback.dart';
+import 'package:upbridge/features/profile/domain/entities/profile.dart';
 
 /// Everything the demo shows, held in one immutable snapshot.
 class AppData {
@@ -194,6 +195,26 @@ class AppStore extends Notifier<AppData> {
   );
 
   // ───────────────────────────── Auth ─────────────────────────────
+
+  void setFirebaseProfile(Profile profile) {
+    state = state.copyWith(
+      user: AppUser(
+        id: profile.uid,
+        name: profile.displayName,
+        phone: profile.phone,
+        role: switch (profile.role) {
+          'admin' => Role.admin,
+          'mentor' => Role.mentor,
+          _ => Role.youth,
+        },
+        onboarded: profile.onboarded,
+        location: 'Rwanda',
+      ),
+      youthId: profile.uid,
+      goal: profile.learningGoal,
+      interests: profile.interests,
+    );
+  }
 
   static String _key(String phone) {
     final d = phone.replaceAll(RegExp(r'\D'), '');
