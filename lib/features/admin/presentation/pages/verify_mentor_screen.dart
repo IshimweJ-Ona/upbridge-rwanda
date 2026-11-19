@@ -1,10 +1,10 @@
-// Reviews mentor application checks and records the admin decision.
+// Reviews mentor application checks and records the admin decision in demo state.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/shared.dart';
 
 /// AD5 · Verify a mentor applicant (Sylvestre Nsanzimana, 4 of 4 checks).
 class VerifyMentorScreen extends ConsumerWidget {
@@ -12,13 +12,19 @@ class VerifyMentorScreen extends ConsumerWidget {
 
   final String applicantId;
 
-  Future<void> _decide(BuildContext context, WidgetRef ref, MentorApplicant a, bool approve) async {
+  Future<void> _decide(
+    BuildContext context,
+    WidgetRef ref,
+    MentorApplicant a,
+    bool approve,
+  ) async {
     final first = a.name.split(' ').first;
     if (!approve) {
       final ok = await showAppDialog(
         context,
         title: 'Decline $first’s application?',
-        body: '$first gets an SMS explaining which check didn’t pass. They can apply again later.',
+        body:
+            '$first gets an SMS explaining which check didn’t pass. They can apply again later.',
         confirmLabel: 'Decline',
         destructive: true,
         icon: Icons.person_off_outlined,
@@ -38,12 +44,20 @@ class VerifyMentorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final a = ref.watch(appStoreProvider.select((s) => s.applicant(applicantId)));
+    final a = ref.watch(
+      appStoreProvider.select((s) => s.applicant(applicantId)),
+    );
     if (a == null) {
       return const DetailPage(
         title: 'Applicant',
         backFallback: '/a/mentors',
-        children: [SizedBox(height: 24), EmptyState(icon: Icons.person_search_outlined, title: 'Applicant not found')],
+        children: [
+          SizedBox(height: 24),
+          EmptyState(
+            icon: Icons.person_search_outlined,
+            title: 'Applicant not found',
+          ),
+        ],
       );
     }
     final first = a.name.split(' ').first;
@@ -54,24 +68,54 @@ class VerifyMentorScreen extends ConsumerWidget {
       title: a.name,
       backFallback: '/a/mentors',
       footerNote: !decided && !complete
-          ? Text('Approve once all ${a.checks.length} checks pass', style: AppText.caption, textAlign: TextAlign.center)
+          ? Text(
+              'Approve once all ${a.checks.length} checks pass',
+              style: AppText.caption,
+              textAlign: TextAlign.center,
+            )
           : null,
       footer: decided
-          ? [AppButton('Back to mentors', variant: ButtonVariant.secondary, onPressed: () => goBack(context, fallback: '/a/mentors'))]
+          ? [
+              AppButton(
+                'Back to mentors',
+                variant: ButtonVariant.secondary,
+                onPressed: () => goBack(context, fallback: '/a/mentors'),
+              ),
+            ]
           : [
-              AppButton('Approve as mentor', icon: Icons.verified_rounded, onPressed: complete ? () => _decide(context, ref, a, true) : null),
+              AppButton(
+                'Approve as mentor',
+                icon: Icons.verified_rounded,
+                onPressed: complete
+                    ? () => _decide(context, ref, a, true)
+                    : null,
+              ),
               if (complete)
-                AppButton('Decline', variant: ButtonVariant.dangerOutline, onPressed: () => _decide(context, ref, a, false))
+                AppButton(
+                  'Decline',
+                  variant: ButtonVariant.dangerOutline,
+                  onPressed: () => _decide(context, ref, a, false),
+                )
               else
                 AppButton(
                   'Remind the reference',
                   variant: ButtonVariant.secondary,
                   leadingIcon: Icons.sms_outlined,
-                  onPressed: () => showToast(context, 'Reminder sent to $first’s reference', icon: Icons.sms_outlined),
+                  onPressed: () => showToast(
+                    context,
+                    'Demo reminder queued for $first’s reference',
+                    icon: Icons.sms_outlined,
+                  ),
                 ),
             ],
       children: [
         const SizedBox(height: 8),
+        const NoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Demonstration data',
+          body: 'Mentor verification records here are stored in local demo state.',
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             AppAvatar(a.initials, tone: Tone.info, size: 60),
@@ -92,32 +136,57 @@ class VerifyMentorScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         if (decided)
           NoticeCard(
-            tone: a.state == ApplicantState.approved ? Tone.success : Tone.neutral,
-            icon: a.state == ApplicantState.approved ? Icons.verified_rounded : Icons.person_off_outlined,
-            title: a.state == ApplicantState.approved ? 'Approved today' : 'Declined today',
-            body: a.state == ApplicantState.approved ? '$first can now be matched with youth.' : '$first has been told by SMS.',
+            tone: a.state == ApplicantState.approved
+                ? Tone.success
+                : Tone.neutral,
+            icon: a.state == ApplicantState.approved
+                ? Icons.verified_rounded
+                : Icons.person_off_outlined,
+            title: a.state == ApplicantState.approved
+                ? 'Approved today'
+                : 'Declined today',
+            body: a.state == ApplicantState.approved
+                ? '$first can now be matched with youth.'
+                : '$first has been told by SMS.',
           )
         else
           NoticeCard(
             tone: complete ? Tone.success : Tone.warning,
             icon: complete ? Icons.task_alt_rounded : Icons.pending_outlined,
             title: '${a.passed} of ${a.checks.length} checks passed',
-            body: complete ? 'Everything is in place to approve.' : 'One check is still open.',
+            body: complete
+                ? 'Everything is in place to approve.'
+                : 'One check is still open.',
           ),
         const SectionLabel('Background checks'),
         ListGroup(
           children: [
             for (final c in a.checks)
               ListRow(
-                leading: Icon(c.passed ? Icons.check_circle_rounded : Icons.pending_outlined, color: c.passed ? AppColors.successText : AppColors.warningText),
+                leading: Icon(
+                  c.passed
+                      ? Icons.check_circle_rounded
+                      : Icons.pending_outlined,
+                  color: c.passed
+                      ? AppColors.successText
+                      : AppColors.warningText,
+                ),
                 title: c.label,
                 subtitle: c.detail,
-                trailing: StatusBadge(c.passed ? 'Passed' : 'Waiting', tone: c.passed ? Tone.success : Tone.warning),
+                trailing: StatusBadge(
+                  c.passed ? 'Passed' : 'Waiting',
+                  tone: c.passed ? Tone.success : Tone.warning,
+                ),
               ),
           ],
         ),
         const SectionLabel('Why they want to mentor'),
-        SurfaceCard(child: Text('“${a.motivation}”', style: AppText.bodyM.copyWith(color: AppColors.textPrimary))),
+        SurfaceCard(
+          child: Text(
+            '“${a.motivation}”',
+            style: AppText.bodyM.copyWith(color: AppColors.textPrimary),
+          ),
+        ),
         const SectionLabel('Skills'),
         TagWrap(a.skills, tone: Tone.info),
         const SectionLabel('Details'),
