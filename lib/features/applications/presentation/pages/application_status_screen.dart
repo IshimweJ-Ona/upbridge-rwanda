@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/shared/shared.dart';
+import 'package:upbridge/core/errors/app_failure.dart';
+import 'package:upbridge/features/applications/presentation/providers/application_providers.dart';
+import 'package:upbridge/features/applications/presentation/state/failure_message.dart';
+import 'package:upbridge/features/opportunities/presentation/providers/opportunity_providers.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
 
@@ -13,7 +17,7 @@ class ApplicationStatusScreen extends ConsumerWidget {
 
   final String appId;
 
-  Future<void> _withdraw(BuildContext context, WidgetRef ref, Opportunity? o) async {
+  Future<void> _withdraw(BuildContext context, WidgetRef ref, Application app, Opportunity? o) async {
     final ok = await showAppDialog(
       context,
       title: 'Withdraw this application?',
@@ -24,22 +28,33 @@ class ApplicationStatusScreen extends ConsumerWidget {
       icon: Icons.undo_rounded,
     );
     if (!ok) return;
-    ref.read(appStoreProvider.notifier).withdraw(appId);
-    if (context.mounted) showToast(context, 'Application withdrawn', icon: Icons.undo_rounded, tone: Tone.warning);
+    try {
+      await ref.read(withdrawApplicationProvider)(app);
+      if (context.mounted) showToast(context, 'Application withdrawn', icon: Icons.undo_rounded, tone: Tone.warning);
+    } on AppFailure catch (e) {
+      if (context.mounted) showToast(context, failureMessage(e), icon: Icons.error_outline_rounded, tone: Tone.danger);
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(appStoreProvider);
-    final app = data.application(appId);
+    final application = ref.watch(applicationProvider(appId));
+    final app = application.value;
     if (app == null) {
-      return const DetailPage(
+      return DetailPage(
         title: 'Application',
         backFallback: '/jobs/applications',
-        children: [SizedBox(height: 24), EmptyState(icon: Icons.search_off_rounded, title: 'Application not found')],
+        children: [
+          const SizedBox(height: 24),
+          if (application.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            const EmptyState(icon: Icons.search_off_rounded, title: 'Application not found'),
+        ],
       );
     }
-    final o = data.opportunity(app.oppId);
+    final o = ref.watch(opportunityProvider(app.oppId)).value;
     final projects = [for (final id in app.projectIds) data.project(id)].whereType<Project>().toList();
     final tone = app.status.tone;
 
@@ -50,7 +65,7 @@ class ApplicationStatusScreen extends ConsumerWidget {
       footer: [
         if (o != null) AppButton('View listing', variant: ButtonVariant.secondary, onPressed: () => context.push('/opportunity/${o.id}')),
         if (app.status.isActive)
-          AppButton('Withdraw application', variant: ButtonVariant.dangerOutline, onPressed: () => _withdraw(context, ref, o))
+          AppButton('Withdraw application', variant: ButtonVariant.dangerOutline, onPressed: () => _withdraw(context, ref, app, o))
         else
           AppButton('Find similar opportunities', onPressed: () => context.go('/jobs')),
       ],
