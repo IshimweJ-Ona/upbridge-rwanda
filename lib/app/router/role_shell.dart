@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/shared.dart';
 
 class TabItem {
   const TabItem(this.label, this.icon, this.activeIcon);
@@ -32,7 +32,11 @@ const mentorTabs = [
 
 const adminTabs = [
   TabItem('Overview', Icons.insights_outlined, Icons.insights_rounded),
-  TabItem('Users', Icons.manage_accounts_outlined, Icons.manage_accounts_rounded),
+  TabItem(
+    'Users',
+    Icons.manage_accounts_outlined,
+    Icons.manage_accounts_rounded,
+  ),
   TabItem('Mentors', Icons.verified_user_outlined, Icons.verified_user_rounded),
   TabItem('Jobs', Icons.work_outline_rounded, Icons.work_rounded),
   TabItem('Settings', Icons.settings_outlined, Icons.settings_rounded),
@@ -47,29 +51,62 @@ class RoleShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(verifiedSessionProvider).asData?.value;
+    final liveSession =
+        session != null && session.signedIn && session.emailVerified;
+
     final tabs = switch (role) {
       Role.youth => youthTabs,
       Role.mentor => mentorTabs,
       Role.admin => adminTabs,
     };
-    final badges = switch (role) {
-      Role.youth => <int, int>{},
-      Role.mentor => {1: ref.watch(appStoreProvider.select((s) => (s.user?.isNewMentor ?? false) ? 0 : s.queue.length))},
-      Role.admin => {
-          2: ref.watch(appStoreProvider.select((s) => s.applicants.where((a) => a.state == ApplicantState.pending).length)),
-          3: ref.watch(appStoreProvider.select((s) => s.forwards.where((f) => !f.forwarded).length)),
-        },
-    };
+    final badges = liveSession
+        ? const <int, int>{}
+        : switch (role) {
+            Role.youth => <int, int>{},
+            Role.mentor => {
+              1: ref.watch(
+                appStoreProvider.select(
+                  (s) => (s.user?.isNewMentor ?? false) ? 0 : s.queue.length,
+                ),
+              ),
+            },
+            Role.admin => {
+              2: ref.watch(
+                appStoreProvider.select(
+                  (s) => s.applicants
+                      .where((a) => a.state == ApplicantState.pending)
+                      .length,
+                ),
+              ),
+              3: ref.watch(
+                appStoreProvider.select(
+                  (s) => s.forwards.where((f) => !f.forwarded).length,
+                ),
+              ),
+            },
+          };
 
-    void onTap(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
+    void onTap(int i) =>
+        shell.goBranch(i, initialLocation: i == shell.currentIndex);
 
     if (MediaQuery.sizeOf(context).width >= Breakpoints.wide) {
       return Scaffold(
         backgroundColor: AppColors.canvas,
         body: Row(
           children: [
-            SideNav(tabs: tabs, index: shell.currentIndex, onTap: onTap, badges: badges, role: role),
-            const VerticalDivider(width: 1, thickness: 1, color: AppColors.borderSubtle),
+            SideNav(
+              tabs: tabs,
+              index: shell.currentIndex,
+              onTap: onTap,
+              badges: badges,
+              role: role,
+            ),
+            const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: AppColors.borderSubtle,
+            ),
             Expanded(child: shell),
           ],
         ),
@@ -79,14 +116,23 @@ class RoleShell extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.canvas,
       body: shell,
-      bottomNavigationBar: AppTabBar(tabs: tabs, index: shell.currentIndex, onTap: onTap, badges: badges),
+      bottomNavigationBar: AppTabBar(
+        tabs: tabs,
+        index: shell.currentIndex,
+        onTap: onTap,
+        badges: badges,
+      ),
     );
   }
 }
 
 /// Cross-fades between tab branches while keeping each branch's state alive.
 class BranchSwitcher extends StatelessWidget {
-  const BranchSwitcher({super.key, required this.index, required this.children});
+  const BranchSwitcher({
+    super.key,
+    required this.index,
+    required this.children,
+  });
 
   final int index;
   final List<Widget> children;
@@ -96,7 +142,8 @@ class BranchSwitcher extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        for (var i = 0; i < children.length; i++) _Branch(active: i == index, child: children[i]),
+        for (var i = 0; i < children.length; i++)
+          _Branch(active: i == index, child: children[i]),
       ],
     );
   }
@@ -137,7 +184,13 @@ class _Branch extends StatelessWidget {
 }
 
 class AppTabBar extends StatelessWidget {
-  const AppTabBar({super.key, required this.tabs, required this.index, required this.onTap, this.badges = const {}});
+  const AppTabBar({
+    super.key,
+    required this.tabs,
+    required this.index,
+    required this.onTap,
+    this.badges = const {},
+  });
 
   final List<TabItem> tabs;
   final int index;
@@ -170,7 +223,9 @@ class AppTabBar extends StatelessWidget {
                     child: Container(
                       decoration: const BoxDecoration(
                         color: AppColors.accent,
-                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(3)),
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(3),
+                        ),
                       ),
                     ),
                   ),
@@ -198,7 +253,12 @@ class AppTabBar extends StatelessWidget {
 }
 
 class _TabButton extends StatelessWidget {
-  const _TabButton({required this.item, required this.active, required this.badge, required this.onTap});
+  const _TabButton({
+    required this.item,
+    required this.active,
+    required this.badge,
+    required this.onTap,
+  });
 
   final TabItem item;
   final bool active;
@@ -225,8 +285,16 @@ class _TabButton extends StatelessWidget {
                   AnimatedSwitcher(
                     duration: Motion.base,
                     switchInCurve: Motion.emphasized,
-                    transitionBuilder: (child, a) => ScaleTransition(scale: Tween(begin: 0.7, end: 1.0).animate(a), child: FadeTransition(opacity: a, child: child)),
-                    child: Icon(active ? item.activeIcon : item.icon, key: ValueKey(active), size: 24, color: color),
+                    transitionBuilder: (child, a) => ScaleTransition(
+                      scale: Tween(begin: 0.7, end: 1.0).animate(a),
+                      child: FadeTransition(opacity: a, child: child),
+                    ),
+                    child: Icon(
+                      active ? item.activeIcon : item.icon,
+                      key: ValueKey(active),
+                      size: 24,
+                      color: color,
+                    ),
                   ),
                   if (badge > 0)
                     Positioned(
@@ -236,16 +304,31 @@ class _TabButton extends StatelessWidget {
                         tween: Tween(begin: 0, end: 1),
                         duration: Motion.slow,
                         curve: Motion.emphasized,
-                        builder: (context, v, child) => Transform.scale(scale: v, child: child),
+                        builder: (context, v, child) =>
+                            Transform.scale(scale: v, child: child),
                         child: Container(
                           constraints: const BoxConstraints(minWidth: 18),
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.accent,
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.surface, width: 1.5),
+                            border: Border.all(
+                              color: AppColors.surface,
+                              width: 1.5,
+                            ),
                           ),
-                          child: Text('$badge', textAlign: TextAlign.center, style: AppText.tab.copyWith(color: AppColors.onPrimary, fontWeight: FontWeight.w600, fontSize: 10)),
+                          child: Text(
+                            '$badge',
+                            textAlign: TextAlign.center,
+                            style: AppText.tab.copyWith(
+                              color: AppColors.onPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 10,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -254,7 +337,10 @@ class _TabButton extends StatelessWidget {
               const SizedBox(height: 4),
               AnimatedDefaultTextStyle(
                 duration: Motion.fast,
-                style: AppText.tab.copyWith(color: color, fontWeight: active ? FontWeight.w600 : FontWeight.w500),
+                style: AppText.tab.copyWith(
+                  color: color,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                ),
                 child: Text(item.label),
               ),
             ],
@@ -267,7 +353,14 @@ class _TabButton extends StatelessWidget {
 
 /// Sidebar navigation for tablets and desktop.
 class SideNav extends ConsumerWidget {
-  const SideNav({super.key, required this.tabs, required this.index, required this.onTap, required this.badges, required this.role});
+  const SideNav({
+    super.key,
+    required this.tabs,
+    required this.index,
+    required this.onTap,
+    required this.badges,
+    required this.role,
+  });
 
   final List<TabItem> tabs;
   final int index;
@@ -277,7 +370,18 @@ class SideNav extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(appStoreProvider.select((s) => s.user));
+    final session = ref.watch(verifiedSessionProvider).asData?.value;
+    final demoUser = ref.watch(appStoreProvider.select((s) => s.user));
+    final hasLiveSession =
+        session != null && session.signedIn && session.emailVerified;
+    final displayName = hasLiveSession ? session.displayLabel : demoUser?.name;
+    final displayInitials = hasLiveSession
+        ? session.initials
+        : demoUser?.initials;
+    final displayRole = hasLiveSession
+        ? session.role.label
+        : demoUser?.role.label;
+
     return Container(
       width: 248,
       color: AppColors.surface,
@@ -288,9 +392,17 @@ class SideNav extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(padding: EdgeInsets.only(left: 8), child: UpBridgeLogo(markWidth: 44, horizontal: true)),
+              const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: UpBridgeLogo(markWidth: 44, horizontal: true),
+              ),
               const SizedBox(height: 28),
-              Padding(padding: const EdgeInsets.only(left: 8, bottom: 8), child: MonoLabel(role == Role.youth ? 'MENU' : '${role.label} workspace')),
+              Padding(
+                padding: const EdgeInsets.only(left: 8, bottom: 8),
+                child: MonoLabel(
+                  role == Role.youth ? 'MENU' : '${role.label} workspace',
+                ),
+              ),
               for (var i = 0; i < tabs.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
@@ -300,39 +412,65 @@ class SideNav extends ConsumerWidget {
                     child: AnimatedContainer(
                       duration: Motion.base,
                       curve: Motion.curve,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 11,
+                      ),
                       decoration: BoxDecoration(
-                        color: i == index ? AppColors.sunken : Colors.transparent,
+                        color: i == index
+                            ? AppColors.sunken
+                            : Colors.transparent,
                         borderRadius: Radii.rMd,
                       ),
                       child: Row(
                         children: [
-                          Icon(i == index ? tabs[i].activeIcon : tabs[i].icon, size: 21, color: i == index ? AppColors.textPrimary : AppColors.textMuted),
+                          Icon(
+                            i == index ? tabs[i].activeIcon : tabs[i].icon,
+                            size: 21,
+                            color: i == index
+                                ? AppColors.textPrimary
+                                : AppColors.textMuted,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               tabs[i].label,
-                              style: AppText.bodyMStrong.copyWith(color: i == index ? AppColors.textPrimary : AppColors.textSecondary, fontWeight: i == index ? FontWeight.w600 : FontWeight.w500),
+                              style: AppText.bodyMStrong.copyWith(
+                                color: i == index
+                                    ? AppColors.textPrimary
+                                    : AppColors.textSecondary,
+                                fontWeight: i == index
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
                             ),
                           ),
-                          if ((badges[i] ?? 0) > 0) StatusBadge('${badges[i]}', tone: Tone.accent),
+                          if ((badges[i] ?? 0) > 0)
+                            StatusBadge('${badges[i]}', tone: Tone.accent),
                         ],
                       ),
                     ),
                   ),
                 ),
               const Spacer(),
-              if (user != null)
+              if (displayName != null &&
+                  displayInitials != null &&
+                  displayRole != null)
                 Row(
                   children: [
-                    AppAvatar(user.initials, size: 36, tone: Tone.accent),
+                    AppAvatar(displayInitials, size: 36, tone: Tone.accent),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(user.name, style: AppText.bodySStrong, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(user.role.label, style: AppText.caption),
+                          Text(
+                            displayName,
+                            style: AppText.bodySStrong,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(displayRole, style: AppText.caption),
                         ],
                       ),
                     ),

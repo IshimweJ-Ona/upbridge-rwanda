@@ -1,13 +1,15 @@
-// Defines application routes and redirects based on Firebase auth and app roles.
+// Defines application routes and redirects based on Firebase claims, Firestore profile, and demo fallback.
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 
-import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
-import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/app/auth/verify_email_screen.dart';
+import 'package:upbridge/app/router/role_shell.dart';
+import 'package:upbridge/app/router/route_guards.dart';
+import 'package:upbridge/app/splash/splash_screen.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
 import 'package:upbridge/features/admin/presentation/pages/add_user_screen.dart';
 import 'package:upbridge/features/admin/presentation/pages/admin_jobs_screen.dart';
 import 'package:upbridge/features/admin/presentation/pages/admin_mentors_screen.dart';
@@ -18,13 +20,16 @@ import 'package:upbridge/features/admin/presentation/pages/check_application_scr
 import 'package:upbridge/features/admin/presentation/pages/new_listing_screen.dart';
 import 'package:upbridge/features/admin/presentation/pages/reported_listing_screen.dart';
 import 'package:upbridge/features/admin/presentation/pages/verify_mentor_screen.dart';
+import 'package:upbridge/features/applications/presentation/pages/application_sent_screen.dart';
+import 'package:upbridge/features/applications/presentation/pages/application_status_screen.dart';
+import 'package:upbridge/features/applications/presentation/pages/apply_review_screen.dart';
+import 'package:upbridge/features/applications/presentation/pages/apply_screen.dart';
+import 'package:upbridge/features/applications/presentation/pages/my_applications_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/forgot_password_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/login_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/password_updated_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/sign_up_screen.dart';
 import 'package:upbridge/features/auth/presentation/pages/welcome_screen.dart';
-import 'package:upbridge/app/auth/verify_email_screen.dart';
-import 'package:upbridge/app/splash/splash_screen.dart';
 import 'package:upbridge/features/home/presentation/pages/check_in_screen.dart';
 import 'package:upbridge/features/home/presentation/pages/home_screen.dart';
 import 'package:upbridge/features/home/presentation/pages/notifications_screen.dart';
@@ -49,11 +54,6 @@ import 'package:upbridge/features/mentorship/presentation/pages/request_sent_scr
 import 'package:upbridge/features/mentorship/presentation/pages/request_session_screen.dart';
 import 'package:upbridge/features/onboarding/presentation/pages/goal_screen.dart';
 import 'package:upbridge/features/onboarding/presentation/pages/interests_screen.dart';
-import 'package:upbridge/features/applications/presentation/pages/application_sent_screen.dart';
-import 'package:upbridge/features/applications/presentation/pages/application_status_screen.dart';
-import 'package:upbridge/features/applications/presentation/pages/apply_review_screen.dart';
-import 'package:upbridge/features/applications/presentation/pages/apply_screen.dart';
-import 'package:upbridge/features/applications/presentation/pages/my_applications_screen.dart';
 import 'package:upbridge/features/opportunities/presentation/pages/opportunities_screen.dart';
 import 'package:upbridge/features/opportunities/presentation/pages/opportunity_detail_screen.dart';
 import 'package:upbridge/features/portfolio/presentation/pages/add_project_screen.dart';
@@ -64,9 +64,9 @@ import 'package:upbridge/features/portfolio/presentation/pages/project_saved_scr
 import 'package:upbridge/features/profile/presentation/pages/language_screen.dart';
 import 'package:upbridge/features/profile/presentation/pages/not_found_screen.dart';
 import 'package:upbridge/features/profile/presentation/pages/profile_screen.dart';
-import 'package:upbridge/app/router/role_shell.dart';
-import 'package:upbridge/app/router/route_guards.dart';
-import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/shared.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -80,39 +80,90 @@ const _publicRoutes = {
 };
 const _sharedRoutes = {AppRoutes.language};
 
-/// Re-runs the redirect whenever who is signed in (or their onboarding state) changes.
+/// Re-runs redirects whenever Firebase session claims/profile or demo state changes.
 class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(Ref ref) {
     ref.listen<(String?, bool?)>(
       appStoreProvider.select((s) => (s.user?.id, s.user?.onboarded)),
       (_, _) => notifyListeners(),
     );
-    ref.listen<AsyncValue<User?>>(
-      authStateProvider,
+    ref.listen<AsyncValue<VerifiedSession>>(
+      verifiedSessionProvider,
       (_, _) => notifyListeners(),
     );
   }
 }
 
 String? _redirect(Ref ref, GoRouterState state) {
-  final user = ref.read(appStoreProvider).user;
   final loc = state.matchedLocation;
   if (loc == AppRoutes.splash) return null;
   final isPublic = _publicRoutes.contains(loc);
 
   if (Firebase.apps.isNotEmpty) {
-    final firebaseUser = FirebaseAuth.instance.currentUser;
-    if (firebaseUser == null) return isPublic ? null : '/welcome';
+    final session = ref.read(verifiedSessionProvider).asData?.value;
+    if (session == null) {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser == null) {
+        return isPublic ? null : AppRoutes.welcome;
+      }
+      if (!firebaseUser.emailVerified) {
+        return loc == AppRoutes.verifyEmail ? null : AppRoutes.verifyEmail;
+      }
+      return null;
+    }
+
+    if (!session.signedIn) {
+      return isPublic ? null : AppRoutes.welcome;
+    }
+    if (!session.emailVerified) {
+      return emailVerificationRedirect(
+        signedIn: true,
+        emailVerified: false,
+        location: loc,
+      );
+    }
+
+    if (!session.profileLoaded &&
+        (loc == AppRoutes.verifyEmail ||
+            loc.startsWith('/onboarding') ||
+            isPublic ||
+            loc == '/')) {
+      return null;
+    }
+
+    // Route verified youth lacking users/{uid} through /verify-email so
+    // VerifyEmailScreen creates the baseline document before onboarding writes.
+    if (session.role == Role.youth && !session.profileExists) {
+      return loc == AppRoutes.verifyEmail ? null : AppRoutes.verifyEmail;
+    }
+
+    final destination = verifiedUserDestination(
+      role: session.role,
+      onboarded: session.onboarded,
+    );
     final verificationRedirect = emailVerificationRedirect(
       signedIn: true,
-      emailVerified: firebaseUser.emailVerified,
+      emailVerified: true,
       location: loc,
+      verifiedDestination: destination,
     );
     if (verificationRedirect != null) return verificationRedirect;
+
+    if (session.role == Role.youth && !session.onboarded) {
+      return loc.startsWith('/onboarding') ? null : '/onboarding/goal';
+    }
+    if (isPublic || loc == '/' || loc.startsWith('/onboarding')) {
+      return destination;
+    }
+    if (_sharedRoutes.contains(loc)) {
+      return null;
+    }
+    return roleAreaRedirect(role: session.role, location: loc);
   }
 
+  final user = ref.read(appStoreProvider).user;
   if (user == null) {
-    return isPublic ? null : '/welcome';
+    return isPublic ? null : AppRoutes.welcome;
   }
   if (!user.onboarded) {
     return loc.startsWith('/onboarding') ? null : '/onboarding/goal';

@@ -1,15 +1,20 @@
-// Displays pilot administration settings.
+// Displays pilot administration settings with real Firebase sign-out and demo-state labeling.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/shared/shared.dart';
 
 /// AD11 · Admin settings.
 class AdminSettingsScreen extends ConsumerWidget {
   const AdminSettingsScreen({super.key});
 
-  Future<void> _toggle(BuildContext context, WidgetRef ref, String key, bool current) async {
+  Future<void> _toggle(
+    BuildContext context,
+    WidgetRef ref,
+    String key,
+    bool current,
+  ) async {
     if (key == 'pauseSignups' && !current) {
       final ok = await showAppDialog(
         context,
@@ -23,7 +28,10 @@ class AdminSettingsScreen extends ConsumerWidget {
     ref.read(appStoreProvider.notifier).toggleSetting(key);
     if (!context.mounted) return;
     final label = switch (key) {
-      'replyBy' => current ? 'Reply-by date is now optional' : 'Reply-by date is required again',
+      'replyBy' =>
+        current
+            ? 'Reply-by date is now optional'
+            : 'Reply-by date is required again',
       'pauseSignups' => current ? 'Sign-ups are open' : 'New sign-ups paused',
       _ => current ? 'Weekly report turned off' : 'Weekly report turned on',
     };
@@ -31,14 +39,28 @@ class AdminSettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final ok = await showAppDialog(context, title: 'Log out?', confirmLabel: 'Log out', destructive: true, icon: Icons.logout_rounded);
-    if (ok) ref.read(appStoreProvider.notifier).logout();
+    final ok = await showAppDialog(
+      context,
+      title: 'Log out?',
+      confirmLabel: 'Log out',
+      destructive: true,
+      icon: Icons.logout_rounded,
+    );
+    if (!ok) return;
+    await ref.read(authServiceProvider).signOut();
+    ref.read(appStoreProvider.notifier).logout();
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appStoreProvider.select((s) => s.settings));
-    final user = ref.watch(appStoreProvider.select((s) => s.user));
+    final demoUser = ref.watch(appStoreProvider.select((s) => s.user));
+    final session = ref.watch(verifiedSessionProvider).asData?.value;
+    final eyebrow = session != null && session.signedIn
+        ? '${session.displayLabel} · Admin'
+        : demoUser == null
+        ? 'Admin'
+        : '${demoUser.name} · ${demoUser.headline}';
 
     Widget row(String key, IconData icon, String title, String subtitle) {
       final v = settings[key] ?? false;
@@ -47,31 +69,72 @@ class AdminSettingsScreen extends ConsumerWidget {
         title: title,
         subtitle: subtitle,
         chevron: false,
-        trailing: AppSwitch(value: v, onChanged: (_) => _toggle(context, ref, key, v)),
+        trailing: AppSwitch(
+          value: v,
+          onChanged: (_) => _toggle(context, ref, key, v),
+        ),
         onTap: () => _toggle(context, ref, key, v),
       );
     }
 
     return PageFrame(
       largeTitle: 'Settings',
-      eyebrow: user == null ? 'Admin' : '${user.name} · ${user.headline}',
+      eyebrow: eyebrow,
       children: [
+        const SizedBox(height: 12),
+        const NoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Demonstration data',
+          body: 'Setting toggles below update local demonstration state until appSettings persistence is wired.',
+        ),
         const SectionLabel('Listings', top: 16),
-        ListGroup(children: [row('replyBy', Icons.event_available_outlined, 'Require a reply-by date', 'Employers must commit to replying to every applicant')]),
+        ListGroup(
+          children: [
+            row(
+              'replyBy',
+              Icons.event_available_outlined,
+              'Require a reply-by date',
+              'Employers must commit to replying to every applicant',
+            ),
+          ],
+        ),
         const SectionLabel('Sign-ups'),
-        ListGroup(children: [row('pauseSignups', Icons.pause_circle_outline_rounded, 'Pause new sign-ups', 'Existing users can still log in')]),
+        ListGroup(
+          children: [
+            row(
+              'pauseSignups',
+              Icons.pause_circle_outline_rounded,
+              'Pause new sign-ups',
+              'Existing users can still log in',
+            ),
+          ],
+        ),
         AnimatedSize(
           duration: Motion.base,
           curve: Motion.curve,
           child: (settings['pauseSignups'] ?? false)
               ? const Padding(
                   padding: EdgeInsets.only(top: 10),
-                  child: NoticeCard(tone: Tone.warning, icon: Icons.pause_circle_outline_rounded, title: 'Sign-ups are paused', body: 'New visitors can join a waiting list.'),
+                  child: NoticeCard(
+                    tone: Tone.warning,
+                    icon: Icons.pause_circle_outline_rounded,
+                    title: 'Sign-ups are paused',
+                    body: 'New visitors can join a waiting list.',
+                  ),
                 )
               : const SizedBox(width: double.infinity),
         ),
         const SectionLabel('Reports'),
-        ListGroup(children: [row('weeklyReport', Icons.summarize_outlined, 'Weekly report by email', 'Every Monday at 08:00 to the pilot team')]),
+        ListGroup(
+          children: [
+            row(
+              'weeklyReport',
+              Icons.summarize_outlined,
+              'Weekly report by email',
+              'Every Monday at 08:00 to the pilot team',
+            ),
+          ],
+        ),
         const SectionLabel('Pilot'),
         const KeyValueTable([
           ('Started', 'Mon 3 Aug 2026'),
@@ -85,7 +148,9 @@ class AdminSettingsScreen extends ConsumerWidget {
             ListRow(
               leading: const IconTile(Icons.logout_rounded, tone: Tone.danger),
               title: 'Log out',
-              titleStyle: AppText.bodyMStrong.copyWith(color: AppColors.dangerText),
+              titleStyle: AppText.bodyMStrong.copyWith(
+                color: AppColors.dangerText,
+              ),
               chevron: false,
               onTap: () => _logout(context, ref),
             ),

@@ -1,5 +1,4 @@
 // Reads and writes only the shared Firestore fields documented for the pilot.
-// Holds: the only class that talks to Cloud Firestore for the youth journey. Field names follow docs/SCHEMA.md.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:upbridge/shared/services/firebase/firestore_schema.dart';
@@ -24,6 +23,23 @@ class UpBridgeRepository {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchProfile(String uid) {
     return _db.collection(Fs.users).doc(uid).snapshots();
+  }
+
+  /// Creates the baseline youth profile only when users/{uid} does not yet exist.
+  Future<bool> ensureYouthProfile({
+    required String uid,
+    String displayName = '',
+  }) async {
+    final existing = await getProfile(uid);
+    if (existing.exists) return false;
+    await saveProfile(uid, {
+      'uid': uid,
+      'role': 'youth',
+      'accountStatus': 'active',
+      'displayName': displayName.trim(),
+      'onboarded': false,
+    });
+    return true;
   }
 
   /// One task-progress document per youth per task: id = "{uid}_{taskId}".
