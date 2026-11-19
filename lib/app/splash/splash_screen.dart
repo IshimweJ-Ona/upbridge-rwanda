@@ -9,8 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:upbridge/app/router/route_guards.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/core/constants/app_constants.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/shared.dart';
 
 const splashDuration = AppConstants.splashDuration;
@@ -54,11 +55,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted || _hasNavigated) return;
 
     final initialized = Firebase.apps.isNotEmpty;
+    final session = initialized
+        ? ref.read(verifiedSessionProvider).asData?.value
+        : null;
     final firebaseUser = initialized ? FirebaseAuth.instance.currentUser : null;
+
     final destination = splashDestination(
       firebaseInitialized: initialized,
-      firebaseSignedIn: firebaseUser != null,
-      emailVerified: firebaseUser?.emailVerified ?? false,
+      firebaseSignedIn: session?.signedIn ?? (firebaseUser != null),
+      emailVerified:
+          session?.emailVerified ?? (firebaseUser?.emailVerified ?? false),
+      firebaseRole: session?.role,
+      firebaseOnboarded: session?.onboarded,
+      firebaseProfileExists:
+          !(session?.profileLoaded ?? false) ||
+          (session?.profileExists ?? true),
       appUser: ref.read(appStoreProvider).user,
     );
     _navigateOnce(destination);
@@ -188,18 +199,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               AppButton(
                                 'Create free account',
                                 variant: ButtonVariant.onDark,
-                                onPressed: () => context.go('/signup'),
+                                onPressed: () =>
+                                    _navigateOnce(AppRoutes.signup),
                               ),
                               const SizedBox(height: 10),
                               AppButton(
                                 'I already have an account',
                                 variant: ButtonVariant.outlineOnDark,
-                                onPressed: () => context.go('/login'),
+                                onPressed: () => _navigateOnce(AppRoutes.login),
                               ),
                               const SizedBox(height: 14),
                               Center(
                                 child: Text(
-                                  'PROTOTYPE  ·  ALL DATA IS SAMPLE DATA',
+                                  'Kigali Convention Centre at night',
                                   textAlign: TextAlign.center,
                                   style: AppText.caption.copyWith(
                                     color: AppColors.textInverse.withValues(

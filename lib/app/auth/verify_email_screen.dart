@@ -1,18 +1,21 @@
-// Sends verification emails and gates signed-in users until their address is confirmed.
+// Sends verification emails, ensures baseline youth profiles, and routes verified accounts to their role area.
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_core/firebase_core.dart';
 
+import 'package:upbridge/app/router/route_guards.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/shared/services/demo/app_store.dart';
 import 'package:upbridge/shared/services/firebase/firebase_failure_mapper.dart';
 import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
-import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
-import 'package:upbridge/features/profile/domain/entities/profile.dart';
-import 'package:upbridge/features/profile/presentation/providers/profile_providers.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 
 class VerifyEmailScreen extends ConsumerStatefulWidget {
-  const VerifyEmailScreen({super.key});
+  const VerifyEmailScreen({super.key, this.onNavigate});
+
+  /// Optional navigation hook used by focused widget tests.
+  final ValueChanged<String>? onNavigate;
 
   @override
   ConsumerState<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
@@ -21,26 +24,37 @@ class VerifyEmailScreen extends ConsumerStatefulWidget {
 class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   bool _sending = false;
   bool _checking = false;
+  bool _settingUpProfile = false;
   bool _sent = false;
   bool _verified = false;
-  bool _creatingProfile = false;
-  bool _profileCreated = false;
+  String _destination = '/onboarding/goal';
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sendVerification());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initVerification());
   }
 
-  Future<void> _sendVerification() async {
+  Future<void> _initVerification() async {
+    final authService = ref.read(authServiceProvider);
+    if (authService.isEmailVerified) {
+      await _completeVerifiedSetup();
+      return;
+    }
+    if (authService.currentUser != null) {
+      await _sendVerification(force: false);
+    }
+  }
+
+  Future<void> _sendVerification({bool force = false}) async {
     if (_sending || _verified) return;
     setState(() {
       _sending = true;
       _error = null;
     });
     try {
-      await ref.read(authServiceProvider).sendVerificationEmail();
+      await ref.read(authServiceProvider).sendVerificationEmail(force: force);
       if (mounted) setState(() => _sent = true);
     } catch (error) {
       if (mounted) setState(() => _error = _messageFor(error));
@@ -58,13 +72,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       final verified = await ref
           .read(authServiceProvider)
           .reloadAndCheckEmailVerification();
-      if (mounted) {
+      if (!mounted) return;
+      if (!verified) {
         setState(() {
-          _verified = verified;
-          if (!verified) _error = 'We have not received confirmation yet.';
+          _verified = false;
+          _error = 'We have not received confirmation yet.';
         });
-        if (verified) await _createProfile();
+        return;
       }
+      await _completeVerifiedSetup();
     } catch (error) {
       if (mounted) setState(() => _error = _messageFor(error));
     } finally {
@@ -72,38 +88,66 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     }
   }
 
-  Future<void> _createProfile() async {
-    final user = ref.read(authServiceProvider).currentUser;
-    if (user == null) return;
-    final draft = ref.read(registrationDraftProvider);
-    final profile = Profile(
-      uid: user.uid,
-      role: 'youth',
-      accountStatus: 'active',
-      displayName: draft?.displayName ?? user.displayName ?? '',
-      phone: draft?.phone ?? '',
-    );
-    if (mounted) setState(() => _creatingProfile = true);
+  Future<void> _completeVerifiedSetup() async {
+    final authService = ref.read(authServiceProvider);
+    final user = authService.currentUser;
+    if (mounted) {
+      setState(() {
+        _verified = true;
+        _settingUpProfile = true;
+        _error = null;
+      });
+    }
     try {
-      await ref.read(profileRepositoryProvider).createYouth(profile);
-      ref.read(appStoreProvider.notifier).setFirebaseProfile(profile);
-      if (mounted) setState(() => _profileCreated = true);
+      final roleClaim = await authService.readRoleClaim(forceRefresh: true);
+      final role = trustedRoleFromClaim(roleClaim);
+      var onboarded = role != Role.youth;
+
+      if (user != null && Firebase.apps.isNotEmpty) {
+        final repo = ref.read(repositoryProvider);
+        if (role == Role.youth) {
+          await repo.ensureYouthProfile(
+            uid: user.uid,
+            displayName: user.displayName ?? '',
+          );
+          final snapshot = await repo.getProfile(user.uid);
+          onboarded = snapshot.data()?['onboarded'] == true;
+        }
+      }
+
+      final destination = verifiedUserDestination(
+        role: role,
+        onboarded: onboarded,
+      );
+      if (!mounted) return;
+      setState(() {
+        _destination = destination;
+        _settingUpProfile = false;
+      });
+      _goTo(destination);
     } catch (error) {
       if (mounted) {
         setState(() {
-          _profileCreated = false;
+          _settingUpProfile = false;
           _error = _messageFor(error);
         });
       }
-    } finally {
-      if (mounted) setState(() => _creatingProfile = false);
+    }
+  }
+
+  void _goTo(String destination) {
+    final onNavigate = widget.onNavigate;
+    if (onNavigate != null) {
+      onNavigate(destination);
+    } else {
+      context.go(destination);
     }
   }
 
   String _messageFor(Object error) {
     if (error is FirebaseException && error.code == 'permission-denied') {
-      return 'Email verification succeeded, but Firebase denied profile creation. '
-          'Check that the deployed Firestore rules allow verified youth users to create users/{uid}.';
+      return 'Email verification succeeded, but Firestore denied profile setup. '
+          'Check that Firestore rules allow verified youth accounts to create users/{uid}.';
     }
     final failure = mapFirebaseFailure(error);
     return switch (failure.code) {
@@ -117,7 +161,8 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
 
   Future<void> _signOut() async {
     await ref.read(authServiceProvider).signOut();
-    if (mounted) context.go('/welcome');
+    ref.read(appStoreProvider.notifier).logout();
+    if (mounted) _goTo(AppRoutes.welcome);
   }
 
   @override
@@ -161,16 +206,18 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _verified && _profileCreated && !_creatingProfile
-                        ? () => context.go('/onboarding/goal')
+                    onPressed: _verified
+                        ? (_settingUpProfile
+                              ? null
+                              : (_error != null
+                                    ? _completeVerifiedSetup
+                                    : () => _goTo(_destination)))
                         : _checking
                         ? null
                         : _checkVerification,
                     child: Text(
                       _verified
-                          ? _creatingProfile
-                                ? 'Setting up…'
-                                : 'Continue'
+                          ? (_settingUpProfile ? 'Setting up…' : 'Continue')
                           : _checking
                           ? 'Checking…'
                           : 'I verified my email',
@@ -179,7 +226,9 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                   if (!_verified) ...[
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: _sending ? null : _sendVerification,
+                      onPressed: _sending
+                          ? null
+                          : () => _sendVerification(force: true),
                       child: Text(
                         _sending
                             ? 'Sending…'
