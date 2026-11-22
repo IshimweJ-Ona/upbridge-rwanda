@@ -15,8 +15,17 @@ void main() {
 
   test('relative time handles future, recent, and older dates', () {
     final now = DateTime(2026, 11, 13, 12);
-    expect(formatRelativeTime(now.add(const Duration(minutes: 1)), now: now), 'just now');
-    expect(formatRelativeTime(now.subtract(const Duration(minutes: 12)), now: now), '12 min ago');
-    expect(formatRelativeTime(now.subtract(const Duration(days: 1)), now: now), 'yesterday');
+    expect(
+      formatRelativeTime(now.add(const Duration(minutes: 1)), now: now),
+      'just now',
+    );
+    expect(
+      formatRelativeTime(now.subtract(const Duration(minutes: 12)), now: now),
+      '12 min ago',
+    );
+    expect(
+      formatRelativeTime(now.subtract(const Duration(days: 1)), now: now),
+      'yesterday',
+    );
   });
 }

@@ -1,20 +1,27 @@
-// Sends verification emails, ensures baseline youth profiles, and routes verified accounts to their role area.
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
-import 'package:upbridge/shared/models/models.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
+import 'package:upbridge/core/providers/repository_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
+import 'package:upbridge/core/themes/app_colors.dart';
+import 'package:upbridge/core/themes/app_text.dart';
+import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentor_application.dart';
+import 'package:upbridge/features/profile/domain/models/user_profile.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/firebase/firebase_failure_mapper.dart';
 import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
+import 'package:upbridge/shared/widgets/buttons.dart';
+import 'package:upbridge/shared/widgets/surfaces.dart';
 
 class VerifyEmailScreen extends ConsumerStatefulWidget {
   const VerifyEmailScreen({super.key, this.onNavigate});
 
-  /// Optional navigation hook used by focused widget tests.
   final ValueChanged<String>? onNavigate;
 
   @override
@@ -22,40 +29,87 @@ class VerifyEmailScreen extends ConsumerStatefulWidget {
 }
 
 class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
+  static const int _resendCooldownSeconds = 60;
+
   bool _sending = false;
   bool _checking = false;
   bool _settingUpProfile = false;
   bool _sent = false;
   bool _verified = false;
-  String _destination = '/onboarding/goal';
+  bool _isMentorTrack = false;
+  int _cooldownRemaining = 0;
+  Timer? _cooldownTimer;
+  String _destination = AppRoutes.onboardingGoal;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    final draft = ref.read(registrationDraftProvider);
+    _isMentorTrack = draft?.wantsMentorApplication ?? false;
+    if (ref.read(authServiceProvider).isEmailVerified) {
+      _verified = true;
+      _settingUpProfile = true;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _initVerification());
+  }
+
+  @override
+  void dispose() {
+    _cooldownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _cooldownRemaining = _resendCooldownSeconds);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_cooldownRemaining <= 1) {
+        timer.cancel();
+        setState(() => _cooldownRemaining = 0);
+      } else {
+        setState(() => _cooldownRemaining--);
+      }
+    });
   }
 
   Future<void> _initVerification() async {
     final authService = ref.read(authServiceProvider);
+    final user = authService.currentUser;
+    if (user != null) {
+      final loaded = await ref
+          .read(registrationDraftProvider.notifier)
+          .loadForUid(user.uid);
+      if (mounted && loaded != null) {
+        setState(() => _isMentorTrack = loaded.wantsMentorApplication);
+      }
+    }
     if (authService.isEmailVerified) {
       await _completeVerifiedSetup();
       return;
     }
-    if (authService.currentUser != null) {
+    if (user != null) {
       await _sendVerification(force: false);
     }
   }
 
   Future<void> _sendVerification({bool force = false}) async {
-    if (_sending || _verified) return;
+    if (_sending || _verified || (force && _cooldownRemaining > 0)) return;
     setState(() {
       _sending = true;
       _error = null;
     });
     try {
       await ref.read(authServiceProvider).sendVerificationEmail(force: force);
-      if (mounted) setState(() => _sent = true);
+      if (mounted) {
+        setState(() => _sent = true);
+        _startCooldown();
+      }
     } catch (error) {
       if (mounted) setState(() => _error = _messageFor(error));
     } finally {
@@ -64,6 +118,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   }
 
   Future<void> _checkVerification() async {
+    if (_checking) return;
     setState(() {
       _checking = true;
       _error = null;
@@ -89,36 +144,143 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   }
 
   Future<void> _completeVerifiedSetup() async {
+    _cooldownTimer?.cancel();
     final authService = ref.read(authServiceProvider);
     final user = authService.currentUser;
     if (mounted) {
       setState(() {
         _verified = true;
         _settingUpProfile = true;
+        _cooldownRemaining = 0;
         _error = null;
       });
     }
     try {
       final roleClaim = await authService.readRoleClaim(forceRefresh: true);
-      final role = trustedRoleFromClaim(roleClaim);
-      var onboarded = role != Role.youth;
+      var role = userRoleFromClaim(roleClaim);
+      var onboarded = role != UserRole.student;
+      final draftNotifier = ref.read(registrationDraftProvider.notifier);
+      final draft = user != null
+          ? (ref.read(registrationDraftProvider) ??
+                await draftNotifier.loadForUid(user.uid))
+          : ref.read(registrationDraftProvider);
+
+      bool hasMentorAppInFirestore = false;
 
       if (user != null && Firebase.apps.isNotEmpty) {
-        final repo = ref.read(repositoryProvider);
-        if (role == Role.youth) {
-          await repo.ensureYouthProfile(
+        final accountRepo = ref.read(userAccountRepositoryProvider);
+        final profileRepo = ref.read(userProfileRepositoryProvider);
+        final mentorAppRepo = ref.read(mentorApplicationRepositoryProvider);
+
+        var account = await accountRepo.getAccount(user.uid);
+        final mentorDraft = draft?.mentorApplication;
+        final displayName = (draft?.displayName ?? user.displayName ?? '')
+            .trim();
+        final phone = (draft?.phone ?? '').trim();
+
+        if (role == UserRole.student && account == null) {
+          // Email verification strictly ensures a student/unapproved account; it never grants mentor role.
+          await accountRepo.ensureStudentAccount(
             uid: user.uid,
-            displayName: user.displayName ?? '',
+            email: user.email ?? '',
+            displayName: displayName,
+            phone: phone,
           );
-          final snapshot = await repo.getProfile(user.uid);
-          onboarded = snapshot.data()?['onboarded'] == true;
+          final existingProfile = await profileRepo.getProfile(user.uid);
+          if (existingProfile == null) {
+            final now = DateTime.now().toUtc();
+            await profileRepo.upsertOwnProfile(
+              UserProfile(
+                id: user.uid,
+                ownerUid: user.uid,
+                displayName: displayName,
+                headline: mentorDraft?.headline ?? '',
+                location: 'Kigali, Rwanda',
+                about: mentorDraft?.bio ?? '',
+                cvAsset: mentorDraft?.cvAsset,
+                skills: mentorDraft?.skills ?? const [],
+                professionalLinks: mentorDraft?.supportingLinks ?? const [],
+                isMentorPublic: false,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+          }
+          account = await accountRepo.getAccount(user.uid);
         }
+
+        if (draft?.wantsMentorApplication == true && mentorDraft != null) {
+          final existingApp = await mentorAppRepo.getApplication(user.uid);
+          if (existingApp == null) {
+            final now = DateTime.now().toUtc();
+            await mentorAppRepo.submitApplication(
+              MentorApplication(
+                id: user.uid,
+                ownerUid: user.uid,
+                applicantName: displayName.isNotEmpty
+                    ? displayName
+                    : (user.displayName ?? 'Applicant'),
+                applicantEmail: user.email ?? '',
+                headline: mentorDraft.headline,
+                profession: mentorDraft.profession,
+                education: mentorDraft.education,
+                bio: mentorDraft.bio,
+                expertise: mentorDraft.expertise,
+                skills: mentorDraft.skills,
+                experienceYears: mentorDraft.experienceYears,
+                availability: mentorDraft.availability,
+                mentoringInterests: mentorDraft.mentoringInterests,
+                maxMentees: mentorDraft.maxMentees,
+                cvAsset: mentorDraft.cvAsset,
+                supportingLinks: mentorDraft.supportingLinks,
+                status: MentorApplicationStatus.pending,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+          }
+          hasMentorAppInFirestore = true;
+        } else {
+          final existingApp = await mentorAppRepo.getApplication(user.uid);
+          hasMentorAppInFirestore =
+              existingApp?.status == MentorApplicationStatus.pending ||
+              existingApp?.status == MentorApplicationStatus.rejected ||
+              existingApp?.status == MentorApplicationStatus.revoked;
+        }
+
+        role = resolveEffectiveRole(claimRole: role, account: account);
+        onboarded = role != UserRole.student || (account?.onboarded ?? false);
       }
 
-      final destination = verifiedUserDestination(
-        role: role,
-        onboarded: onboarded,
-      );
+      String destination;
+      if (role == UserRole.admin) {
+        destination = AppRoutes.adminOverview;
+      } else if (role == UserRole.mentor) {
+        destination = AppRoutes.mentorHome;
+      } else if (hasMentorAppInFirestore) {
+        destination = AppRoutes.mentorPending;
+      } else if (draft?.wantsMentorApplication == true) {
+        destination = AppRoutes.mentorApply;
+      } else {
+        destination = onboarded
+            ? AppRoutes.studentHome
+            : AppRoutes.onboardingGoal;
+      }
+
+      if (user != null) {
+        if (draft?.credentialUploadFailed == true &&
+            draft?.mentorApplication?.cvAsset == null) {
+          await RegistrationDraftController.setCredentialUploadWarning(
+            user.uid,
+            true,
+          );
+        }
+        await draftNotifier.clearForUid(user.uid);
+      } else if (draft != null) {
+        draftNotifier.setDraft(null);
+      }
+      ref.invalidate(appSessionProvider);
+
       if (!mounted) return;
       setState(() {
         _destination = destination;
@@ -147,103 +309,149 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   String _messageFor(Object error) {
     if (error is FirebaseException && error.code == 'permission-denied') {
       return 'Email verification succeeded, but Firestore denied profile setup. '
-          'Check that Firestore rules allow verified youth accounts to create users/{uid}.';
+          'Check that Firestore rules allow verified accounts to create users/{uid}.';
     }
     final failure = mapFirebaseFailure(error);
     return switch (failure.code) {
       'network-request-failed' || 'unavailable' || 'deadline-exceeded' =>
         'You appear to be offline. Check your connection and try again.',
       'too-many-requests' =>
-        'Please wait a little before requesting another email.',
+        'Too many verification emails sent recently. Please wait a minute before trying again.',
+      'expired-action-code' || 'invalid-action-code' =>
+        'That verification link expired. Request a new email below and open the newest link.',
       _ => 'We could not complete that request. Please try again.',
     };
   }
 
   Future<void> _signOut() async {
+    _cooldownTimer?.cancel();
     await ref.read(authServiceProvider).signOut();
-    ref.read(appStoreProvider.notifier).logout();
     if (mounted) _goTo(AppRoutes.welcome);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
+    final p = context.palette;
     final email =
         ref.watch(authServiceProvider).currentEmail ?? 'your email address';
+
+    final resendLabel = _sending
+        ? 'Sending…'
+        : _cooldownRemaining > 0
+        ? 'Resend available in ${_cooldownRemaining}s'
+        : _sent
+        ? 'Resend verification email'
+        : 'Send verification email';
+
     return Scaffold(
       body: SafeArea(
         child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(Icons.mark_email_unread_outlined, size: 56),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Verify your email',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _verified
-                        ? 'Your email is verified. You can continue to UpBridge.'
-                        : 'We sent a verification link to $email. Open that email and click the link to unlock your account.',
-                    textAlign: TextAlign.center,
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SurfaceCard(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: IconTile(
+                        _verified
+                            ? Icons.mark_email_read_outlined
+                            : Icons.mark_email_unread_outlined,
+                        tone: _verified ? Tone.success : Tone.info,
+                        size: 56,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _verified
-                        ? (_settingUpProfile
-                              ? null
-                              : (_error != null
-                                    ? _completeVerifiedSetup
-                                    : () => _goTo(_destination)))
-                        : _checking
-                        ? null
-                        : _checkVerification,
-                    child: Text(
+                    const SizedBox(height: 20),
+                    Text(
+                      _verified
+                          ? (l10n?.verifyEmailVerifiedHeading ??
+                                'Email verified')
+                          : (l10n?.verifyEmailTitle ?? 'Verify your email'),
+                      textAlign: TextAlign.center,
+                      style: AppText.titleL.copyWith(color: p.textPrimary),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _verified
+                          ? (l10n?.verifyEmailSettingUpBody ??
+                                'Your email is verified. Setting up your account…')
+                          : 'We sent a verification link to $email. Open that email and click the link to unlock your account.',
+                      textAlign: TextAlign.center,
+                      style: AppText.bodyS.copyWith(color: p.textSecondary),
+                    ),
+                    if (_isMentorTrack && !_verified) ...[
+                      const SizedBox(height: 16),
+                      NoticeCard(
+                        tone: Tone.info,
+                        icon: Icons.verified_user_outlined,
+                        title:
+                            l10n?.mentorReviewFollowsVerificationTitle ??
+                            'Mentor review follows verification',
+                        body:
+                            l10n?.mentorReviewFollowsVerificationBody ??
+                            'Verifying your email confirms your address only — it does not approve mentor access. Once verified, your application enters admin review.',
+                      ),
+                    ],
+                    if (_sent && !_verified && _error == null) ...[
+                      const SizedBox(height: 14),
+                      const NoticeCard(
+                        tone: Tone.success,
+                        icon: Icons.send_outlined,
+                        title: 'Verification email sent',
+                        body:
+                            'Check your inbox and spam folder, then tap "I verified my email" below.',
+                      ),
+                    ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 14),
+                      NoticeCard(
+                        tone: Tone.danger,
+                        icon: Icons.error_outline_rounded,
+                        title: 'Verification update',
+                        body: _error!,
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    AppButton(
                       _verified
                           ? (_settingUpProfile ? 'Setting up…' : 'Continue')
                           : _checking
-                          ? 'Checking…'
-                          : 'I verified my email',
+                          ? (l10n?.checkingStatusLabel ?? 'Checking…')
+                          : (l10n?.iVerifiedMyEmailCta ??
+                                'I verified my email'),
+                      loading: _checking || (_verified && _settingUpProfile),
+                      onPressed: _verified
+                          ? (_settingUpProfile
+                                ? null
+                                : (_error != null
+                                      ? _completeVerifiedSetup
+                                      : () => _goTo(_destination)))
+                          : _checkVerification,
                     ),
-                  ),
-                  if (!_verified) ...[
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _sending
-                          ? null
-                          : () => _sendVerification(force: true),
-                      child: Text(
-                        _sending
-                            ? 'Sending…'
-                            : _sent
-                            ? 'Resend verification email'
-                            : 'Send verification email',
+                    if (!_verified) ...[
+                      const SizedBox(height: 10),
+                      AppButton(
+                        resendLabel,
+                        variant: ButtonVariant.secondary,
+                        loading: _sending,
+                        onPressed: (_sending || _cooldownRemaining > 0)
+                            ? null
+                            : () => _sendVerification(force: true),
                       ),
+                    ],
+                    const SizedBox(height: 8),
+                    AppButton(
+                      'Sign out',
+                      variant: ButtonVariant.ghost,
+                      onPressed: _signOut,
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _signOut,
-                    child: const Text('Sign out'),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

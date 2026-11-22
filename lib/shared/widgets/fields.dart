@@ -1,13 +1,10 @@
-// Provides shared text inputs, verification code fields, and toggles.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import 'package:upbridge/shared/animations/pressable.dart';
 import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/core/themes/app_text.dart';
 import 'package:upbridge/core/themes/app_tokens.dart';
+import 'package:upbridge/shared/animations/pressable.dart';
 
-/// Labelled input with helper text, error state and an animated focus border.
 class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
@@ -100,33 +97,44 @@ class _AppTextFieldState extends State<AppTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final hasError = widget.error != null;
     final borderColor = hasError
-        ? AppColors.dangerText
+        ? p.dangerText
         : _focus.hasFocus
-        ? AppColors.focus
-        : AppColors.borderStrong;
+        ? p.focus
+        : p.borderStrong;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(child: Text(widget.label, style: AppText.bodySStrong)),
-            if (widget.trailingNote != null)
-              Text(widget.trailingNote!, style: AppText.caption),
-          ],
-        ),
-        const SizedBox(height: 6),
+        if (widget.label.isNotEmpty) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: AppText.bodySStrong.copyWith(color: p.textPrimary),
+                ),
+              ),
+              if (widget.trailingNote != null)
+                Text(
+                  widget.trailingNote!,
+                  style: AppText.caption.copyWith(color: p.textMuted),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+        ],
         AnimatedContainer(
-          duration: Motion.fast,
+          duration: Motion.durationFor(context, Motion.fast),
           curve: Motion.curve,
           decoration: BoxDecoration(
-            color: widget.readOnly ? AppColors.canvas : AppColors.surface,
+            color: widget.readOnly ? p.sunken : p.surface,
             borderRadius: Radii.rMd,
             border: Border.all(
               color: borderColor,
-              width: (_focus.hasFocus || hasError) ? 1.6 : 1,
+              width: (_focus.hasFocus || hasError) ? 1.5 : 1,
             ),
           ),
           child: TextField(
@@ -142,14 +150,14 @@ class _AppTextFieldState extends State<AppTextField> {
             onTap: widget.onTap,
             autofocus: widget.autofocus,
             inputFormatters: widget.inputFormatters,
-            style: AppText.bodyM.copyWith(color: AppColors.textPrimary),
+            style: AppText.bodyM.copyWith(color: p.textPrimary),
             decoration: InputDecoration(
               isDense: true,
               border: InputBorder.none,
               hintText: widget.hint,
-              hintStyle: AppText.bodyM.copyWith(color: AppColors.textMuted),
+              hintStyle: AppText.bodyM.copyWith(color: p.textMuted),
               prefixText: widget.prefixText,
-              prefixStyle: AppText.bodyM.copyWith(color: AppColors.textMuted),
+              prefixStyle: AppText.bodyM.copyWith(color: p.textMuted),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 13,
@@ -158,32 +166,22 @@ class _AppTextFieldState extends State<AppTextField> {
                   ? IconButton(
                       tooltip: _hidden ? 'Show password' : 'Hide password',
                       onPressed: () => setState(() => _hidden = !_hidden),
-                      icon: AnimatedSwitcher(
-                        duration: Motion.fast,
-                        transitionBuilder: (child, a) =>
-                            ScaleTransition(scale: a, child: child),
-                        child: Icon(
-                          _hidden
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          key: ValueKey(_hidden),
-                          size: 20,
-                          color: AppColors.textSecondary,
-                        ),
+                      icon: Icon(
+                        _hidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: p.textSecondary,
                       ),
                     )
                   : widget.suffixIcon == null
                   ? null
-                  : Icon(
-                      widget.suffixIcon,
-                      size: 20,
-                      color: AppColors.textSecondary,
-                    ),
+                  : Icon(widget.suffixIcon, size: 20, color: p.textSecondary),
             ),
           ),
         ),
         AnimatedSize(
-          duration: Motion.base,
+          duration: Motion.durationFor(context, Motion.base),
           curve: Motion.curve,
           alignment: Alignment.topLeft,
           child: hasError
@@ -192,21 +190,19 @@ class _AppTextFieldState extends State<AppTextField> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 1),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
                         child: Icon(
                           Icons.error_outline_rounded,
                           size: 15,
-                          color: AppColors.dangerText,
+                          color: p.dangerText,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           widget.error!,
-                          style: AppText.caption.copyWith(
-                            color: AppColors.dangerText,
-                          ),
+                          style: AppText.caption.copyWith(color: p.dangerText),
                         ),
                       ),
                     ],
@@ -216,7 +212,10 @@ class _AppTextFieldState extends State<AppTextField> {
               ? const SizedBox(width: double.infinity)
               : Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(widget.helper!, style: AppText.caption),
+                  child: Text(
+                    widget.helper!,
+                    style: AppText.caption.copyWith(color: p.textMuted),
+                  ),
                 ),
         ),
       ],
@@ -224,124 +223,6 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 }
 
-/// Six boxes for the SMS code; moves focus forward and back automatically.
-class OtpField extends StatefulWidget {
-  const OtpField({
-    super.key,
-    this.length = 6,
-    this.initial = '',
-    this.onChanged,
-    this.hasError = false,
-  });
-
-  final int length;
-  final String initial;
-  final ValueChanged<String>? onChanged;
-  final bool hasError;
-
-  @override
-  State<OtpField> createState() => _OtpFieldState();
-}
-
-class _OtpFieldState extends State<OtpField> {
-  late final List<TextEditingController> _c = List.generate(
-    widget.length,
-    (i) => TextEditingController(
-      text: i < widget.initial.length ? widget.initial[i] : '',
-    ),
-  );
-  late final List<FocusNode> _f = List.generate(
-    widget.length,
-    (_) => FocusNode(),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    for (final f in _f) {
-      f.addListener(() => setState(() {}));
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final c in _c) {
-      c.dispose();
-    }
-    for (final f in _f) {
-      f.dispose();
-    }
-    super.dispose();
-  }
-
-  String get value => _c.map((c) => c.text).join();
-
-  void _changed(int i, String v) {
-    if (v.length == 2) {
-      _c[i].text = v.substring(1);
-      _c[i].selection = const TextSelection.collapsed(offset: 1);
-      if (i < widget.length - 1) _f[i + 1].requestFocus();
-    } else if (v.length > 2) {
-      final digits = v.replaceAll(RegExp(r'\D'), '');
-      for (var k = 0; k < widget.length; k++) {
-        _c[k].text = k < digits.length ? digits[k] : '';
-      }
-      _f[(digits.length).clamp(0, widget.length - 1)].requestFocus();
-    } else if (v.isNotEmpty && i < widget.length - 1) {
-      _f[i + 1].requestFocus();
-    } else if (v.isEmpty && i > 0) {
-      _f[i - 1].requestFocus();
-    }
-    widget.onChanged?.call(value);
-    setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < widget.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: AnimatedContainer(
-              duration: Motion.fast,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: Radii.rMd,
-                border: Border.all(
-                  color: widget.hasError
-                      ? AppColors.dangerText
-                      : _f[i].hasFocus
-                      ? AppColors.focus
-                      : AppColors.borderStrong,
-                  width: _f[i].hasFocus ? 1.6 : 1,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: TextField(
-                controller: _c[i],
-                focusNode: _f[i],
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: AppText.dataMonoL,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  counterText: '',
-                  isDense: true,
-                ),
-                onChanged: (v) => _changed(i, v),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Checkbox with a label; the box fills and the tick pops in.
 class CheckRow extends StatelessWidget {
   const CheckRow({
     super.key,
@@ -360,68 +241,63 @@ class CheckRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Pressable(
           onTap: () => onChanged(!value),
           scale: 0.99,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AnimatedContainer(
-                duration: Motion.fast,
-                width: 22,
-                height: 22,
-                margin: const EdgeInsets.only(top: 1),
-                decoration: BoxDecoration(
-                  color: value ? AppColors.actionPrimary : AppColors.surface,
-                  borderRadius: Radii.rSm,
-                  border: Border.all(
-                    color: error != null
-                        ? AppColors.dangerText
-                        : (value
-                              ? AppColors.actionPrimary
-                              : AppColors.borderStrong),
-                    width: 1.4,
-                  ),
-                ),
-                child: AnimatedScale(
-                  scale: value ? 1 : 0,
-                  duration: Motion.base,
-                  curve: Motion.emphasized,
-                  child: const Icon(
-                    Icons.check_rounded,
-                    size: 16,
-                    color: AppColors.onPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: AppText.bodyS.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: Motion.durationFor(context, Motion.fast),
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: value ? p.actionPrimary : p.surface,
+                    borderRadius: Radii.rSm,
+                    border: Border.all(
+                      color: error != null
+                          ? p.dangerText
+                          : (value ? p.actionPrimary : p.borderStrong),
+                      width: 1.4,
                     ),
-                    if (subtitle != null)
-                      Text(subtitle!, style: AppText.caption),
-                  ],
+                  ),
+                  child: value
+                      ? Icon(Icons.check_rounded, size: 16, color: p.onPrimary)
+                      : null,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: AppText.bodyS.copyWith(color: p.textPrimary),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          style: AppText.caption.copyWith(color: p.textMuted),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         if (error != null)
           Padding(
-            padding: const EdgeInsets.only(top: 6, left: 34),
+            padding: const EdgeInsets.only(top: 4, left: 34),
             child: Text(
               error!,
-              style: AppText.caption.copyWith(color: AppColors.dangerText),
+              style: AppText.caption.copyWith(color: p.dangerText),
             ),
           ),
       ],
@@ -429,7 +305,6 @@ class CheckRow extends StatelessWidget {
   }
 }
 
-/// Toggle switch drawn to match the design (navy when on).
 class AppSwitch extends StatelessWidget {
   const AppSwitch({super.key, required this.value, required this.onChanged});
 
@@ -438,6 +313,7 @@ class AppSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Semantics(
       toggled: value,
       child: GestureDetector(
@@ -446,34 +322,119 @@ class AppSwitch extends StatelessWidget {
           onChanged(!value);
         },
         child: AnimatedContainer(
-          duration: Motion.base,
+          duration: Motion.durationFor(context, Motion.base),
           curve: Motion.curve,
-          width: 46,
-          height: 28,
+          width: 48,
+          height: 30,
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: value ? AppColors.actionPrimary : AppColors.borderSubtle,
+            color: value ? p.actionPrimary : p.borderSubtle,
             borderRadius: BorderRadius.circular(20),
           ),
           child: AnimatedAlign(
-            duration: Motion.base,
+            duration: Motion.durationFor(context, Motion.base),
             curve: Motion.curve,
             alignment: value ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
-              width: 22,
-              height: 22,
+              width: 24,
+              height: 24,
               decoration: const BoxDecoration(
-                color: AppColors.surface,
+                color: Colors.white,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x2213294B),
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
-                  ),
-                ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact search input with optional clear button and consistent 44px height.
+class AppSearchField extends StatefulWidget {
+  const AppSearchField({
+    super.key,
+    required this.controller,
+    required this.hint,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  State<AppSearchField> createState() => _AppSearchFieldState();
+}
+
+class _AppSearchFieldState extends State<AppSearchField> {
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+    widget.controller.addListener(_onTextChange);
+  }
+
+  void _onTextChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChange);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AnimatedContainer(
+      duration: Motion.durationFor(context, Motion.fast),
+      curve: Motion.curve,
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.rMd,
+        border: Border.all(
+          color: _focus.hasFocus ? p.focus : p.borderSubtle,
+          width: _focus.hasFocus ? 1.5 : 1,
+        ),
+      ),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focus,
+        onChanged: widget.onChanged,
+        textInputAction: TextInputAction.search,
+        style: AppText.bodyM.copyWith(color: p.textPrimary),
+        decoration: InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          hintText: widget.hint,
+          hintStyle: AppText.bodyS.copyWith(color: p.textMuted),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: _focus.hasFocus ? p.focus : p.textMuted,
+          ),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 42,
+            minHeight: 42,
+          ),
+          suffixIcon: widget.controller.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  icon: Icon(Icons.close_rounded, size: 18, color: p.textMuted),
+                  onPressed: () {
+                    widget.controller.clear();
+                    widget.onChanged?.call('');
+                  },
+                ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 11,
           ),
         ),
       ),

@@ -1,69 +1,166 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/app/router/route_guards.dart';
-import 'package:upbridge/shared/models/models.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
 
 void main() {
-  group('roleAreaRedirect', () {
-    test('youth can stay in youth routes and use shared language settings', () {
-      expect(roleAreaRedirect(role: Role.youth, location: '/home'), isNull);
-      expect(roleAreaRedirect(role: Role.youth, location: '/language'), isNull);
-    });
-
-    test('youth is sent home when entering mentor or admin routes', () {
-      expect(roleAreaRedirect(role: Role.youth, location: '/m/home'), '/home');
+  group('claimsRoleAreaRedirect', () {
+    test('student stays in student routes and shared locations', () {
       expect(
-        roleAreaRedirect(role: Role.youth, location: '/a/overview'),
-        '/home',
-      );
-      expect(
-        roleAreaRedirect(role: Role.youth, location: '/a-new-user'),
-        '/home',
-      );
-    });
-
-    test('mentor stays in mentor routes and shared settings', () {
-      expect(
-        roleAreaRedirect(role: Role.mentor, location: '/m/reviews'),
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: AppRoutes.studentHome,
+        ),
         isNull,
       );
       expect(
-        roleAreaRedirect(role: Role.mentor, location: '/language'),
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: AppRoutes.language,
+        ),
+        isNull,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: '/mentorship/m1',
+        ),
+        isNull,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: AppRoutes.mentorApply,
+        ),
         isNull,
       );
     });
 
-    test('mentor is sent to mentor home outside the mentor area', () {
-      expect(roleAreaRedirect(role: Role.mentor, location: '/home'), '/m/home');
+    test('student is redirected home when entering mentor or admin routes', () {
       expect(
-        roleAreaRedirect(role: Role.mentor, location: '/a/overview'),
-        '/m/home',
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: AppRoutes.mentorHome,
+        ),
+        AppRoutes.studentHome,
       );
       expect(
-        roleAreaRedirect(role: Role.mentor, location: '/a-forward/123'),
-        '/m/home',
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: AppRoutes.adminOverview,
+        ),
+        AppRoutes.studentHome,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.student,
+          location: '/a-applicant/u1',
+        ),
+        AppRoutes.studentHome,
       );
     });
 
     test(
-      'admin stays in admin routes and is redirected from other role areas',
+      'mentor stays in mentor routes and shared mentorship/profile routes',
       () {
         expect(
-          roleAreaRedirect(role: Role.admin, location: '/a/overview'),
+          claimsRoleAreaRedirect(
+            role: UserRole.mentor,
+            location: AppRoutes.mentorHome,
+          ),
           isNull,
         );
         expect(
-          roleAreaRedirect(role: Role.admin, location: '/a-listing/123'),
+          claimsRoleAreaRedirect(
+            role: UserRole.mentor,
+            location: '/m/requests',
+          ),
           isNull,
         );
         expect(
-          roleAreaRedirect(role: Role.admin, location: '/m/home'),
-          '/a/overview',
+          claimsRoleAreaRedirect(
+            role: UserRole.mentor,
+            location: '/mentorship/m1',
+          ),
+          isNull,
         );
         expect(
-          roleAreaRedirect(role: Role.admin, location: '/home'),
-          '/a/overview',
+          claimsRoleAreaRedirect(
+            role: UserRole.mentor,
+            location: '/user-profile/s1',
+          ),
+          isNull,
+        );
+        expect(
+          claimsRoleAreaRedirect(
+            role: UserRole.mentor,
+            location: AppRoutes.language,
+          ),
+          isNull,
         );
       },
     );
+
+    test('mentor is sent to mentor home outside mentor & shared areas', () {
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.mentor,
+          location: AppRoutes.studentHome,
+        ),
+        AppRoutes.mentorHome,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.mentor,
+          location: AppRoutes.adminOverview,
+        ),
+        AppRoutes.mentorHome,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.mentor,
+          location: '/a-applicant/u1',
+        ),
+        AppRoutes.mentorHome,
+      );
+    });
+
+    test('admin stays in admin & shared routes and is redirected from other role areas', () {
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.admin,
+          location: AppRoutes.adminOverview,
+        ),
+        isNull,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.admin,
+          location: '/a-applicant/u1',
+        ),
+        isNull,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.admin,
+          location: '/user-profile/u1',
+        ),
+        isNull,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.admin,
+          location: AppRoutes.mentorHome,
+        ),
+        AppRoutes.adminOverview,
+      );
+      expect(
+        claimsRoleAreaRedirect(
+          role: UserRole.admin,
+          location: AppRoutes.studentHome,
+        ),
+        AppRoutes.adminOverview,
+      );
+    });
   });
 }

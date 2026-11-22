@@ -1,200 +1,853 @@
-// Requires verified Firebase email claims and enforces per-feature ownership and state rules.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    function isSignedIn() {
       return request.auth != null && request.auth.token.email_verified == true;
     }
 
-    // Roles are trusted only when provisioned as Firebase Auth custom claims.
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userDocExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isUserDocActive(data) {
+      return ('status' in data && data.status == 'active')
+        || (!('status' in data)
+          && (!('accountStatus' in data) || data.accountStatus == 'active'));
+    }
+
+    function isActiveUser() {
+      return isSignedIn() && (
+        !userDocExists(request.auth.uid)
+        || isUserDocActive(userDoc(request.auth.uid))
+      );
+    }
+
+    // Privileged admin role is trusted exclusively from Firebase Auth custom claims.
     function isAdmin() {
-      return signedIn() && request.auth.token.role == 'admin';
+      return isActiveUser()
+        && ('role' in request.auth.token)
+        && request.auth.token.role == 'admin';
     }
 
-    function isMentor() {
-      return signedIn() && request.auth.token.role == 'mentor';
+    // Approved mentor requires active account AND either approved Firestore user record
+    // (blocking revoked mentors immediately on Spark even before token expiry) OR
+    // custom token role='mentor' when no users/{uid} doc overrides it.
+    function isApprovedMentor() {
+      return isActiveUser() && (
+        (userDocExists(request.auth.uid)
+          && ('role' in userDoc(request.auth.uid))
+          && ('isApproved' in userDoc(request.auth.uid))
+          && userDoc(request.auth.uid).role == 'mentor'
+          && userDoc(request.auth.uid).isApproved == true)
+        || (!userDocExists(request.auth.uid)
+          && ('role' in request.auth.token)
+          && request.auth.token.role == 'mentor')
+      );
     }
 
-    function owns(field) {
-      return signedIn() && resource.data[field] == request.auth.uid;
+    function isStudent() {
+      return isActiveUser() && !isAdmin() && !isApprovedMentor();
     }
 
-    function isGenericCollection(collection) {
-      return !(collection in [
-        'users',
-        'mentorProfiles',
-        'mentorSessions',
-        'applications',
-        'checkIns',
-        'notifications',
-        'auditLogs',
-        'appSettings',
-        'learningPaths',
-        'learningTasks',
-        'opportunities'
-      ]);
+    function validStr(value, minLen, maxLen) {
+      return value is string && value.size() >= minLen && value.size() <= maxLen;
+    }
+
+    function validOptionalAsset(asset, ownerUid) {
+      return asset == null || (
+        asset is map
+        && asset.keys().hasOnly(['url', 'publicId', 'resourceType', 'size', 'ownerUid', 'createdAt'])
+        && validStr(asset.url, 10, 1000)
+        && asset.url.matches('^https://res\\.cloudinary\\.com/vbzq5ssu/image/upload/.*')
+        && validStr(asset.publicId, 1, 400)
+        && asset.resourceType == 'image'
+        && asset.size is int && asset.size > 0 && asset.size <= 10485760
+        && asset.ownerUid == ownerUid
+      );
+    }
+
+    function validOptionalUrlList(value, maxCount) {
+      return !(value is list) || value.size() <= maxCount;
+    }
+
+    function validNotificationBase(data) {
+      return validStr(data.ownerUid, 1, 128)
+        && validStr(data.title, 2, 160)
+        && validStr(data.body, 2, 1000)
+        && data.isRead == false
+        && data.status == 'unread';
+    }
+
+    function validParticipantNotificationSource(data) {
+      return ('sourceCollection' in data)
+        && ('sourceId' in data)
+        && validStr(data.sourceId, 1, 128)
+        && (
+          (
+            data.sourceCollection == 'mentorRequests'
+            && existsAfter(/databases/$(database)/documents/mentorRequests/$(data.sourceId))
+            && (
+              (getAfter(/databases/$(database)/documents/mentorRequests/$(data.sourceId)).data.studentUid == request.auth.uid
+                && getAfter(/databases/$(database)/documents/mentorRequests/$(data.sourceId)).data.mentorUid == data.ownerUid)
+              || (isApprovedMentor()
+                && getAfter(/databases/$(database)/documents/mentorRequests/$(data.sourceId)).data.mentorUid == request.auth.uid
+                && getAfter(/databases/$(database)/documents/mentorRequests/$(data.sourceId)).data.studentUid == data.ownerUid)
+            )
+          )
+          || (
+            data.sourceCollection == 'mentorships'
+            && existsAfter(/databases/$(database)/documents/mentorships/$(data.sourceId))
+            && (
+              (getAfter(/databases/$(database)/documents/mentorships/$(data.sourceId)).data.studentUid == request.auth.uid
+                && getAfter(/databases/$(database)/documents/mentorships/$(data.sourceId)).data.mentorUid == data.ownerUid)
+              || (isApprovedMentor()
+                && getAfter(/databases/$(database)/documents/mentorships/$(data.sourceId)).data.mentorUid == request.auth.uid
+                && getAfter(/databases/$(database)/documents/mentorships/$(data.sourceId)).data.studentUid == data.ownerUid)
+            )
+          )
+          || (
+            data.sourceCollection == 'sessions'
+            && existsAfter(/databases/$(database)/documents/sessions/$(data.sourceId))
+            && (
+              (getAfter(/databases/$(database)/documents/sessions/$(data.sourceId)).data.studentUid == request.auth.uid
+                && getAfter(/databases/$(database)/documents/sessions/$(data.sourceId)).data.mentorUid == data.ownerUid)
+              || (isApprovedMentor()
+                && getAfter(/databases/$(database)/documents/sessions/$(data.sourceId)).data.mentorUid == request.auth.uid
+                && getAfter(/databases/$(database)/documents/sessions/$(data.sourceId)).data.studentUid == data.ownerUid)
+            )
+          )
+        );
     }
 
     match /users/{userId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
-      allow create: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.role == 'youth'
-        && request.resource.data.accountStatus == 'active';
-      allow update: if isAdmin() || (signedIn()
-        && request.auth.uid == userId
+      // Allow a signed-in user to read their own account document even when deactivated
+      // so the client can surface the deactivated notice cleanly.
+      allow read: if isAdmin() || isOwner(userId);
+
+      allow create: if isAdmin() || (
+        isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'email', 'displayName', 'phone', 'role', 'isApproved',
+          'status', 'onboarded', 'preferredLocale', 'photoAsset',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.role == 'student'
+        && request.resource.data.isApproved == false
+        && request.resource.data.status == 'active'
+        && validStr(request.resource.data.email, 3, 200)
+        && validStr(request.resource.data.displayName, 0, 120)
+        && validStr(request.resource.data.phone, 0, 40)
+        && request.resource.data.onboarded is bool
+        && request.resource.data.preferredLocale in ['en', 'rw', 'fr']
+        && validOptionalAsset(request.resource.data.photoAsset, request.auth.uid)
+      );
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'photoUrl', 'phone', 'interests', 'learningGoal',
-          'onboarded', 'updatedAt'
-        ]));
+          'displayName', 'phone', 'onboarded', 'preferredLocale', 'photoAsset', 'updatedAt'
+        ])
+        && (!('displayName' in request.resource.data)
+          || validStr(request.resource.data.displayName, 1, 120))
+        && (!('phone' in request.resource.data)
+          || validStr(request.resource.data.phone, 0, 40))
+        && request.resource.data.onboarded is bool
+        && (!('preferredLocale' in request.resource.data)
+          || request.resource.data.preferredLocale in ['en', 'rw', 'fr'])
+        && (!('photoAsset' in request.resource.data)
+          || validOptionalAsset(request.resource.data.photoAsset, request.auth.uid))
+      );
+
       allow delete: if isAdmin();
     }
 
-    match /mentorProfiles/{mentorId} {
-      allow read: if signedIn();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (isMentor()
-        && request.auth.uid == mentorId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'meetingLink', 'menteeLimit', 'availabilityWindows',
-          'accepting', 'availability', 'openSlots', 'updatedAt'
-        ])
-        && request.resource.data.updatedAt == request.time);
+    match /profiles/{userId} {
+      allow get: if isAdmin() || (
+        isActiveUser() && (
+          isOwner(userId)
+          || resource == null
+          || !('status' in resource.data)
+          || resource.data.status == 'active'
+        )
+      );
+      allow list: if isAdmin() || (
+        isActiveUser() && (
+          resource.data.ownerUid == request.auth.uid
+          || resource.data.status == 'active'
+        )
+      );
+
+      allow create: if isAdmin() || (
+        isActiveUser()
+        && isOwner(userId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && (request.resource.data.isMentorPublic == false || isApprovedMentor())
+        && request.resource.data.status == 'active'
+        && validStr(request.resource.data.displayName, 0, 120)
+        && validStr(request.resource.data.headline, 0, 160)
+        && validStr(request.resource.data.location, 0, 120)
+        && validStr(request.resource.data.about, 0, 2000)
+        && validOptionalAsset(request.resource.data.photoAsset, request.auth.uid)
+        && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid)
+        && request.resource.data.skills is list && request.resource.data.skills.size() <= 30
+        && request.resource.data.interests is list && request.resource.data.interests.size() <= 10
+        && (!('professionalLinks' in request.resource.data)
+          || (request.resource.data.professionalLinks is list
+            && request.resource.data.professionalLinks.size() <= 10))
+      );
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && isOwner(userId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.status in ['active', 'archived']
+        && validStr(request.resource.data.displayName, 0, 120)
+        && validStr(request.resource.data.headline, 0, 160)
+        && validStr(request.resource.data.location, 0, 120)
+        && validStr(request.resource.data.about, 0, 2000)
+        && validOptionalAsset(request.resource.data.photoAsset, request.auth.uid)
+        && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid)
+        && (!('professionalLinks' in request.resource.data)
+          || (request.resource.data.professionalLinks is list
+            && request.resource.data.professionalLinks.size() <= 10))
+        && (
+          (
+            isApprovedMentor()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'displayName', 'headline', 'location', 'about', 'photoAsset',
+              'cvAsset', 'skills', 'interests', 'learningGoal', 'professionalLinks',
+              'education', 'experience', 'certificates', 'isMentorPublic',
+              'mentorExpertise', 'mentorExperienceYears', 'mentorAvailability',
+              'mentorMaxMentees', 'mentorBio', 'status', 'updatedAt'
+            ])
+            && (!('mentorExperienceYears' in request.resource.data)
+              || (request.resource.data.mentorExperienceYears is int
+                && request.resource.data.mentorExperienceYears >= 0
+                && request.resource.data.mentorExperienceYears <= 60))
+            && (!('mentorMaxMentees' in request.resource.data)
+              || (request.resource.data.mentorMaxMentees is int
+                && request.resource.data.mentorMaxMentees >= 1
+                && request.resource.data.mentorMaxMentees <= 50))
+            && (!('mentorBio' in request.resource.data)
+              || validStr(request.resource.data.mentorBio, 0, 2000))
+          )
+          || (
+            request.resource.data.isMentorPublic == resource.data.isMentorPublic
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'displayName', 'headline', 'location', 'about', 'photoAsset',
+              'cvAsset', 'skills', 'interests', 'learningGoal', 'professionalLinks',
+              'education', 'experience', 'certificates', 'status', 'updatedAt'
+            ])
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
     }
 
-    match /mentorSessions/{sessionId} {
-      allow read: if isAdmin() || (signedIn()
-        && (resource.data.requesterId == request.auth.uid
-          || resource.data.mentorId == request.auth.uid));
-      allow create: if signedIn()
-        && request.resource.data.requesterId == request.auth.uid
-        && request.resource.data.status == 'requested'
-        && request.resource.data.keys().hasOnly([
-          'requesterId', 'requesterName', 'mentorId', 'mentorName',
-          'topic', 'note', 'startsAt', 'durationMinutes', 'mode',
-          'status', 'createdAt', 'updatedAt'
+    match /projects/{projectId} {
+      allow read: if isAdmin() || (
+        isActiveUser() && (
+          isOwner(resource.data.ownerUid)
+          || (resource.data.isPublic == true && resource.data.status == 'published')
+        )
+      );
+
+      allow create: if isActiveUser()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status in ['draft', 'published']
+        && validStr(request.resource.data.title, 2, 120)
+        && validStr(request.resource.data.description, 10, 2500)
+        && request.resource.data.skills is list
+        && request.resource.data.skills.size() >= 1
+        && request.resource.data.skills.size() <= 15
+        && request.resource.data.images is list
+        && request.resource.data.images.size() <= 6
+        && request.resource.data.attachments is list
+        && request.resource.data.attachments.size() <= 6
+        && request.resource.data.isPublic is bool;
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && isOwner(resource.data.ownerUid)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.status in ['draft', 'published', 'archived']
+        && validStr(request.resource.data.title, 2, 120)
+        && validStr(request.resource.data.description, 10, 2500)
+        && request.resource.data.skills is list
+        && request.resource.data.skills.size() >= 1
+        && request.resource.data.skills.size() <= 15
+        && request.resource.data.images is list
+        && request.resource.data.images.size() <= 6
+        && request.resource.data.attachments is list
+        && request.resource.data.attachments.size() <= 6
+        && request.resource.data.isPublic is bool
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'description', 'skills', 'projectUrl', 'repoUrl',
+          'images', 'attachments', 'courseId', 'isPublic', 'status', 'updatedAt'
         ])
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin() || (signedIn() && (
-        (resource.data.requesterId == request.auth.uid
-          && resource.data.status in ['requested', 'confirmed']
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
-          && request.resource.data.status == 'cancelled'
-          && request.resource.data.updatedAt == request.time)
-        || (isMentor()
-          && resource.data.mentorId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status', 'meetingLink', 'updatedAt'
+      );
+
+      allow delete: if isAdmin() || (isActiveUser() && isOwner(resource.data.ownerUid));
+    }
+
+    match /mentorApplications/{applicantUid} {
+      allow read: if isAdmin() || isOwner(applicantUid);
+
+      allow create: if isActiveUser()
+        && isOwner(applicantUid)
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'applicantName', 'applicantEmail', 'headline', 'profession',
+          'education', 'bio', 'expertise', 'skills', 'experienceYears',
+          'availability', 'mentoringInterests', 'maxMentees', 'cvAsset',
+          'supportingLinks', 'status', 'rejectionReason', 'reviewedBy',
+          'reviewedAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.rejectionReason == ''
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && validStr(request.resource.data.applicantName, 2, 120)
+        && validStr(request.resource.data.applicantEmail, 3, 200)
+        && validStr(request.resource.data.headline, 3, 160)
+        && (!('profession' in request.resource.data)
+          || validStr(request.resource.data.profession, 0, 160))
+        && (!('education' in request.resource.data)
+          || validStr(request.resource.data.education, 0, 240))
+        && validStr(request.resource.data.bio, 20, 2000)
+        && validStr(request.resource.data.availability, 0, 200)
+        && (!('mentoringInterests' in request.resource.data)
+          || validStr(request.resource.data.mentoringInterests, 0, 400))
+        && (!('maxMentees' in request.resource.data)
+          || (request.resource.data.maxMentees is int
+            && request.resource.data.maxMentees >= 1
+            && request.resource.data.maxMentees <= 50))
+        && request.resource.data.expertise is list
+        && request.resource.data.expertise.size() >= 1
+        && request.resource.data.expertise.size() <= 15
+        && (!('skills' in request.resource.data)
+          || (request.resource.data.skills is list
+            && request.resource.data.skills.size() <= 30))
+        && request.resource.data.experienceYears is int
+        && request.resource.data.experienceYears >= 0
+        && request.resource.data.experienceYears <= 60
+        && (!('supportingLinks' in request.resource.data)
+          || (request.resource.data.supportingLinks is list
+            && request.resource.data.supportingLinks.size() <= 10))
+        && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid);
+
+      allow update: if (
+        isAdmin()
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'rejectionReason', 'reviewedBy', 'reviewedAt', 'updatedAt'
+        ])
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.resource.data.status in ['approved', 'rejected']
+            && (
+              request.resource.data.status == 'approved'
+              || validStr(request.resource.data.rejectionReason, 5, 1000)
+            )
+          )
+          || (
+            resource.data.status == 'approved'
+            && request.resource.data.status == 'revoked'
+            && validStr(request.resource.data.rejectionReason, 5, 1000)
+          )
+        )
+      ) || (
+        isActiveUser()
+        && isOwner(applicantUid)
+        && resource.data.status in ['pending', 'rejected', 'revoked']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.rejectionReason == ''
+        && validStr(request.resource.data.applicantName, 2, 120)
+        && validStr(request.resource.data.applicantEmail, 3, 200)
+        && validStr(request.resource.data.headline, 3, 160)
+        && (!('profession' in request.resource.data)
+          || validStr(request.resource.data.profession, 0, 160))
+        && (!('education' in request.resource.data)
+          || validStr(request.resource.data.education, 0, 240))
+        && validStr(request.resource.data.bio, 20, 2000)
+        && validStr(request.resource.data.availability, 0, 200)
+        && (!('mentoringInterests' in request.resource.data)
+          || validStr(request.resource.data.mentoringInterests, 0, 400))
+        && (!('maxMentees' in request.resource.data)
+          || (request.resource.data.maxMentees is int
+            && request.resource.data.maxMentees >= 1
+            && request.resource.data.maxMentees <= 50))
+        && request.resource.data.expertise is list
+        && request.resource.data.expertise.size() >= 1
+        && request.resource.data.expertise.size() <= 15
+        && (!('skills' in request.resource.data)
+          || (request.resource.data.skills is list
+            && request.resource.data.skills.size() <= 30))
+        && request.resource.data.experienceYears is int
+        && request.resource.data.experienceYears >= 0
+        && request.resource.data.experienceYears <= 60
+        && (!('supportingLinks' in request.resource.data)
+          || (request.resource.data.supportingLinks is list
+            && request.resource.data.supportingLinks.size() <= 10))
+        && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'applicantName', 'applicantEmail', 'headline', 'profession',
+          'education', 'bio', 'expertise', 'skills', 'experienceYears',
+          'availability', 'mentoringInterests', 'maxMentees', 'cvAsset',
+          'supportingLinks', 'status', 'rejectionReason', 'reviewedBy',
+          'reviewedAt', 'updatedAt'
+        ])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /mentorRequests/{requestId} {
+      allow read: if isAdmin() || (
+        isActiveUser() && (
+          resource.data.studentUid == request.auth.uid
+          || (isApprovedMentor() && resource.data.mentorUid == request.auth.uid)
+        )
+      );
+
+      allow create: if isActiveUser()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.studentUid == request.auth.uid
+        && request.resource.data.mentorUid != request.auth.uid
+        && request.resource.data.status == 'pending'
+        && validStr(request.resource.data.message, 10, 1500)
+        && validStr(request.resource.data.goals, 0, 1000)
+        && exists(/databases/$(database)/documents/profiles/$(request.resource.data.mentorUid))
+        && get(/databases/$(database)/documents/profiles/$(request.resource.data.mentorUid)).data.isMentorPublic == true
+        && (
+          !userDocExists(request.resource.data.mentorUid)
+          || (('role' in userDoc(request.resource.data.mentorUid))
+            && ('isApproved' in userDoc(request.resource.data.mentorUid))
+            && userDoc(request.resource.data.mentorUid).role == 'mentor'
+            && userDoc(request.resource.data.mentorUid).isApproved == true
+            && isUserDocActive(userDoc(request.resource.data.mentorUid)))
+        );
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && resource.data.status == 'pending'
+        && (
+          (
+            resource.data.studentUid == request.auth.uid
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'respondedAt', 'updatedAt'
+            ])
+          )
+          || (
+            isApprovedMentor()
+            && resource.data.mentorUid == request.auth.uid
+            && request.resource.data.status in ['accepted', 'declined']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'responseNote', 'respondedAt', 'updatedAt'
+            ])
+            && validStr(request.resource.data.responseNote, 0, 1000)
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /mentorships/{mentorshipId} {
+      allow read: if isAdmin() || (
+        isActiveUser() && (
+          resource.data.studentUid == request.auth.uid
+          || (isApprovedMentor() && resource.data.mentorUid == request.auth.uid)
+        )
+      );
+
+      allow create: if isAdmin() || (
+        isApprovedMentor()
+        && request.resource.data.mentorUid == request.auth.uid
+        && request.resource.data.ownerUid == request.resource.data.studentUid
+        && request.resource.data.studentUid != request.resource.data.mentorUid
+        && request.resource.data.status == 'active'
+        && existsAfter(/databases/$(database)/documents/mentorRequests/$(request.resource.data.requestId))
+        && getAfter(/databases/$(database)/documents/mentorRequests/$(request.resource.data.requestId)).data.mentorUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/mentorRequests/$(request.resource.data.requestId)).data.studentUid == request.resource.data.studentUid
+        && getAfter(/databases/$(database)/documents/mentorRequests/$(request.resource.data.requestId)).data.status == 'accepted'
+      );
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && (
+          (
+            (resource.data.studentUid == request.auth.uid || (isApprovedMentor() && resource.data.mentorUid == request.auth.uid))
+            && resource.data.status == 'active'
+            && request.resource.data.status in ['completed', 'ended']
+            && request.resource.data.endedByUid == request.auth.uid
+            && (request.resource.data.feedbackRating == null
+              || (request.resource.data.feedbackRating is int
+                && request.resource.data.feedbackRating >= 1
+                && request.resource.data.feedbackRating <= 5))
+            && validStr(request.resource.data.feedbackComment, 0, 1000)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'endedByUid', 'endedAt', 'feedbackRating', 'feedbackComment', 'updatedAt'
+            ])
+          )
+          || (
+            resource.data.studentUid == request.auth.uid
+            && resource.data.status in ['completed', 'ended']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'feedbackRating', 'feedbackComment', 'updatedAt'
+            ])
+            && request.resource.data.feedbackRating is int
+            && request.resource.data.feedbackRating >= 1
+            && request.resource.data.feedbackRating <= 5
+            && validStr(request.resource.data.feedbackComment, 0, 1000)
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAdmin() || (
+        isActiveUser() && (
+          resource.data.studentUid == request.auth.uid
+          || (isApprovedMentor() && resource.data.mentorUid == request.auth.uid)
+        )
+      );
+
+      allow create: if isActiveUser()
+        && request.resource.data.ownerUid == request.auth.uid
+        && (
+          request.resource.data.studentUid == request.auth.uid
+          || (isApprovedMentor() && request.resource.data.mentorUid == request.auth.uid)
+        )
+        && request.resource.data.status == 'scheduled'
+        && validStr(request.resource.data.topic, 3, 200)
+        && request.resource.data.durationMinutes is int
+        && request.resource.data.durationMinutes >= 15
+        && request.resource.data.durationMinutes <= 180
+        && exists(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId))
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == 'active'
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentUid == request.resource.data.studentUid
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorUid == request.resource.data.mentorUid;
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && resource.data.status == 'scheduled'
+        && (
+          (
+            resource.data.studentUid == request.auth.uid
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'cancelReason', 'updatedAt'
+            ])
+          )
+          || (
+            isApprovedMentor()
+            && resource.data.mentorUid == request.auth.uid
+            && (
+              (
+                request.resource.data.status == 'scheduled'
+                && validStr(request.resource.data.topic, 3, 200)
+                && request.resource.data.durationMinutes is int
+                && request.resource.data.durationMinutes >= 15
+                && request.resource.data.durationMinutes <= 180
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'topic', 'notes', 'meetingMode', 'meetingLink', 'scheduledAt',
+                  'durationMinutes', 'updatedAt'
+                ])
+              )
+              || (
+                request.resource.data.status in ['completed', 'cancelled']
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'status', 'notes', 'cancelReason', 'completedAt', 'updatedAt'
+                ])
+              )
+            )
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /courses/{courseId} {
+      allow read: if isAdmin() || (
+        isActiveUser() && (
+          resource.data.status == 'published'
+          || (isApprovedMentor() && resource.data.ownerUid == request.auth.uid)
+        )
+      );
+
+      allow create: if isAdmin() || (
+        isApprovedMentor()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'ownerName', 'title', 'summary', 'category',
+          'customCategory', 'level', 'estimatedMinutes', 'learningObjectives',
+          'resources', 'modules', 'skills', 'coverAsset', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && (!('ownerName' in request.resource.data)
+          || validStr(request.resource.data.ownerName, 0, 120))
+        && request.resource.data.status in ['draft', 'published']
+        && validStr(request.resource.data.title, 3, 160)
+        && validStr(request.resource.data.summary, 10, 2000)
+        && (!('category' in request.resource.data)
+          || request.resource.data.category in [
+            'it', 'mobileWeb', 'dataAi', 'design', 'cloudDevops',
+            'cybersecurity', 'softSkills', 'career', 'entrepreneurship', 'custom'
           ])
-          && ((resource.data.status == 'requested'
-                && request.resource.data.status in ['confirmed', 'declined'])
-              || (resource.data.status == 'confirmed'
-                && request.resource.data.status in ['completed', 'cancelled']))
-          && request.resource.data.updatedAt == request.time)
-      ));
-      allow delete: if isAdmin() || (signedIn()
-        && resource.data.requesterId == request.auth.uid
-        && resource.data.status == 'requested');
+        && (!('customCategory' in request.resource.data)
+          || validStr(request.resource.data.customCategory, 0, 80))
+        && (!('level' in request.resource.data)
+          || validStr(request.resource.data.level, 1, 40))
+        && (!('estimatedMinutes' in request.resource.data)
+          || (request.resource.data.estimatedMinutes is int
+            && request.resource.data.estimatedMinutes >= 5
+            && request.resource.data.estimatedMinutes <= 1200))
+        && (!('modules' in request.resource.data)
+          || (request.resource.data.modules is list
+            && request.resource.data.modules.size() <= 40))
+        && (!('skills' in request.resource.data)
+          || (request.resource.data.skills is list
+            && request.resource.data.skills.size() <= 30))
+        && (!('learningObjectives' in request.resource.data)
+          || (request.resource.data.learningObjectives is list
+            && request.resource.data.learningObjectives.size() <= 20))
+        && (!('resources' in request.resource.data)
+          || (request.resource.data.resources is list
+            && request.resource.data.resources.size() <= 20))
+        && (!('coverAsset' in request.resource.data)
+          || validOptionalAsset(request.resource.data.coverAsset, request.auth.uid))
+      );
+
+      allow update: if isAdmin() || (
+        isApprovedMentor()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ownerName', 'title', 'summary', 'category', 'customCategory',
+          'level', 'estimatedMinutes', 'learningObjectives', 'resources',
+          'modules', 'skills', 'coverAsset', 'status', 'updatedAt'
+        ])
+        && (!('ownerName' in request.resource.data)
+          || validStr(request.resource.data.ownerName, 0, 120))
+        && request.resource.data.status in ['draft', 'published', 'archived']
+        && validStr(request.resource.data.title, 3, 160)
+        && validStr(request.resource.data.summary, 10, 2000)
+        && (!('category' in request.resource.data)
+          || request.resource.data.category in [
+            'it', 'mobileWeb', 'dataAi', 'design', 'cloudDevops',
+            'cybersecurity', 'softSkills', 'career', 'entrepreneurship', 'custom'
+          ])
+        && (!('customCategory' in request.resource.data)
+          || validStr(request.resource.data.customCategory, 0, 80))
+        && (!('level' in request.resource.data)
+          || validStr(request.resource.data.level, 1, 40))
+        && (!('estimatedMinutes' in request.resource.data)
+          || (request.resource.data.estimatedMinutes is int
+            && request.resource.data.estimatedMinutes >= 5
+            && request.resource.data.estimatedMinutes <= 1200))
+        && (!('modules' in request.resource.data)
+          || (request.resource.data.modules is list
+            && request.resource.data.modules.size() <= 40))
+        && (!('skills' in request.resource.data)
+          || (request.resource.data.skills is list
+            && request.resource.data.skills.size() <= 30))
+        && (!('learningObjectives' in request.resource.data)
+          || (request.resource.data.learningObjectives is list
+            && request.resource.data.learningObjectives.size() <= 20))
+        && (!('resources' in request.resource.data)
+          || (request.resource.data.resources is list
+            && request.resource.data.resources.size() <= 20))
+        && (!('coverAsset' in request.resource.data)
+          || validOptionalAsset(request.resource.data.coverAsset, request.auth.uid))
+        && (
+          request.resource.data.status == resource.data.status
+          || (resource.data.status == 'draft' && request.resource.data.status == 'published')
+          || (resource.data.status == 'published' && request.resource.data.status == 'archived')
+          || (resource.data.status in ['archived', 'published'] && request.resource.data.status == 'draft')
+        )
+      );
+
+      allow delete: if isAdmin() || (
+        isApprovedMentor()
+        && resource.data.ownerUid == request.auth.uid
+        && resource.data.status == 'draft'
+      );
+    }
+
+    match /courseProgress/{progressId} {
+      allow read: if isAdmin() || (
+        isActiveUser() && (
+          resource.data.ownerUid == request.auth.uid
+          || (isApprovedMentor() && resource.data.courseOwnerUid == request.auth.uid)
+        )
+      );
+
+      allow create: if isActiveUser()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'courseId', 'courseTitle', 'courseOwnerUid',
+          'completedModuleIds', 'progressPercent', 'evidenceUrl',
+          'evidenceAsset', 'status', 'completedAt', 'createdAt', 'updatedAt'
+        ])
+        && validStr(request.resource.data.courseId, 1, 128)
+        && validStr(request.resource.data.courseTitle, 1, 160)
+        && progressId == request.auth.uid + '_' + request.resource.data.courseId
+        && request.resource.data.ownerUid == request.auth.uid
+        && exists(/databases/$(database)/documents/courses/$(request.resource.data.courseId))
+        && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.status == 'published'
+        && (
+          !('ownerUid' in get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data)
+          || request.resource.data.courseOwnerUid
+            == get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid
+        )
+        && request.resource.data.status in ['notStarted', 'inProgress', 'completed']
+        && request.resource.data.progressPercent is int
+        && request.resource.data.progressPercent >= 0
+        && request.resource.data.progressPercent <= 100
+        && request.resource.data.completedModuleIds is list
+        && request.resource.data.completedModuleIds.size() <= 40
+        && (!('evidenceUrl' in request.resource.data)
+          || validStr(request.resource.data.evidenceUrl, 0, 500))
+        && validOptionalAsset(request.resource.data.evidenceAsset, request.auth.uid);
+
+      allow update: if isActiveUser()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.courseId == resource.data.courseId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'courseTitle', 'courseOwnerUid', 'completedModuleIds',
+          'progressPercent', 'evidenceUrl', 'evidenceAsset',
+          'status', 'completedAt', 'updatedAt'
+        ])
+        && validStr(request.resource.data.courseTitle, 1, 160)
+        && exists(/databases/$(database)/documents/courses/$(request.resource.data.courseId))
+        && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.status == 'published'
+        && (
+          !('ownerUid' in get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data)
+          || request.resource.data.courseOwnerUid
+            == get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid
+        )
+        && request.resource.data.status in ['notStarted', 'inProgress', 'completed']
+        && request.resource.data.progressPercent is int
+        && request.resource.data.progressPercent >= 0
+        && request.resource.data.progressPercent <= 100
+        && request.resource.data.completedModuleIds is list
+        && request.resource.data.completedModuleIds.size() <= 40
+        && (!('evidenceUrl' in request.resource.data)
+          || validStr(request.resource.data.evidenceUrl, 0, 500))
+        && validOptionalAsset(request.resource.data.evidenceAsset, request.auth.uid);
+
+      allow delete: if isAdmin();
+    }
+
+    match /opportunities/{opportunityId} {
+      allow read: if isAdmin() || (isActiveUser() && resource.data.status == 'published');
+      allow create, update, delete: if isAdmin();
     }
 
     match /applications/{applicationId} {
-      allow read: if isAdmin() || owns('userId');
-      allow create: if signedIn()
+      allow read: if isAdmin() || (isActiveUser() && resource.data.ownerUid == request.auth.uid);
+
+      allow create: if isActiveUser()
         && applicationId == request.auth.uid + '_' + request.resource.data.opportunityId
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.status == 'sent'
-        && request.resource.data.keys().hasOnly([
-          'userId', 'userName', 'opportunityId', 'projectIds',
-          'note', 'status', 'ref', 'createdAt', 'updatedAt'
-        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'submitted'
+        && validStr(request.resource.data.coverNote, 20, 2500)
         && request.resource.data.projectIds is list
-        && request.resource.data.projectIds.size() >= 1
-        && request.resource.data.note is string
-        && request.resource.data.note.size() >= 60
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin() || (signedIn()
-        && resource.data.userId == request.auth.uid
+        && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid)
+        && exists(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId))
+        && get(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId)).data.status == 'published';
+
+      allow update: if isAdmin() || (
+        isActiveUser()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.opportunityId == resource.data.opportunityId
         && (
-          (resource.data.status in ['sent', 'underReview']
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          (resource.data.status in ['submitted', 'underReview']
             && request.resource.data.status == 'withdrawn'
-            && request.resource.data.updatedAt == request.time)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
           || (resource.data.status == 'withdrawn'
-            && request.resource.data.userId == request.auth.uid
-            && request.resource.data.opportunityId == resource.data.opportunityId
-            && request.resource.data.status == 'sent'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'userName', 'projectIds', 'note', 'status', 'ref', 'createdAt', 'updatedAt'
-            ])
+            && request.resource.data.status == 'submitted'
+            && validStr(request.resource.data.coverNote, 20, 2500)
             && request.resource.data.projectIds is list
-            && request.resource.data.projectIds.size() >= 1
-            && request.resource.data.note is string
-            && request.resource.data.note.size() >= 60
-            && request.resource.data.createdAt == request.time
-            && request.resource.data.updatedAt == request.time)
-        ));
+            && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'studentName', 'projectIds', 'coverNote', 'cvAsset', 'status', 'updatedAt'
+            ]))
+        )
+      );
+
       allow delete: if isAdmin();
     }
 
-    match /checkIns/{checkInId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          'userId', 'monthKey', 'usefulness', 'applied', 'changeNote', 'createdAt'
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (isActiveUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if (
+        isAdmin() && validNotificationBase(request.resource.data)
+      ) || (
+        isActiveUser()
+        && validNotificationBase(request.resource.data)
+        && request.resource.data.ownerUid != request.auth.uid
+        && validParticipantNotificationSource(request.resource.data)
+      );
+      allow delete: if false;
+      allow update: if isActiveUser()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'isRead', 'status', 'readAt', 'updatedAt'
         ])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.monthKey is string
-        && request.resource.data.monthKey.matches('^\\d{4}-(0[1-9]|1[0-2])$')
-        && checkInId == request.auth.uid + '_' + request.resource.data.monthKey
-        && request.resource.data.usefulness is int
-        && request.resource.data.usefulness >= 1
-        && request.resource.data.usefulness <= 5
-        && request.resource.data.applied is bool
-        && request.resource.data.changeNote is string
-        && request.resource.data.changeNote.size() <= 500
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.isRead == true
+        && request.resource.data.status == 'read';
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll([
+          'ownerUid', 'actorUid', 'actorEmail', 'action',
+          'targetCollection', 'targetId', 'details', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'actorUid', 'actorEmail', 'action',
+          'targetCollection', 'targetId', 'details', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.actorUid == request.auth.uid
+        && validStr(request.resource.data.action, 2, 100)
+        && validStr(request.resource.data.targetCollection, 2, 100)
+        && validStr(request.resource.data.targetId, 1, 160)
+        && request.resource.data.status == 'recorded';
       allow update, delete: if false;
     }
 
-    match /notifications/{notificationId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create, delete: if false;
-      allow update: if signedIn()
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])
-        && request.resource.data.isRead == true
-        && request.resource.data.readAt == request.time;
-    }
-
-    match /{catalog}/{documentId} {
-      allow read: if catalog in ['learningPaths', 'learningTasks', 'opportunities']
-        && resource.data.status == 'published' && signedIn();
-      allow write: if catalog in ['learningPaths', 'learningTasks', 'opportunities']
-        && isAdmin();
-    }
-
-    match /{collection}/{documentId} {
-      allow read: if isGenericCollection(collection)
-        && (isAdmin()
-          || owns('userId')
-          || owns('ownerId')
-          || owns('requesterId'));
-      // Unfinalized feature writes (learning/portfolio) stay closed until
-      // their field validation and permitted transitions are reviewed.
-      allow create, update, delete: if isGenericCollection(collection)
-        && isAdmin();
-    }
-
-    match /auditLogs/{documentId} {
-      allow read: if isAdmin();
-      allow write: if false;
-    }
-
-    match /appSettings/{documentId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -125,33 +125,36 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
               ),
             ),
             child: Material(
-              color: AppColors.inverse,
-              borderRadius: Radii.rLg,
-              elevation: 6,
-              shadowColor: const Color(0x4013294B),
+              color: AppColors.navy,
+              borderRadius: Radii.rMd,
+              elevation: 4,
+              shadowColor: const Color(0x33123B75),
               child: InkWell(
-                borderRadius: Radii.rLg,
+                borderRadius: Radii.rMd,
                 onTap: _dismiss,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+                    horizontal: 14,
+                    vertical: 12,
                   ),
                   child: Row(
                     children: [
                       Icon(
                         widget.icon,
                         size: 20,
-                        color: widget.tone == Tone.success
-                            ? const Color(0xFF7FD3A7)
-                            : AppColors.brandOrange,
+                        color: switch (widget.tone) {
+                          Tone.success => const Color(0xFF34D399),
+                          Tone.warning => const Color(0xFFFBBF24),
+                          Tone.danger => const Color(0xFFF87171),
+                          _ => const Color(0xFF93C5FD),
+                        },
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           widget.message,
                           style: AppText.bodySStrong.copyWith(
-                            color: AppColors.textInverse,
+                            color: context.palette.textInverse,
                           ),
                         ),
                       ),
@@ -219,6 +222,7 @@ class _AppDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return SafeArea(
       child: Center(
         child: Padding(
@@ -226,7 +230,7 @@ class _AppDialog extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 380),
             child: Material(
-              color: AppColors.surface,
+              color: p.surface,
               borderRadius: Radii.rXl,
               clipBehavior: Clip.antiAlias,
               child: Padding(
@@ -243,10 +247,16 @@ class _AppDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                     ],
-                    Text(title, style: AppText.titleM),
+                    Text(
+                      title,
+                      style: AppText.titleM.copyWith(color: p.textPrimary),
+                    ),
                     if (body != null) ...[
                       const SizedBox(height: 8),
-                      Text(body!, style: AppText.bodyM),
+                      Text(
+                        body!,
+                        style: AppText.bodyM.copyWith(color: p.textSecondary),
+                      ),
                     ],
                     const SizedBox(height: 22),
                     Row(
@@ -289,12 +299,13 @@ Future<T?> showAppSheet<T>(
   required String title,
   required Widget Function(BuildContext) builder,
 }) {
+  final p = context.palette;
   return showModalBottomSheet<T>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: AppColors.surface,
+    backgroundColor: p.surface,
     barrierColor: AppColors.scrim,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.xl)),
@@ -412,10 +423,10 @@ class BannerHost extends ConsumerWidget {
                             onOpen(banner.route);
                           },
                           child: Material(
-                            color: AppColors.inverse,
+                            color: AppColors.navy,
                             borderRadius: Radii.rLg,
-                            elevation: 10,
-                            shadowColor: const Color(0x5513294B),
+                            elevation: 6,
+                            shadowColor: const Color(0x33123B75),
                             child: Padding(
                               padding: const EdgeInsets.all(14),
                               child: Row(
@@ -425,15 +436,15 @@ class BannerHost extends ConsumerWidget {
                                     width: 36,
                                     height: 36,
                                     decoration: BoxDecoration(
-                                      color: AppColors.brandOrange.withValues(
-                                        alpha: 0.18,
+                                      color: AppColors.actionBlue.withValues(
+                                        alpha: 0.24,
                                       ),
                                       borderRadius: Radii.rMd,
                                     ),
                                     child: Icon(
                                       banner.icon,
                                       size: 20,
-                                      color: AppColors.brandOrange,
+                                      color: Colors.white,
                                     ),
                                   ),
                                   const SizedBox(width: 12),

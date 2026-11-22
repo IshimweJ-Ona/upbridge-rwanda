@@ -1,201 +1,204 @@
-// Shows the admin pilot overview with clearly labeled sample statistics and live user count when authenticated.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:upbridge/features/admin/presentation/providers/admin_providers.dart';
-import 'package:upbridge/shared/models/models.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
-import 'package:upbridge/shared/services/demo/sample_data.dart';
+import 'package:intl/intl.dart';
+import 'package:upbridge/core/providers/live_data_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
+import 'package:upbridge/core/widgets/skeleton_loaders.dart';
+import 'package:upbridge/features/admin/domain/models/audit_log_entry.dart';
+import 'package:upbridge/features/admin/presentation/widgets/catalog_editor_sheets.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentor_application.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
+import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
 
-/// AD1 · Pilot overview — objectives and what needs attention.
 class AdminOverviewScreen extends ConsumerWidget {
   const AdminOverviewScreen({super.key});
 
+  Future<void> _createCourse(BuildContext context, String uid) async {
+    final saved = await showCourseEditorSheet(context, adminUid: uid);
+    if (saved == true && context.mounted) {
+      showToast(context, 'Course saved');
+    }
+  }
+
+  Future<void> _createOpportunity(BuildContext context, String uid) async {
+    final saved = await showOpportunityEditorSheet(context, adminUid: uid);
+    if (saved == true && context.mounted) {
+      showToast(context, 'Opportunity saved');
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(appStoreProvider);
-    final session = ref.watch(verifiedSessionProvider).asData?.value;
-    final isLiveAdmin =
-        session != null &&
-        session.firebaseInitialized &&
-        session.signedIn &&
-        session.emailVerified &&
-        session.role == Role.admin;
-    final liveUserCountAsync = isLiveAdmin
-        ? ref.watch(adminUserCountProvider)
-        : null;
+    final l10n = AppLocalizations.of(context);
+    final p = context.palette;
+    final session = ref.watch(appSessionProvider).asData?.value;
+    final uid = session?.uid;
 
-    final pendingMentors = data.applicants
-        .where((a) => a.state == ApplicantState.pending)
-        .length;
-    final toForward = data.forwards.where((f) => !f.forwarded).length;
-    final reported = data.opportunities
-        .where((o) => o.state == ListingState.reported)
-        .toList();
-    final youth = 412;
-    final mentors =
-        18 +
-        data.applicants.where((a) => a.state == ApplicantState.approved).length;
-    final listings =
-        27 -
-        data.opportunities
-            .where((o) => o.state == ListingState.removed)
-            .length +
-        (data.opportunities.length - SampleData.opportunities.length);
-    const daysLeft = SampleData.pilotDays - SampleData.pilotDay;
+    if (session == null || uid == null) {
+      return const PageFrame(
+        largeTitle: 'Admin Overview',
+        subtitle: 'Platform activity and management',
+        children: [SizedBox(height: 16), SkeletonDashboardLoader()],
+      );
+    }
+
+    final unreadCount =
+        ref.watch(liveUnreadNotificationCountProvider(uid)).asData?.value ?? 0;
+    final metricsAsync = ref.watch(platformMetricsProvider);
+    final pendingAppsAsync = ref.watch(pendingMentorApplicationsProvider);
+    final auditLogsAsync = ref.watch(adminAuditLogsProvider);
 
     return PageFrame(
-      largeTitle: 'Pilot overview',
-      eyebrow: 'Day ${SampleData.pilotDay} of ${SampleData.pilotDays}',
+      largeTitle: 'Admin Overview',
+      subtitle: 'Platform activity and management',
+      actions: [
+        CircleIconButton(
+          icon: Icons.notifications_none_rounded,
+          badge: unreadCount > 0,
+          tooltip: l10n.notificationsTitle,
+          onTap: () => context.push('/notifications'),
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: l10n.tabAdminSettings,
+          child: Pressable(
+            onTap: () => context.go('/a/settings'),
+            scale: 0.94,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: AppAvatar(
+                initialsOf(session.displayLabel),
+                tone: Tone.info,
+                size: 34,
+              ),
+            ),
+          ),
+        ),
+      ],
       onRefresh: () async {
-        if (isLiveAdmin) {
-          ref.invalidate(adminUserCountProvider);
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+        ref.invalidate(platformMetricsProvider);
+        ref.invalidate(pendingMentorApplicationsProvider);
+        ref.invalidate(adminAuditLogsProvider);
       },
       children: [
-        const SizedBox(height: 14),
-        const NoticeCard(
-          icon: Icons.info_outline_rounded,
-          title: 'Demonstration data',
-          body: 'These sample figures are not live platform statistics.',
-        ),
-        if (isLiveAdmin) ...[
-          const SizedBox(height: 12),
-          ListGroup(
-            children: [
-              ListRow(
-                leading: const IconTile(
-                  Icons.cloud_done_outlined,
-                  tone: Tone.info,
-                ),
-                title: 'Live Firestore accounts',
-                subtitle: switch (liveUserCountAsync) {
-                  AsyncData(:final value) =>
-                    '$value registered users currently stored in Firestore',
-                  AsyncError() => 'Could not fetch live Firestore user count',
-                  _ => 'Loading live Firestore user count…',
-                },
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => context.go('/a/users'),
-              ),
-            ],
-          ),
-        ],
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Kigali · Huye · Musanze · Rubavu',
-                style: AppText.bodyS,
-              ),
-            ),
-            const MonoLabel('$daysLeft days left · ends 2 Nov'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        const ProgressLine(
-          SampleData.pilotDay / SampleData.pilotDays,
-          color: AppColors.inverse,
-        ),
-        const SectionLabel('Needs your attention'),
-        ListGroup(
-          children: [
-            _AttentionRow(
-              icon: Icons.verified_user_outlined,
-              tone: Tone.accent,
-              title: 'Mentor applications',
-              count: pendingMentors,
-              detail: pendingMentors == 0
-                  ? 'All checked'
-                  : 'Background checks ready to review',
-              onTap: () => context.go('/a/mentors'),
-            ),
-            _AttentionRow(
-              icon: Icons.forward_to_inbox_outlined,
-              tone: Tone.info,
-              title: 'Applications to forward',
-              count: toForward,
-              detail: toForward == 0
-                  ? 'Nothing waiting'
-                  : 'Check evidence, then send to employers',
-              onTap: () => context.go('/a/jobs?tab=forward'),
-            ),
-            _AttentionRow(
-              icon: Icons.flag_outlined,
-              tone: Tone.danger,
-              title: 'Reported listing',
-              count: reported.length,
-              detail: reported.isEmpty
-                  ? 'No open reports'
-                  : '“${reported.first.title}” · ${reported.first.reports} reports',
-              onTap: reported.isEmpty
-                  ? () => context.go('/a/jobs?tab=reported')
-                  : () => context.push('/a-listing/${reported.first.id}'),
-            ),
-          ],
-        ),
-        const SectionLabel('Pilot objectives'),
-        ListGroup(
-          children: [
-            for (final o in SampleData.objectives) ObjectiveMeter(objective: o),
-          ],
-        ),
-        const SectionLabel('People and listings (sample)'),
-        Row(
-          children: [
-            Expanded(
-              child: MetricTile(
-                value: youth,
-                label: 'Youth',
-                icon: Icons.school_outlined,
-                tone: Tone.accent,
-                onTap: () => context.go('/a/users'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: MetricTile(
-                value: mentors,
-                label: 'Verified mentors',
-                icon: Icons.verified_user_outlined,
-                tone: Tone.info,
-                onTap: () => context.go('/a/mentors'),
-              ),
-            ),
-          ],
-        ),
         const SizedBox(height: 12),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Expanded(
-              child: MetricTile(
-                value: listings,
-                label: 'Open listings',
-                icon: Icons.work_outline_rounded,
-                tone: Tone.success,
-                onTap: () => context.go('/a/jobs'),
-              ),
+            QuickActionChip(
+              label: 'New course',
+              icon: Icons.add_rounded,
+              primary: true,
+              onTap: () => _createCourse(context, uid),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: MetricTile(
-                value: youth + mentors + 3,
-                label: 'All users (sample)',
-                icon: Icons.groups_outlined,
-                onTap: () => context.go('/a/users'),
-              ),
+            QuickActionChip(
+              label: 'Post opportunity',
+              icon: Icons.work_outline_rounded,
+              onTap: () => _createOpportunity(context, uid),
+            ),
+            QuickActionChip(
+              label: 'Manage users',
+              icon: Icons.group_outlined,
+              onTap: () => context.go('/a/users'),
             ),
           ],
         ),
         const SizedBox(height: 16),
-        Center(
-          child: Text(
-            'Sample figures shown above for pilot walkthrough',
-            style: AppText.caption,
+        metricsAsync.when(
+          loading: () => const SkeletonMetricsGridLoader(tiles: 6),
+          error: (error, _) => EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load metrics',
+            body: errorMessage(error),
+            action: l10n.retry,
+            onAction: () => ref.invalidate(platformMetricsProvider),
+          ),
+          data: (metrics) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              MetricsGrid(
+                items: [
+                  MetricTileData(
+                    label: 'Total users',
+                    caption: 'All accounts',
+                    value: '${metrics.totalUsers}',
+                    icon: Icons.people_outline_rounded,
+                    tone: Tone.info,
+                    onTap: () => context.go('/a/users'),
+                  ),
+                  MetricTileData(
+                    label: 'Youth',
+                    caption: 'Learner accounts',
+                    value: '${metrics.studentCount}',
+                    icon: Icons.school_outlined,
+                    tone: Tone.success,
+                    onTap: () => context.go('/a/users'),
+                  ),
+                  MetricTileData(
+                    label: 'Verified mentors',
+                    caption: 'Approved mentors',
+                    value: '${metrics.mentorCount}',
+                    icon: Icons.workspace_premium_outlined,
+                    tone: Tone.info,
+                    onTap: () => context.go('/a/mentors'),
+                  ),
+                  MetricTileData(
+                    label: 'Active mentorships',
+                    caption: 'Ongoing pairs',
+                    value: '${metrics.activeMentorships}',
+                    icon: Icons.handshake_outlined,
+                    tone: Tone.info,
+                    onTap: () => context.go('/a/mentors'),
+                  ),
+                  MetricTileData(
+                    label: 'Published courses',
+                    caption: 'Live tracks',
+                    value: '${metrics.publishedCourses}',
+                    icon: Icons.menu_book_outlined,
+                    tone: Tone.success,
+                    onTap: () => context.go('/a/catalog'),
+                  ),
+                  MetricTileData(
+                    label: 'Open opportunities',
+                    caption: 'Live listings',
+                    value: '${metrics.publishedOpportunities}',
+                    icon: Icons.work_outline_rounded,
+                    tone: Tone.warning,
+                    onTap: () => context.go('/a/catalog'),
+                  ),
+                ],
+              ),
+              SectionLabel(
+                'Mentor applications',
+                action: 'Review applications',
+                onAction: () => context.go('/a/mentors'),
+              ),
+              _MentorQueueCard(
+                pendingCount: metrics.pendingMentorApplications,
+                recentApps:
+                    pendingAppsAsync.asData?.value ?? const <MentorApplication>[],
+                onReviewAll: () => context.go('/a/mentors'),
+                onOpenApplicant: (appUid) => context.push('/a-applicant/$appUid'),
+              ),
+              SectionLabel(
+                'Recent activity',
+                action: 'Audit logs',
+                onAction: () => context.go('/a/settings'),
+              ),
+              _RecentActivitySection(
+                logsAsync: auditLogsAsync,
+                onRetry: () => ref.invalidate(adminAuditLogsProvider),
+                onOpenSettings: () => context.go('/a/settings'),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Secured by Cloud Firestore Spark rules and verified admin custom claims.',
+                style: AppText.caption.copyWith(color: p.textMuted),
+              ),
+            ],
           ),
         ),
       ],
@@ -203,55 +206,150 @@ class AdminOverviewScreen extends ConsumerWidget {
   }
 }
 
-class _AttentionRow extends StatelessWidget {
-  const _AttentionRow({
-    required this.icon,
-    required this.tone,
-    required this.title,
-    required this.count,
-    required this.detail,
-    required this.onTap,
+class _MentorQueueCard extends StatelessWidget {
+  const _MentorQueueCard({
+    required this.pendingCount,
+    required this.recentApps,
+    required this.onReviewAll,
+    required this.onOpenApplicant,
   });
 
-  final IconData icon;
-  final Tone tone;
-  final String title;
-  final int count;
-  final String detail;
-  final VoidCallback onTap;
+  final int pendingCount;
+  final List<MentorApplication> recentApps;
+  final VoidCallback onReviewAll;
+  final ValueChanged<String> onOpenApplicant;
 
   @override
   Widget build(BuildContext context) {
-    return ListRow(
-      leading: IconTile(icon, tone: count == 0 ? Tone.neutral : tone),
-      title: title,
-      subtitle: detail,
-      trailing: AnimatedSwitcher(
-        duration: Motion.base,
-        transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-        child: count == 0
-            ? const Icon(
-                Icons.check_circle_rounded,
-                key: ValueKey('ok'),
-                size: 20,
-                color: AppColors.successText,
-              )
-            : Container(
-                key: ValueKey(count),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: tone.background,
-                  borderRadius: BorderRadius.circular(12),
+    final p = context.palette;
+    final preview = recentApps.take(2).toList(growable: false);
+
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      accentEdge: pendingCount > 0 ? p.warningText : p.successText,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            child: Row(
+              children: [
+                IconTile(
+                  pendingCount > 0
+                      ? Icons.how_to_reg_outlined
+                      : Icons.verified_user_outlined,
+                  tone: pendingCount > 0 ? Tone.warning : Tone.success,
+                  size: 34,
                 ),
-                child: Text(
-                  '$count',
-                  style: AppText.dataMonoStrong.copyWith(
-                    color: tone.foreground,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pendingCount == 0
+                            ? 'All mentor applications reviewed'
+                            : '$pendingCount mentor application${pendingCount == 1 ? '' : 's'} waiting',
+                        style: AppText.bodyMStrong.copyWith(color: p.textPrimary),
+                      ),
+                      Text(
+                        pendingCount == 0
+                            ? 'No pending applications in queue'
+                            : 'Inspect credentials and approve or reply',
+                        style: AppText.caption.copyWith(color: p.textSecondary),
+                      ),
+                    ],
                   ),
                 ),
+                StatusBadge(
+                  '$pendingCount pending',
+                  tone: pendingCount > 0 ? Tone.warning : Tone.success,
+                ),
+              ],
+            ),
+          ),
+          if (preview.isNotEmpty) ...[
+            Divider(height: 1, color: p.borderSubtle),
+            for (var i = 0; i < preview.length; i++) ...[
+              if (i > 0) Divider(height: 1, color: p.borderSubtle),
+              UserListTile(
+                name: preview[i].applicantName,
+                email: preview[i].headline,
+                avatarTone: Tone.info,
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: p.textMuted,
+                ),
+                onTap: () => onOpenApplicant(preview[i].ownerUid),
               ),
+            ],
+          ],
+          Divider(height: 1, color: p.borderSubtle),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextLink(
+                'Review applications',
+                compact: true,
+                onTap: onReviewAll,
+              ),
+            ),
+          ),
+        ],
       ),
-      onTap: onTap,
+    );
+  }
+}
+
+class _RecentActivitySection extends StatelessWidget {
+  const _RecentActivitySection({
+    required this.logsAsync,
+    required this.onRetry,
+    required this.onOpenSettings,
+  });
+
+  final AsyncValue<List<AuditLogEntry>> logsAsync;
+  final VoidCallback onRetry;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return logsAsync.when(
+      loading: () => const SkeletonListLoader(rows: 2, showAvatar: true),
+      error: (_, _) => EmptyState(
+        icon: Icons.cloud_off_outlined,
+        title: 'Could not load activity',
+        action: 'Try again',
+        onAction: onRetry,
+      ),
+      data: (logs) {
+        if (logs.isEmpty) {
+          return const EmptyState(
+            icon: Icons.receipt_long_outlined,
+            title: 'No recent admin activity',
+            body: 'Mentor reviews and status changes appear here.',
+          );
+        }
+        final recent = logs.take(4).toList(growable: false);
+        return ListGroup(
+          children: [
+            for (final log in recent)
+              ActivityTile(
+                icon: Icons.history_rounded,
+                tone: Tone.info,
+                title: log.displayAction,
+                subtitle: log.details.isNotEmpty
+                    ? log.details
+                    : '${log.targetCollection}/${log.targetId}',
+                timestamp: DateFormat('d MMM · HH:mm')
+                    .format(log.createdAt.toLocal()),
+                onTap: onOpenSettings,
+              ),
+          ],
+        );
+      },
     );
   }
 }

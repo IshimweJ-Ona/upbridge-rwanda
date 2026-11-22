@@ -39,7 +39,7 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    final delay = Motion.stagger * widget.index.clamp(0, 12);
+    final delay = Motion.stagger * widget.index.clamp(0, 10);
     if (delay == Duration.zero) {
       _c.forward();
     } else {
@@ -47,6 +47,15 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
         _delayTimer = null;
         if (mounted) _c.forward();
       });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _delayTimer?.cancel();
+      _c.value = 1;
     }
   }
 

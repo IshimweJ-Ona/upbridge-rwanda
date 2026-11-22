@@ -1,26 +1,15 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:flutter_test/flutter_test.dart';
 import 'package:upbridge/app/app.dart';
 
 void main() {
-  testWidgets('app opens on the splash screen', (WidgetTester tester) async {
+  testWidgets('app opens on the animated SVG splash screen', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: UpBridgeApp()));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(
-      find.text('Turn what you learn into proof employers trust.'),
-      findsOneWidget,
-    );
-    expect(find.text('Create free account'), findsOneWidget);
-    expect(find.byKey(const ValueKey('splash-background')), findsOneWidget);
+    expect(find.byKey(const ValueKey('splash-mark')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pumpAndSettle();
   });
 }

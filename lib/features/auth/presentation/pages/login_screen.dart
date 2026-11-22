@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
+import 'package:upbridge/core/providers/repository_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/features/auth/domain/validators.dart';
-import 'package:upbridge/features/profile/presentation/providers/profile_providers.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
-import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
 import 'package:upbridge/shared/shared.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
+
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
@@ -42,33 +44,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     if (emailError != null || passwordError != null) return;
+
     setState(() => _loading = true);
     try {
-      final credential = await ref
-          .read(authServiceProvider)
-          .signIn(_email.text, _password.text);
+      final auth = ref.read(authServiceProvider);
+      final credential = await auth.signIn(_email.text, _password.text);
       final user = credential.user;
-      if (user == null) throw StateError('No signed-in user was returned.');
+      if (user == null) {
+        throw StateError('No signed-in user was returned.');
+      }
       await user.reload();
       if (!user.emailVerified) {
-        if (mounted) context.go('/verify-email');
+        if (mounted) context.go(AppRoutes.verifyEmail);
         return;
       }
-      final profile = await ref.read(profileRepositoryProvider).get(user.uid);
-      if (profile == null) {
-        throw StateError(
-          'Your profile is not available yet. Please contact support.',
-        );
+
+      // Refresh token and Firestore account so admin/mentor approvals take effect immediately.
+      final claim = await auth.readRoleClaim(forceRefresh: true);
+      final claimRole = userRoleFromClaim(claim);
+      final account = await ref
+          .read(userAccountRepositoryProvider)
+          .getAccount(user.uid);
+      final role = resolveEffectiveRole(claimRole: claimRole, account: account);
+
+      if (account == null && role == UserRole.student) {
+        if (mounted) context.go(AppRoutes.verifyEmail);
+        return;
       }
-      ref.read(appStoreProvider.notifier).setFirebaseProfile(profile);
-      if (mounted)
-        context.go(
-          profile.onboarded
-              ? profile.role == 'youth'
-                    ? '/home'
-                    : '/welcome'
-              : '/onboarding/goal',
-        );
+      if (account != null && !account.isActive) {
+        if (mounted) context.go(AppRoutes.accountDeactivated);
+        return;
+      }
+
+      String destination;
+      if (role == UserRole.admin) {
+        destination = AppRoutes.adminOverview;
+      } else if (role == UserRole.mentor) {
+        destination = AppRoutes.mentorHome;
+      } else {
+        final mentorApp = await ref
+            .read(mentorApplicationRepositoryProvider)
+            .getApplication(user.uid);
+        final isPendingOrRejected =
+            mentorApp?.status == MentorApplicationStatus.pending ||
+            mentorApp?.status == MentorApplicationStatus.rejected ||
+            mentorApp?.status == MentorApplicationStatus.revoked;
+        if (isPendingOrRejected) {
+          destination = AppRoutes.mentorPending;
+        } else {
+          destination = (account?.onboarded ?? false)
+              ? AppRoutes.studentHome
+              : AppRoutes.onboardingGoal;
+        }
+      }
+
+      if (!mounted) return;
+      context.go(destination);
     } catch (error) {
       if (mounted) setState(() => _error = errorMessage(error));
     } finally {
@@ -77,49 +108,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => DetailPage(
-    title: 'Log in',
-    backFallback: '/welcome',
-    footer: [AppButton('Log in', loading: _loading, onPressed: _submit)],
-    footerNote: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget build(BuildContext context) {
+    final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
+    return DetailPage(
+      title: l10n?.signIn ?? 'Log in',
+      backFallback: AppRoutes.welcome,
+      footer: [
+        AppButton(
+          l10n?.signIn ?? 'Log in',
+          loading: _loading,
+          onPressed: _submit,
+        ),
+      ],
+      footerNote: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('New to UpBridge? ', style: AppText.bodyS),
+          TextLink(
+            l10n?.createFreeAccount ?? 'Create a free account',
+            onTap: () => context.pushReplacement(AppRoutes.signup),
+          ),
+        ],
+      ),
       children: [
-        Text('New to UpBridge? ', style: AppText.bodyS),
-        TextLink(
-          'Create a free account',
-          onTap: () => context.pushReplacement('/signup'),
+        PageHeading(
+          title: l10n?.welcomeBackTitle ?? 'Welcome back',
+          body: l10n?.welcomeBackBody ?? 'Log in with your email and password.',
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          NoticeCard(
+            tone: Tone.danger,
+            icon: Icons.error_outline_rounded,
+            title: 'Sign-in failed',
+            body: _error!,
+          ),
+          const SizedBox(height: 12),
+        ],
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppTextField(
+                label: l10n?.emailLabel ?? 'Email address',
+                controller: _email,
+                error: _emailError,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 14),
+              AppTextField(
+                label: l10n?.passwordLabel ?? 'Password',
+                controller: _password,
+                error: _passwordError,
+                obscure: true,
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextLink(
+                  l10n?.forgotPasswordCta ?? 'Forgot password?',
+                  compact: true,
+                  onTap: () => context.push(AppRoutes.forgotPassword),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
-    ),
-    children: [
-      const PageHeading(
-        title: 'Welcome back',
-        body: 'Log in with your email and password.',
-      ),
-      if (_error != null) ...[
-        const SizedBox(height: 12),
-        Text(_error!, style: TextStyle(color: AppColors.dangerText)),
-      ],
-      AppTextField(
-        label: 'Email address',
-        controller: _email,
-        error: _emailError,
-        keyboardType: TextInputType.emailAddress,
-      ),
-      const SizedBox(height: 16),
-      AppTextField(
-        label: 'Password',
-        controller: _password,
-        error: _passwordError,
-        obscure: true,
-      ),
-      Align(
-        alignment: Alignment.centerRight,
-        child: TextLink(
-          'Forgot password?',
-          onTap: () => context.push('/forgot'),
-        ),
-      ),
-    ],
-  );
+    );
+  }
 }
