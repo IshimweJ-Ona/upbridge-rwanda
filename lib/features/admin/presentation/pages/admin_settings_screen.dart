@@ -1,160 +1,110 @@
-// Displays pilot administration settings with real Firebase sign-out and demo-state labeling.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:upbridge/core/providers/live_data_providers.dart';
+import 'package:upbridge/core/providers/settings_providers.dart';
+import 'package:upbridge/core/widgets/skeleton_loaders.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
+import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
 
-/// AD11 · Admin settings.
 class AdminSettingsScreen extends ConsumerWidget {
   const AdminSettingsScreen({super.key});
 
-  Future<void> _toggle(
-    BuildContext context,
-    WidgetRef ref,
-    String key,
-    bool current,
-  ) async {
-    if (key == 'pauseSignups' && !current) {
-      final ok = await showAppDialog(
-        context,
-        title: 'Pause new sign-ups?',
-        body: 'People who already have an account can still log in. New visitors see a waiting-list message.',
-        confirmLabel: 'Pause sign-ups',
-        icon: Icons.pause_circle_outline_rounded,
-      );
-      if (!ok) return;
-    }
-    ref.read(appStoreProvider.notifier).toggleSetting(key);
-    if (!context.mounted) return;
-    final label = switch (key) {
-      'replyBy' =>
-        current
-            ? 'Reply-by date is now optional'
-            : 'Reply-by date is required again',
-      'pauseSignups' => current ? 'Sign-ups are open' : 'New sign-ups paused',
-      _ => current ? 'Weekly report turned off' : 'Weekly report turned on',
-    };
-    showToast(context, label, icon: Icons.settings_rounded, tone: Tone.info);
-  }
-
-  Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final ok = await showAppDialog(
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final confirm = await showAppDialog(
       context,
-      title: 'Log out?',
-      confirmLabel: 'Log out',
+      title: 'Sign out?',
+      body: 'End your admin session on this device?',
+      confirmLabel: 'Sign out',
       destructive: true,
-      icon: Icons.logout_rounded,
     );
-    if (!ok) return;
+    if (!confirm || !context.mounted) return;
     await ref.read(authServiceProvider).signOut();
-    ref.read(appStoreProvider.notifier).logout();
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appStoreProvider.select((s) => s.settings));
-    final demoUser = ref.watch(appStoreProvider.select((s) => s.user));
-    final session = ref.watch(verifiedSessionProvider).asData?.value;
-    final eyebrow = session != null && session.signedIn
-        ? '${session.displayLabel} · Admin'
-        : demoUser == null
-        ? 'Admin'
-        : '${demoUser.name} · ${demoUser.headline}';
-
-    Widget row(String key, IconData icon, String title, String subtitle) {
-      final v = settings[key] ?? false;
-      return ListRow(
-        leading: IconTile(icon, tone: v ? Tone.info : Tone.neutral),
-        title: title,
-        subtitle: subtitle,
-        chevron: false,
-        trailing: AppSwitch(
-          value: v,
-          onChanged: (_) => _toggle(context, ref, key, v),
-        ),
-        onTap: () => _toggle(context, ref, key, v),
-      );
-    }
+    final l10n = AppLocalizations.of(context);
+    final prefs = ref.watch(appPreferencesProvider);
+    final logsAsync = ref.watch(adminAuditLogsProvider);
 
     return PageFrame(
-      largeTitle: 'Settings',
-      eyebrow: eyebrow,
+      largeTitle: l10n.tabAdminSettings,
+      subtitle: 'Preferences & admin audit log',
+      onRefresh: () async => ref.invalidate(adminAuditLogsProvider),
       children: [
         const SizedBox(height: 12),
-        const NoticeCard(
-          icon: Icons.info_outline_rounded,
-          title: 'Demonstration data',
-          body: 'Setting toggles below update local demonstration state until appSettings persistence is wired.',
-        ),
-        const SectionLabel('Listings', top: 16),
-        ListGroup(
-          children: [
-            row(
-              'replyBy',
-              Icons.event_available_outlined,
-              'Require a reply-by date',
-              'Employers must commit to replying to every applicant',
-            ),
-          ],
-        ),
-        const SectionLabel('Sign-ups'),
-        ListGroup(
-          children: [
-            row(
-              'pauseSignups',
-              Icons.pause_circle_outline_rounded,
-              'Pause new sign-ups',
-              'Existing users can still log in',
-            ),
-          ],
-        ),
-        AnimatedSize(
-          duration: Motion.base,
-          curve: Motion.curve,
-          child: (settings['pauseSignups'] ?? false)
-              ? const Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: NoticeCard(
-                    tone: Tone.warning,
-                    icon: Icons.pause_circle_outline_rounded,
-                    title: 'Sign-ups are paused',
-                    body: 'New visitors can join a waiting list.',
-                  ),
-                )
-              : const SizedBox(width: double.infinity),
-        ),
-        const SectionLabel('Reports'),
-        ListGroup(
-          children: [
-            row(
-              'weeklyReport',
-              Icons.summarize_outlined,
-              'Weekly report by email',
-              'Every Monday at 08:00 to the pilot team',
-            ),
-          ],
-        ),
-        const SectionLabel('Pilot'),
-        const KeyValueTable([
-          ('Started', 'Mon 3 Aug 2026'),
-          ('Ends', 'Mon 2 Nov 2026'),
-          ('Districts', 'Gasabo, Kicukiro, Nyarugenge, Huye, Musanze, Rubavu'),
-          ('Data', 'Handled under Law No. 058/2021 on personal data'),
-        ]),
-        const SectionLabel('Account'),
         ListGroup(
           children: [
             ListRow(
-              leading: const IconTile(Icons.logout_rounded, tone: Tone.danger),
-              title: 'Log out',
-              titleStyle: AppText.bodyMStrong.copyWith(
-                color: AppColors.dangerText,
+              leading: const IconTile(Icons.translate_rounded, tone: Tone.info),
+              title: l10n.languageTitle,
+              subtitle: switch (prefs.locale.languageCode) {
+                'rw' => 'Ikinyarwanda',
+                'fr' => 'Français',
+                _ => 'English',
+              },
+              onTap: () => context.push('/language'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                secondary: const IconTile(
+                  Icons.dark_mode_outlined,
+                  tone: Tone.neutral,
+                ),
+                title: Text(l10n.darkModeLabel, style: AppText.bodyMStrong),
+                value: prefs.themeMode == ThemeMode.dark,
+                onChanged: (dark) => ref
+                    .read(appPreferencesProvider.notifier)
+                    .setThemeMode(dark ? ThemeMode.dark : ThemeMode.light),
               ),
-              chevron: false,
-              onTap: () => _logout(context, ref),
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        AppButton(
+          l10n.signOut,
+          variant: ButtonVariant.dangerOutline,
+          onPressed: () => _signOut(context, ref),
+        ),
+        const SectionLabel('Recent audit logs'),
+        logsAsync.when(
+          loading: () => const SkeletonListLoader(rows: 3, showAvatar: true),
+          error: (error, _) => EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load audit logs',
+            body: errorMessage(error),
+            action: l10n.retry,
+            onAction: () => ref.invalidate(adminAuditLogsProvider),
+          ),
+          data: (logs) {
+            if (logs.isEmpty) {
+              return const EmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: 'No audit events recorded',
+                body:
+                    'Mentor reviews and account status updates appear here automatically.',
+              );
+            }
+            return ListGroup(
+              children: [
+                for (final log in logs)
+                  ActivityTile(
+                    icon: Icons.receipt_long_outlined,
+                    tone: Tone.info,
+                    title: log.displayAction,
+                    subtitle:
+                        '${log.targetCollection}/${log.targetId} · ${log.actorEmail.isEmpty ? log.actorUid : log.actorEmail}${log.details.isNotEmpty ? ' — ${log.details}' : ''}',
+                    timestamp: DateFormat('d MMM · HH:mm')
+                        .format(log.createdAt.toLocal()),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );

@@ -1,15 +1,12 @@
-// Provides common page layouts, app bars, back actions, and step indicators.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:upbridge/shared/animations/reveal.dart';
 import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/core/themes/app_text.dart';
 import 'package:upbridge/core/themes/app_tokens.dart';
+import 'package:upbridge/shared/animations/reveal.dart';
 import 'package:upbridge/shared/widgets/buttons.dart';
 import 'package:upbridge/shared/widgets/surfaces.dart';
 
-/// Pops the current page, or goes to [fallback] when there is nothing to pop (deep links).
 void goBack(BuildContext context, {String fallback = '/'}) {
   final router = GoRouter.of(context);
   if (router.canPop()) {
@@ -19,21 +16,26 @@ void goBack(BuildContext context, {String fallback = '/'}) {
   }
 }
 
-/// Centres content and caps its width on tablets and desktop.
 class ConstrainedContent extends StatelessWidget {
-  const ConstrainedContent({super.key, required this.child, this.maxWidth = Breakpoints.contentMax});
+  const ConstrainedContent({
+    super.key,
+    required this.child,
+    this.maxWidth = Breakpoints.contentMax,
+  });
 
   final Widget child;
   final double maxWidth;
 
   @override
   Widget build(BuildContext context) => Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child),
-      );
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: child,
+    ),
+  );
 }
 
-/// White action bar pinned to the bottom of full-screen pages.
 class FooterBar extends StatelessWidget {
   const FooterBar({super.key, required this.children, this.note});
 
@@ -42,30 +44,32 @@ class FooterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Reveal(
-      index: 2,
-      offset: 24,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.borderSubtle)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(Space.gutter, 12, Space.gutter, 12),
-            child: ConstrainedContent(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (note != null) ...[note!, const SizedBox(height: 10)],
-                  for (var i = 0; i < children.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 8),
-                    children[i],
-                  ],
+    final p = context.palette;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(top: BorderSide(color: p.borderSubtle)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.gutter,
+            12,
+            Space.gutter,
+            12,
+          ),
+          child: ConstrainedContent(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (note != null) ...[note!, const SizedBox(height: 10)],
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  children[i],
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -74,12 +78,6 @@ class FooterBar extends StatelessWidget {
   }
 }
 
-/// The single page layout used by every screen.
-///
-/// * Tab roots pass [largeTitle]: the big title scrolls away and a compact title
-///   fades into the top bar.
-/// * Full-screen pages pass [title] and [showBack]; a hairline appears under the
-///   bar once content scrolls beneath it.
 class PageFrame extends StatefulWidget {
   const PageFrame({
     super.key,
@@ -87,6 +85,7 @@ class PageFrame extends StatefulWidget {
     this.title,
     this.largeTitle,
     this.eyebrow,
+    this.subtitle,
     this.intro,
     this.footer,
     this.footerNote,
@@ -97,9 +96,9 @@ class PageFrame extends StatefulWidget {
     this.backFallback = '/',
     this.onRefresh,
     this.pinned,
-    this.padding = const EdgeInsets.fromLTRB(Space.gutter, 4, Space.gutter, 32),
-    this.stagger = true,
-    this.background = AppColors.canvas,
+    this.padding = const EdgeInsets.fromLTRB(Space.gutter, 4, Space.gutter, 28),
+    this.stagger = false,
+    this.background,
     this.controller,
   });
 
@@ -107,6 +106,7 @@ class PageFrame extends StatefulWidget {
   final String? title;
   final String? largeTitle;
   final String? eyebrow;
+  final String? subtitle;
   final Widget? intro;
   final List<Widget>? footer;
   final Widget? footerNote;
@@ -119,7 +119,7 @@ class PageFrame extends StatefulWidget {
   final Widget? pinned;
   final EdgeInsets padding;
   final bool stagger;
-  final Color background;
+  final Color? background;
   final ScrollController? controller;
 
   @override
@@ -138,7 +138,7 @@ class _PageFrameState extends State<PageFrame> {
   }
 
   void _onScroll() {
-    if (!_sc.hasClients) return;
+    if (!mounted || !_sc.hasClients) return;
     final o = _sc.offset;
     final scrolled = o > 2;
     final past = o > (widget.eyebrow == null ? 30 : 46);
@@ -159,13 +159,32 @@ class _PageFrameState extends State<PageFrame> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final w = widget;
     final hasLarge = w.largeTitle != null;
-    final bottomInset = w.footer == null ? MediaQuery.paddingOf(context).bottom : 0.0;
+    final bottomInset = w.footer == null
+        ? MediaQuery.paddingOf(context).bottom
+        : 0.0;
 
     final content = <Widget>[
-      if (w.eyebrow != null) Padding(padding: const EdgeInsets.only(bottom: 6), child: MonoLabel(w.eyebrow!)),
-      if (hasLarge) Text(w.largeTitle!, style: AppText.display),
+      if (w.eyebrow != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: MonoLabel(w.eyebrow!),
+        ),
+      if (hasLarge)
+        Text(
+          w.largeTitle!,
+          style: AppText.display.copyWith(color: p.textPrimary),
+        ),
+      if (w.subtitle != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            w.subtitle!,
+            style: AppText.bodyS.copyWith(color: p.textSecondary),
+          ),
+        ),
       if (w.intro != null) w.intro!,
       ...w.children,
     ];
@@ -184,15 +203,15 @@ class _PageFrameState extends State<PageFrame> {
     if (w.onRefresh != null) {
       scroll = RefreshIndicator(
         onRefresh: w.onRefresh!,
-        color: AppColors.accent,
-        backgroundColor: AppColors.surface,
+        color: p.accent,
+        backgroundColor: p.surface,
         displacement: 24,
         child: scroll,
       );
     }
 
     return Scaffold(
-      backgroundColor: w.background,
+      backgroundColor: w.background ?? p.canvas,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -203,16 +222,21 @@ class _PageFrameState extends State<PageFrame> {
               divider: _scrolled && w.pinned == null,
               leading: w.showBack
                   ? CircleIconButton(
-                      icon: w.closeIcon ? Icons.close_rounded : Icons.arrow_back_rounded,
+                      icon: w.closeIcon
+                          ? Icons.close_rounded
+                          : Icons.arrow_back_rounded,
                       tooltip: w.closeIcon ? 'Close' : 'Back',
-                      onTap: w.onBack ?? () => goBack(context, fallback: w.backFallback),
+                      onTap:
+                          w.onBack ??
+                          () => goBack(context, fallback: w.backFallback),
                     )
                   : null,
               actions: w.actions,
             ),
             if (w.pinned != null) w.pinned!,
             Expanded(child: scroll),
-            if (w.footer != null) FooterBar(note: w.footerNote, children: w.footer!),
+            if (w.footer != null)
+              FooterBar(note: w.footerNote, children: w.footer!),
           ],
         ),
       ),
@@ -221,7 +245,13 @@ class _PageFrameState extends State<PageFrame> {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({this.title, required this.titleVisible, required this.divider, this.leading, this.actions = const []});
+  const _TopBar({
+    this.title,
+    required this.titleVisible,
+    required this.divider,
+    this.leading,
+    this.actions = const [],
+  });
 
   final String? title;
   final bool titleVisible;
@@ -231,13 +261,24 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final dur = Motion.durationFor(context, Motion.fast);
     return AnimatedContainer(
-      duration: Motion.fast,
-      height: 56,
+      duration: dur,
+      height: 52,
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: divider ? AppColors.borderSubtle : AppColors.borderSubtle.withValues(alpha: 0))),
+        border: Border(
+          bottom: BorderSide(
+            color: divider
+                ? p.borderSubtle
+                : p.borderSubtle.withValues(alpha: 0),
+          ),
+        ),
       ),
-      padding: EdgeInsets.only(left: leading == null ? Space.gutter : 6, right: 6),
+      padding: EdgeInsets.only(
+        left: leading == null ? Space.gutter : 6,
+        right: 6,
+      ),
       child: Row(
         children: [
           ?leading,
@@ -245,12 +286,12 @@ class _TopBar extends StatelessWidget {
           Expanded(
             child: AnimatedOpacity(
               opacity: titleVisible && title != null ? 1 : 0,
-              duration: Motion.fast,
-              child: AnimatedSlide(
-                offset: titleVisible ? Offset.zero : const Offset(0, 0.25),
-                duration: Motion.base,
-                curve: Motion.curve,
-                child: Text(title ?? '', style: AppText.titleS, maxLines: 1, overflow: TextOverflow.ellipsis),
+              duration: dur,
+              child: Text(
+                title ?? '',
+                style: AppText.titleS.copyWith(color: p.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
@@ -261,7 +302,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Convenience wrapper for full-screen pages with a back arrow.
 class DetailPage extends StatelessWidget {
   const DetailPage({
     super.key,
@@ -292,24 +332,29 @@ class DetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PageFrame(
-        title: title,
-        largeTitle: largeTitle,
-        eyebrow: eyebrow,
-        showBack: true,
-        closeIcon: closeIcon,
-        backFallback: backFallback,
-        onBack: onBack,
-        footer: footer,
-        footerNote: footerNote,
-        actions: actions,
-        pinned: pinned,
-        children: children,
-      );
+    title: title,
+    largeTitle: largeTitle,
+    eyebrow: eyebrow,
+    showBack: true,
+    closeIcon: closeIcon,
+    backFallback: backFallback,
+    onBack: onBack,
+    footer: footer,
+    footerNote: footerNote,
+    actions: actions,
+    pinned: pinned,
+    children: children,
+  );
 }
 
-/// Heading block used at the top of form and detail screens.
 class PageHeading extends StatelessWidget {
-  const PageHeading({super.key, required this.title, this.eyebrow, this.body, this.bottom = 20});
+  const PageHeading({
+    super.key,
+    required this.title,
+    this.eyebrow,
+    this.body,
+    this.bottom = 20,
+  });
 
   final String title;
   final String? eyebrow;
@@ -318,21 +363,27 @@ class PageHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Padding(
       padding: EdgeInsets.only(top: 8, bottom: bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (eyebrow != null) ...[MonoLabel(eyebrow!), const SizedBox(height: 8)],
-          Text(title, style: AppText.titleL),
-          if (body != null) ...[const SizedBox(height: 8), Text(body!, style: AppText.bodyM)],
+          if (eyebrow != null) ...[
+            MonoLabel(eyebrow!),
+            const SizedBox(height: 8),
+          ],
+          Text(title, style: AppText.titleL.copyWith(color: p.textPrimary)),
+          if (body != null) ...[
+            const SizedBox(height: 8),
+            Text(body!, style: AppText.bodyM.copyWith(color: p.textSecondary)),
+          ],
         ],
       ),
     );
   }
 }
 
-/// Small step indicator used in onboarding and multi-step forms.
 class StepDots extends StatelessWidget {
   const StepDots({super.key, required this.count, required this.index});
 
@@ -341,17 +392,18 @@ class StepDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Row(
       children: [
         for (var i = 0; i < count; i++) ...[
           if (i > 0) const SizedBox(width: 6),
           Expanded(
             child: AnimatedContainer(
-              duration: Motion.slow,
+              duration: Motion.durationFor(context, Motion.base),
               curve: Motion.curve,
               height: 4,
               decoration: BoxDecoration(
-                color: i <= index ? AppColors.accent : AppColors.borderSubtle,
+                color: i <= index ? p.accent : p.borderSubtle,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),

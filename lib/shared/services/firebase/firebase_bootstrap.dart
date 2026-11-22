@@ -1,7 +1,7 @@
-// Initializes Firebase and connects emulators for opted-in debug runs.
-import 'package:firebase_core/firebase_core.dart';
+// Initializes Firebase and connects Auth/Firestore emulators for opted-in debug runs.
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:upbridge/shared/services/firebase/firebase_options.dart';

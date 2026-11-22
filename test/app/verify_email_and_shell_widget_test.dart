@@ -1,12 +1,15 @@
-// Tests VerifyEmailScreen flows and RoleShell live/demo session header behavior.
+// Tests VerifyEmailScreen flows and RoleShell adaptive rendering.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:upbridge/app/auth/verify_email_screen.dart';
 import 'package:upbridge/app/router/role_shell.dart';
-import 'package:upbridge/shared/models/models.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
+import 'package:upbridge/core/providers/live_data_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/firebase/auth_service.dart';
 import 'package:upbridge/shared/services/firebase/firebase_providers.dart';
 
@@ -16,7 +19,7 @@ void main() {
       'resends verification, verifies email, and routes admin to /a/overview',
       (tester) async {
         final auth = _FakeAuthService(
-          email: 'admin@upbridge.rw',
+          email: 'authapp05@gmail.com',
           roleClaim: 'admin',
         );
         final destinations = <String>[];
@@ -25,13 +28,15 @@ void main() {
           ProviderScope(
             overrides: [authServiceProvider.overrideWithValue(auth)],
             child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: VerifyEmailScreen(onNavigate: destinations.add),
             ),
           ),
         );
         await tester.pump();
 
-        expect(find.textContaining('admin@upbridge.rw'), findsOneWidget);
+        expect(find.textContaining('authapp05@gmail.com'), findsOneWidget);
         expect(auth.sendCalls, isEmpty);
 
         await tester.tap(find.text('Send verification email'));
@@ -42,20 +47,22 @@ void main() {
         await tester.tap(find.text('I verified my email'));
         await tester.pumpAndSettle();
 
-        expect(destinations, ['/a/overview']);
+        expect(destinations, [AppRoutes.adminOverview]);
       },
     );
 
     testWidgets(
       'shows error when confirmation is still pending and supports sign out',
       (tester) async {
-        final auth = _FakeAuthService(email: 'youth@upbridge.rw');
+        final auth = _FakeAuthService(email: 'student@upbridge.rw');
         final destinations = <String>[];
 
         await tester.pumpWidget(
           ProviderScope(
             overrides: [authServiceProvider.overrideWithValue(auth)],
             child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: VerifyEmailScreen(onNavigate: destinations.add),
             ),
           ),
@@ -72,81 +79,86 @@ void main() {
         await tester.tap(find.text('Sign out'));
         await tester.pump();
         expect(auth.signedOut, isTrue);
-        expect(destinations, ['/welcome']);
+        expect(destinations, [AppRoutes.welcome]);
       },
     );
   });
 
   group('RoleShell', () {
-    testWidgets('displays live VerifiedSession identity in desktop SideNav', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'displays live admin NavigationRail on wide desktop viewports',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      const session = VerifiedSession(
-        firebaseInitialized: true,
-        signedIn: true,
-        emailVerified: true,
-        uid: 'admin-uid',
-        email: 'jonathan@upbridge.rw',
-        displayName: 'Jonathan Ishimwe',
-        role: Role.admin,
-        onboarded: true,
-      );
+        const session = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'admin-uid',
+          email: 'authapp05@gmail.com',
+          displayName: 'Jonathan Ishimwe',
+          role: UserRole.admin,
+          onboarded: true,
+        );
 
-      final router = GoRouter(
-        initialLocation: '/a/overview',
-        routes: [
-          StatefulShellRoute.indexedStack(
-            builder: (context, state, shell) =>
-                RoleShell(shell: shell, role: Role.admin),
-            branches: [
-              for (var i = 0; i < 5; i++)
-                StatefulShellBranch(
-                  routes: [
-                    GoRoute(
-                      path: [
-                        '/a/overview',
-                        '/a/users',
-                        '/a/mentors',
-                        '/a/jobs',
-                        '/a/settings',
-                      ][i],
-                      builder: (_, _) => Center(child: Text('Tab $i')),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            verifiedSessionProvider.overrideWith(
-              (ref) => Stream.value(session),
+        final router = GoRouter(
+          initialLocation: AppRoutes.adminOverview,
+          routes: [
+            StatefulShellRoute.indexedStack(
+              builder: (context, state, shell) =>
+                  RoleShell(navigationShell: shell, role: UserRole.admin),
+              branches: [
+                for (var i = 0; i < 5; i++)
+                  StatefulShellBranch(
+                    routes: [
+                      GoRoute(
+                        path: [
+                          '/a/overview',
+                          '/a/users',
+                          '/a/mentors',
+                          '/a/catalog',
+                          '/a/settings',
+                        ][i],
+                        builder: (_, _) => Center(child: Text('Tab $i')),
+                      ),
+                    ],
+                  ),
+              ],
             ),
-            appStoreProvider.overrideWith(_EmptyAppStore.new),
           ],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        addTearDown(router.dispose);
 
-      expect(find.text('Jonathan Ishimwe'), findsOneWidget);
-      expect(find.text('Admin'), findsOneWidget);
-      expect(find.text('Tab 0'), findsOneWidget);
-    });
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(session)),
+              pendingMentorApplicationsProvider.overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+            ],
+            child: MaterialApp.router(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              routerConfig: router,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(NavigationRail), findsOneWidget);
+        expect(find.text('Admin'), findsOneWidget);
+        expect(find.text('Tab 0'), findsOneWidget);
+      },
+    );
   });
 }
 
 class _FakeAuthService extends AuthService {
-  _FakeAuthService({required this.email, this.roleClaim = 'youth'});
+  _FakeAuthService({required this.email, this.roleClaim = 'student'});
 
   final String email;
   final String roleClaim;
@@ -176,5 +188,3 @@ class _FakeAuthService extends AuthService {
     signedOut = true;
   }
 }
-
-class _EmptyAppStore extends AppStore {}
