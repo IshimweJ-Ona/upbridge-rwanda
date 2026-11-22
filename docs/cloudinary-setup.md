@@ -1,58 +1,68 @@
-# Cloudinary setup for public images
+# Cloudinary Setup (`vbzq5ssu`) — Unsigned Free-Tier Architecture
 
-The app has a shared Cloudinary adapter for public JPEG, PNG, and WebP images.
-It returns Cloudinary's HTTPS URL and asset metadata so a feature repository can
-store the URL in Firestore. No feature currently calls the adapter, so this is
-an integration point until the relevant feature owner wires it in.
+All user-uploaded images in UpBridge Rwanda (profile avatars, portfolio project images, course evidence images, certificate screenshots, CV/opportunity screenshots, and mentor application images) upload **directly from the Flutter app to Cloudinary** (`cloud_name = vbzq5ssu`) via an **unsigned upload preset** (`upbridge_public_images`), without Firebase Cloud Functions or Google Cloud Secret Manager.
 
-The shared demo defaults are cloud name `vbzq5ssu` and preset
-`upbridge_public_images`. Once that preset is created in this account, teammates
-can run the app without adding Cloudinary flags. These are public configuration
-values, not credentials.
+Firestore persists only the resulting image metadata: `{ url, publicId, resourceType, size, ownerUid, createdAt }`.
 
-## Configure a free account
+---
 
-1. Create or sign in to a Cloudinary account and open the Console dashboard.
-2. Copy the **Cloud name** from the dashboard.
-3. Open **Settings → Upload → Upload presets** and create an **unsigned** preset
-   named `upbridge_public_images`.
-4. Restrict the preset to image uploads and JPEG, PNG, and WebP formats. Use a
-   dedicated folder such as `upbridge/public-images`, and configure any upload
-   size or transformation limits the current account UI offers.
-5. Do not put the API secret in Flutter, a `--dart-define`, source control, or a
-   screenshot. Anyone who obtains an unsigned preset name can use it to upload,
-   so keep this preset narrow and monitor usage in Cloudinary.
+## Public Configuration (Safe for Frontend)
 
-The app is preconfigured for these values. Run it normally:
-
-```powershell
-flutter run
+```env
+VITE_CLOUDINARY_CLOUD_NAME=vbzq5ssu
+VITE_CLOUDINARY_UPLOAD_PRESET=upbridge_public_images
 ```
 
-To override the defaults for another account or preset, pass public values:
+Override at build/run time if targeting a test Cloudinary account:
 
 ```bash
 flutter run \
-  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud_name \
-  --dart-define=CLOUDINARY_UNSIGNED_IMAGE_PRESET=upbridge_public_images
+  --dart-define=VITE_CLOUDINARY_CLOUD_NAME=vbzq5ssu \
+  --dart-define=VITE_CLOUDINARY_UPLOAD_PRESET=upbridge_public_images
 ```
 
-PowerShell form:
+> Both `CLOUDINARY_CLOUD_NAME` and `CLOUDINARY_UNSIGNED_IMAGE_PRESET` aliases remain supported in `lib/core/constants/firestore_schema.dart`. Never add `CLOUDINARY_API_KEY` or `CLOUDINARY_API_SECRET` to `.env`, `.dart`, or `--dart-define`.
 
-```powershell
-flutter run `
-  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud_name `
-  --dart-define=CLOUDINARY_UNSIGNED_IMAGE_PRESET=upbridge_public_images
+---
+
+## Direct Upload Endpoint & Client Validation
+
+`CloudinaryMediaService` (`lib/core/services/cloudinary_service.dart`) uploads directly to:
+
+```text
+POST https://api.cloudinary.com/v1_1/vbzq5ssu/image/upload
 ```
 
-Replace the example cloud name with the dashboard value. Never put or send the
-API secret. After creating the preset, teammates can use the same account by
-running `flutter run` without the override flags.
+Before sending an HTTP request, `CloudinaryMediaService.uploadImage` enforces:
+- **Allowed image formats**: `jpg`, `jpeg`, `png`, `webp` (`image/jpeg`, `image/png`, `image/webp`)
+- **Maximum size**: `10 MB` (`10 * 1024 * 1024` bytes)
+- **Non-empty file bytes** and valid public configuration
+- **Upload UX**: Progress callbacks (`onProgress`), cancellation (`UploadCancelToken`), and exponential-backoff retries on transient `5xx` / timeout errors (up to `maxRetries`), failing fast on `4xx` responses
+- **Security Rules (`firestore.rules`)**: `validOptionalAsset` requires `https://res.cloudinary.com/vbzq5ssu/image/upload/...`, `resourceType == 'image'`, `ownerUid == request.auth.uid`, and `size <= 10485760`.
 
-## Certificates and private files
+### Replace & Delete Behavior on Spark
 
-Do not upload certificates or private documents with this unsigned client
-service. Unsigned presets are public capabilities and must not expose private
-records. A trusted signing endpoint or equivalent server-side authorization is
-required before those file flows can be implemented safely. This project has
-not provisioned that backend, so certificate uploads remain a known gap.
+- **Upload / Replace**: `replaceFile` uploads the new image first and returns the new `MediaAsset`. Only if upload succeeds does the caller persist the new `MediaAsset` to Firestore.
+- **Delete / Unlink**: Removing an image unlinks the `MediaAsset` reference from the Firestore document immediately.
+- **Trade-off**: Permanent asset destruction (`POST /v1_1/vbzq5ssu/image/destroy`) requires `CLOUDINARY_API_SECRET`, so unsigned client builds cannot call Cloudinary's destroy endpoint directly. If you later connect an optional external server (`onDeleteRemoteAsset` hook), remote cleanup works without changing UI callers; otherwise orphaned images can be cleaned from the Cloudinary Media Library console.
+
+---
+
+## Cloudinary Console Setup & Abuse Prevention (Required)
+
+Because unsigned presets are public by design, configure strict guardrails in Cloudinary Console (**`vbzq5ssu`**):
+
+1. Open **Settings -> Upload -> Upload presets -> Add upload preset**.
+2. Set:
+   - **Upload preset name**: `upbridge_public_images`
+   - **Signing Mode**: **Unsigned**
+3. **Restrict formats & asset type**:
+   - Allowed resource type: **Image**
+   - Allowed formats: `jpg, jpeg, png, webp` (reject PDF, SVG, HTML, executables server-side in Cloudinary)
+4. **Restrict folder & size**:
+   - Folder / Asset folder: `upbridge/public-images` (enforced server-side by the preset itself; the client sends only `upload_preset` + `file`)
+   - Max image file size: `10 MB` (or lower per tier)
+   - Incoming transformation (optional cost/quota saver): limit max dimensions (e.g., `c_limit,w_2048,h_2048,q_auto:good`) and strip EXIF metadata if desired.
+5. **Prevent unauthorized overwriting / abuse**:
+   - Enable **Unique filename** / prevent overwriting existing `public_id`s by disabling **Use filename** or keeping **Overwrite = false**.
+   - Monitor Cloudinary free-plan bandwidth/credit alerts in **Dashboard -> Settings -> Notification emails**.

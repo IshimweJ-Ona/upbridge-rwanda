@@ -30,3 +30,15 @@ String formatRwandaPhone(String input) {
   if (local.length != 9 || !local.startsWith('7')) return input.trim();
   return '+250 ${local.substring(0, 3)} ${local.substring(3, 6)} ${local.substring(6)}';
 }
+
+String initialsOf(String name) {
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) return '?';
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+      .toUpperCase();
+}
