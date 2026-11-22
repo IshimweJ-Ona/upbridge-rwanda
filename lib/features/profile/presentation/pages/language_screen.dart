@@ -1,55 +1,100 @@
-// Owner: Student 1 · Auth, onboarding & profile
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:upbridge/app/router/route_guards.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
+import 'package:upbridge/core/providers/settings_providers.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/shared.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
 
-/// S2 · Language.
 class LanguageScreen extends ConsumerStatefulWidget {
   const LanguageScreen({super.key});
 
   static const options = [
-    RadioOption(value: 'en', title: 'English', subtitle: 'English'),
+    RadioOption(value: 'en', title: 'English', subtitle: 'Default language'),
     RadioOption(value: 'rw', title: 'Ikinyarwanda', subtitle: 'Kinyarwanda'),
     RadioOption(value: 'fr', title: 'Français', subtitle: 'French'),
   ];
 
-  static String labelFor(String code) => options.firstWhere((o) => o.value == code, orElse: () => options.first).title;
+  static String labelFor(String code) => options
+      .firstWhere((o) => o.value == code, orElse: () => options.first)
+      .title;
 
   @override
   ConsumerState<LanguageScreen> createState() => _LanguageScreenState();
 }
 
 class _LanguageScreenState extends ConsumerState<LanguageScreen> {
-  late String _code = ref.read(appStoreProvider).language;
+  String? _pickedLocale;
 
   @override
   Widget build(BuildContext context) {
-    final current = ref.watch(appStoreProvider.select((s) => s.language));
+    final l10n = AppLocalizations.of(context);
+    final prefs = ref.watch(appPreferencesProvider);
+    final session = ref.watch(appSessionProvider).asData?.value;
+    final fallback = session == null || !session.signedIn
+        ? AppRoutes.welcome
+        : homeRouteForRole(
+            session.role,
+            onboarded: session.onboarded,
+            isPendingOrRejectedMentor:
+                session.role == UserRole.student &&
+                (session.hasPendingMentorApplication ||
+                    session.hasRejectedMentorApplication ||
+                    session.hasRevokedMentorApplication),
+          );
+    final selected = _pickedLocale ?? prefs.locale.languageCode;
+    final isDark = prefs.themeMode == ThemeMode.dark;
+
     return DetailPage(
-      title: 'Language',
-      backFallback: '/profile',
+      title: '${l10n.languageTitle} & ${l10n.appearanceTitle}',
+      backFallback: fallback,
       footer: [
         AppButton(
-          'Save language',
-          onPressed: _code == current
+          l10n.save,
+          onPressed: selected == prefs.locale.languageCode
               ? null
-              : () {
-                  ref.read(appStoreProvider.notifier).setLanguage(_code);
-                  showToast(context, 'Language saved: ${LanguageScreen.labelFor(_code)}');
-                  goBack(context, fallback: '/profile');
+              : () async {
+                  await ref
+                      .read(appPreferencesProvider.notifier)
+                      .setLocale(selected);
+                  if (context.mounted) {
+                    showToast(context, 'Language updated');
+                    goBack(context, fallback: fallback);
+                  }
                 },
         ),
       ],
       children: [
-        const PageHeading(title: 'Choose your language', body: 'Used for the app, SMS updates and emails from UpBridge.'),
-        RadioCards<String>(options: LanguageScreen.options, value: _code, onChanged: (v) => setState(() => _code = v)),
-        const SizedBox(height: 18),
-        const NoticeCard(
-          icon: Icons.translate_rounded,
-          title: 'Translations are being reviewed',
-          body: 'During the pilot, screens stay in English until each translation has been checked by a native speaker. SMS updates switch right away.',
+        PageHeading(
+          title: l10n.languageTitle,
+          body: l10n.languageSelectBody,
+        ),
+        RadioCards<String>(
+          options: LanguageScreen.options,
+          value: selected,
+          onChanged: (v) => setState(() => _pickedLocale = v),
+        ),
+        const SectionLabel('Appearance'),
+        ListGroup(
+          children: [
+            ListRow(
+              leading: const IconTile(
+                Icons.dark_mode_outlined,
+                tone: Tone.info,
+              ),
+              title: l10n.darkModeLabel,
+              subtitle: isDark ? 'Dark theme enabled' : 'Light / system theme',
+              trailing: AppSwitch(
+                value: isDark,
+                onChanged: (dark) => ref
+                    .read(appPreferencesProvider.notifier)
+                    .setThemeMode(dark ? ThemeMode.dark : ThemeMode.light),
+              ),
+              chevron: false,
+            ),
+          ],
         ),
       ],
     );

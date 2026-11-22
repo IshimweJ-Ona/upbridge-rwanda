@@ -14,8 +14,9 @@ abstract final class Validators {
     final local = digits.startsWith('250')
         ? digits.substring(3)
         : (digits.startsWith('0') ? digits.substring(1) : digits);
-    if (local.length != 9 || !local.startsWith('7'))
+    if (local.length != 9 || !local.startsWith('7')) {
       return 'Enter a Rwandan mobile number, like 788 123 456.';
+    }
     return null;
   }
 
@@ -38,6 +39,38 @@ abstract final class Validators {
             .length <
         2) {
       return 'Enter your full name.';
+    }
+    return null;
+  }
+
+  static String? url(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'Enter a valid URL starting with https:// or http://.';
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null ||
+        !uri.hasScheme ||
+        (uri.scheme != 'https' && uri.scheme != 'http') ||
+        uri.host.isEmpty ||
+        !uri.host.contains('.')) {
+      return 'Enter a valid URL starting with https:// or http://.';
+    }
+    return null;
+  }
+
+  static String? optionalUrl(String value) {
+    if (value.trim().isEmpty) return null;
+    return url(value);
+  }
+
+  static String? minLength(
+    String value,
+    int min, {
+    String field = 'This field',
+  }) {
+    if (value.trim().length < min) {
+      return '$field must be at least $min characters.';
     }
     return null;
   }

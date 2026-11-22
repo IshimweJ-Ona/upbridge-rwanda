@@ -1,29 +1,75 @@
-# Developer integration guide
+# Developer Integration Guide
 
-## Shared startup and providers
+## Shared Architecture & Providers (Post-Rework Baseline)
 
-`main()` awaits `initFirebase()` before creating the app and fails closed if Firebase cannot initialize. Use `firebaseAuthProvider`, `firestoreProvider`, `authServiceProvider`, `authStateProvider`, and `repositoryProvider` from `lib/shared/services/firebase/firebase_providers.dart`. `AuthService` exposes current user, auth-state changes, email verification send/reload, and sign-out; it does not create anonymous accounts or implement login/signup. The shared router redirects a signed-in unverified Firebase user to `/verify-email`; the screen sends/resends the Firebase verification email, reloads the account and refreshes the ID token before leaving the gate.
+- `main()` initializes Firebase via `initFirebase()` (`lib/shared/services/firebase/firebase_bootstrap.dart`) and renders `FirebaseUnavailableApp` if startup fails.
+- Shared auth, claims, and session state live in:
+  - `lib/shared/services/firebase/firebase_providers.dart` (`firebaseAuthProvider`, `firestoreProvider`)
+  - `lib/core/providers/session_providers.dart` (`appSessionProvider`, `resolveEffectiveRole`)
+  - `lib/core/providers/repository_providers.dart` & `lib/core/providers/live_data_providers.dart`
+- Schema constants and allowed status lifecycles are centralized in `lib/core/constants/firestore_schema.dart` (`Fs`) and `lib/core/domain/status_lifecycle.dart` (`StatusTransitions`). Never duplicate collection names or raw status literals.
+- UI screens use shared Material 3 primitives from `lib/shared/shared.dart` (`PageFrame`, `DetailPage`, `SurfaceCard`, `ListGroup`, `AppButton`, `AppSearchField`, `MetricsGrid`, `StatusBadge`).
+- All media uploads run directly from the client to **Cloudinary Free** (`vbzq5ssu` / `upbridge_public_images`) via `CloudinaryMediaService`. No Cloud Functions (`functions/`) or paid Firebase Blaze features are used.
 
-Use the shared Firebase providers for injectable dependencies. Keep feature interfaces, entities, repositories, screens, and feature-specific tests in the owning developer's feature directory. Do not edit another owner's feature to register integrations; coordinate shared route changes with Jonathan. Use the shared `Fs` collection names, `SubmissionStatus`, and `OpportunityStatus` constants rather than duplicating literals.
+---
 
-Before introducing fields or status values, update the contract with Jonathan and record purpose, document ID, owner, data types, timestamps, validation, permitted transitions, and security access. Do not use client profile fields to grant admin permissions. Use `AppStore` only for clearly marked demonstration data; never mix it with Firebase records or present its counts as live platform data.
+## Local Setup
 
-## Team onboarding
+1. Clone the repository and fetch dependencies:
+   ```powershell
+   git checkout main
+   git pull origin main
+   flutter pub get
+   flutter gen-l10n
+   ```
+2. Keep local config files out of Git (already listed in `.gitignore`): `.env`, `lib/firebase_options.dart`, `android/app/google-services.json`, and `ios/Runner/GoogleServiceInfo.plist`.
+3. Read `docs/firebase-setup.md`, `docs/cloudinary-setup.md`, and `docs/firestore-schema.md`.
+4. To test against local Firebase Emulators:
+   ```powershell
+   .\scripts\start_firebase_emulators.ps1
+   flutter run --dart-define=USE_FIREBASE_EMULATORS=true
+   ```
+5. To deploy Firestore security rules and composite indexes to `upridge-rwanda-dev`:
+   ```powershell
+   firebase deploy --only firestore:rules,firestore:indexes --project upridge-rwanda-dev
+   ```
 
-1. Clone the repository and run `flutter pub get`.
-2. Request your own Firebase Console access from the project owner; never share accounts or service keys.
-3. Obtain Android/iOS native Firebase files through the approved team process; they are ignored locally.
-4. Read `firebase-setup.md`, this guide, and `firestore-schema.md`.
-5. On Windows, run `scripts/start_firebase_emulators.ps1`; elsewhere run `firebase emulators:start --project upridge-rwanda-dev --only auth,firestore`. Launch with `flutter run --dart-define=USE_FIREBASE_EMULATORS=true` when testing Firebase integration. For a physical device, also pass `--dart-define=FIREBASE_EMULATOR_HOST=<computer-LAN-IP>`.
-6. Create test accounts only in the emulator or through the approved Firebase Auth process. Application role claims require trusted provisioning.
-7. Implement only your assigned feature and consume shared providers/contracts.
-8. Add feature-owned tests, run `flutter analyze` and `flutter test`, and open a pull request for review.
+---
 
-## Handoffs
+## Team Pull & Push Workflow (After `test/rework-v2` Merges to `main`)
 
-- **Ghislaine:** Owns login, registration, onboarding, and profile workflows. Current screens still use phone/demo state and are not connected to Firebase; wire signup/login to Firebase Email/Password accounts and let the shared router send new unverified accounts to `/verify-email`. On later sign-in, check `emailVerified` and reload the Firebase user before opening app routes. Consume shared Auth state/sign-out; provision app roles through trusted claims. Confirm profile fields with the `users` rule allowlist before writes. Firestore denies unverified users even if a client route is bypassed. Until this handoff is implemented, end-to-end signup/login is not complete.
-- **Lisa:** Owns learning, submissions, and portfolio. Confirm learning catalog, task progress, submission/review contracts, and mentor read access; use the shared collection/status constants where applicable. Resolve the portfolio path discrepancy (`users/{uid}/projects` in the feature data-source note vs. top-level `projects/{id}` with `ownerId` in the shared repository) before enabling writes.
-- **Boaz:** Owns mentor discovery, workspace, requests, reviews, and sessions. Confirm mentor identity linkage and least-privilege review/session access before implementation.
-- **Kellen:** Owns opportunities and applications. Confirm publication/moderation and application state transitions; current opportunity query index is supplied in the shared index file.
+Because `test/rework-v2` refactored feature modules into `lib/features/<feature>/{data,domain,presentation}/` and replaced legacy demo repositories and screens, **everyone must base new work off the updated `main`**.
 
-Shared route registration and changes to shared rules/indexes are coordinated with Jonathan. Feature owners retain their source and test files.
+### Standard Update Flow (For All Teammates)
+1. Save/commit any local uncommitted work on your current branch.
+2. Fetch and start a clean branch from updated `main`:
+   ```powershell
+   git fetch origin
+   git checkout main
+   git pull origin main
+   git checkout -b feature/<your-topic>
+   ```
+3. Before pushing or opening a Pull Request to `main`, run all checks locally:
+   ```powershell
+   flutter pub get
+   flutter gen-l10n
+   flutter analyze
+   flutter test --reporter compact
+   flutter test -d flutter-tester integration_test/app_flows_test.dart --reporter compact
+   ```
+4. Push your branch and open a Pull Request into `main`:
+   ```powershell
+   git push -u origin feature/<your-topic>
+   ```
+
+---
+
+## Per-Developer Branch Status & Handoff Actions
+
+| Teammate | Feature Ownership | Current Branch Status vs `main` | What to Pull & Push |
+|---|---|---|---|
+| **Jonathan** | Core routing (`app_router.dart`, `route_guards.dart`), Spark `firestore.rules`, Admin Overview/Users/Catalog/Settings, CI/docs | `feature/jonathan-engineering-execution` already merged into `main` | Merge `test/rework-v2` -> `main` first, deploy `firestore.rules` + `firestore.indexes.json`, then coordinate PR reviews into `main`. |
+| **Ghislaine** | Auth, Signup/Login, Email Verification, Onboarding, User Profile & CV | `feature/auth-profile` already merged into `main`; rework wired Auth, Verification, Onboarding & Profile to live Firestore | Pull `origin/main` into a fresh branch if making further Auth/Profile/CV updates, verify tests, then push PR -> `main`. |
+| **Lisa** | Learning (`courses`, `courseProgress`), Course Detail/Evidence & Portfolio Projects (`projects`) | `feature/learning-portfolio-screens` and `feauture/lisa-learning-submissions-progress-portfolio` already merged into `main`; rework completed live `courses`/`projects` repos & UI | Pull `origin/main` into a fresh branch for any new Learning/Portfolio enhancements, verify tests, then push PR -> `main`. |
+| **Boaz** | Mentors Discovery, Mentorship Requests, Mentorship Workspace, Sessions & Mentor Dashboard | `origin/feature/mentor-workspace`, `origin/feature/mentorship-requests`, `origin/feature/mentorship-data-layer`, and `origin/feature/mentorship-rules` still have older pre-rework commits | **Do not merge old branches straight into `main`.** Pull updated `origin/main` onto a fresh branch (`feature/mentor-followups`), check whether any slot/session logic from your old branch is still needed on top of `main`, cherry-pick or port only what is missing into `lib/features/mentorship/` or `lib/features/mentor_workspace/`, run checks, and push PR -> `main`. |
+| **Kellen** | Opportunities & Applications | `origin/feature/opportunities-applications` still has pre-rework commits | **Do not merge the old branch straight into `main`.** Pull updated `origin/main` onto a fresh branch (`feature/opportunities-followups`), verify if any application-history/filter behavior from your old branch is still needed beyond what `main` already has, port only missing logic into `lib/features/opportunities/`, run checks, and push PR -> `main`. |

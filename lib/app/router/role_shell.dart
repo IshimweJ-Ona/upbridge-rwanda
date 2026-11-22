@@ -1,485 +1,267 @@
-// Builds persistent role navigation for phone, tablet, and desktop layouts.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:upbridge/shared/models/models.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
+import 'package:upbridge/core/providers/live_data_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/shared.dart';
 
-class TabItem {
-  const TabItem(this.label, this.icon, this.activeIcon);
+class _NavTabSpec {
+  const _NavTabSpec({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+    this.badge = 0,
+  });
+
   final String label;
   final IconData icon;
   final IconData activeIcon;
+  final int badge;
 }
 
-const youthTabs = [
-  TabItem('Home', Icons.home_outlined, Icons.home_rounded),
-  TabItem('Learn', Icons.school_outlined, Icons.school_rounded),
-  TabItem('Mentors', Icons.people_outline_rounded, Icons.people_rounded),
-  TabItem('Jobs', Icons.work_outline_rounded, Icons.work_rounded),
-  TabItem('Profile', Icons.person_outline_rounded, Icons.person_rounded),
-];
+/// Role-scoped shell hosting per-tab navigators and adaptive bottom/side nav.
+class RoleShell extends ConsumerStatefulWidget {
+  const RoleShell({
+    super.key,
+    required this.role,
+    required this.navigationShell,
+  });
 
-const mentorTabs = [
-  TabItem('Home', Icons.home_outlined, Icons.home_rounded),
-  TabItem('Reviews', Icons.rate_review_outlined, Icons.rate_review_rounded),
-  TabItem('Sessions', Icons.event_outlined, Icons.event_rounded),
-  TabItem('Mentees', Icons.groups_outlined, Icons.groups_rounded),
-  TabItem('Profile', Icons.person_outline_rounded, Icons.person_rounded),
-];
-
-const adminTabs = [
-  TabItem('Overview', Icons.insights_outlined, Icons.insights_rounded),
-  TabItem(
-    'Users',
-    Icons.manage_accounts_outlined,
-    Icons.manage_accounts_rounded,
-  ),
-  TabItem('Mentors', Icons.verified_user_outlined, Icons.verified_user_rounded),
-  TabItem('Jobs', Icons.work_outline_rounded, Icons.work_rounded),
-  TabItem('Settings', Icons.settings_outlined, Icons.settings_rounded),
-];
-
-/// Bottom tab bar on phones, sidebar from 1024 px.
-class RoleShell extends ConsumerWidget {
-  const RoleShell({super.key, required this.shell, required this.role});
-
-  final StatefulNavigationShell shell;
-  final Role role;
+  final UserRole role;
+  final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(verifiedSessionProvider).asData?.value;
-    final liveSession =
-        session != null && session.signedIn && session.emailVerified;
+  ConsumerState<RoleShell> createState() => _RoleShellState();
+}
 
-    final tabs = switch (role) {
-      Role.youth => youthTabs,
-      Role.mentor => mentorTabs,
-      Role.admin => adminTabs,
-    };
-    final badges = liveSession
-        ? const <int, int>{}
-        : switch (role) {
-            Role.youth => <int, int>{},
-            Role.mentor => {
-              1: ref.watch(
-                appStoreProvider.select(
-                  (s) => (s.user?.isNewMentor ?? false) ? 0 : s.queue.length,
-                ),
-              ),
-            },
-            Role.admin => {
-              2: ref.watch(
-                appStoreProvider.select(
-                  (s) => s.applicants
-                      .where((a) => a.state == ApplicantState.pending)
-                      .length,
-                ),
-              ),
-              3: ref.watch(
-                appStoreProvider.select(
-                  (s) => s.forwards.where((f) => !f.forwarded).length,
-                ),
-              ),
-            },
-          };
+class _RoleShellState extends ConsumerState<RoleShell> {
+  int? _lastBranchIndex;
 
-    void onTap(int i) =>
-        shell.goBranch(i, initialLocation: i == shell.currentIndex);
+  @override
+  void initState() {
+    super.initState();
+    _lastBranchIndex = widget.navigationShell.currentIndex;
+  }
 
-    if (MediaQuery.sizeOf(context).width >= Breakpoints.wide) {
+  @override
+  void didUpdateWidget(covariant RoleShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final current = widget.navigationShell.currentIndex;
+    if (_lastBranchIndex != current) {
+      _lastBranchIndex = current;
+    }
+  }
+
+  void _onSelectTab(int index) {
+    final isSameTab = index == widget.navigationShell.currentIndex;
+    widget.navigationShell.goBranch(index, initialLocation: isSameTab);
+  }
+
+  List<_NavTabSpec> _tabsForRole(AppLocalizations l10n, String? uid) {
+    switch (widget.role) {
+      case UserRole.student:
+        final unread = uid == null
+            ? 0
+            : ref
+                      .watch(liveUnreadNotificationCountProvider(uid))
+                      .asData
+                      ?.value ??
+                  0;
+        return [
+          _NavTabSpec(
+            label: l10n.tabHome,
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            badge: unread,
+          ),
+          _NavTabSpec(
+            label: l10n.tabLearn,
+            icon: Icons.menu_book_outlined,
+            activeIcon: Icons.menu_book_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabMentors,
+            icon: Icons.people_outline_rounded,
+            activeIcon: Icons.people_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabJobs,
+            icon: Icons.work_outline_rounded,
+            activeIcon: Icons.work_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabProfile,
+            icon: Icons.person_outline_rounded,
+            activeIcon: Icons.person_rounded,
+          ),
+        ];
+
+      case UserRole.mentor:
+        final pendingRequests = uid == null
+            ? 0
+            : (ref.watch(mentorRequestsProvider(uid)).asData?.value ?? const [])
+                  .where((r) => r.status == MentorRequestStatus.pending)
+                  .length;
+        return [
+          _NavTabSpec(
+            label: l10n.tabMentorDashboard,
+            icon: Icons.dashboard_outlined,
+            activeIcon: Icons.dashboard_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabMentorCourses,
+            icon: Icons.menu_book_outlined,
+            activeIcon: Icons.menu_book_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabMentorRequests,
+            icon: Icons.inbox_outlined,
+            activeIcon: Icons.inbox_rounded,
+            badge: pendingRequests,
+          ),
+          _NavTabSpec(
+            label: l10n.tabMentorMentees,
+            icon: Icons.groups_outlined,
+            activeIcon: Icons.groups_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabProfile,
+            icon: Icons.tune_outlined,
+            activeIcon: Icons.tune_rounded,
+          ),
+        ];
+
+      case UserRole.admin:
+        final pendingApps =
+            ref.watch(pendingMentorApplicationsProvider).asData?.value.length ??
+            0;
+        return [
+          _NavTabSpec(
+            label: l10n.tabAdminOverview,
+            icon: Icons.insights_outlined,
+            activeIcon: Icons.insights_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabAdminUsers,
+            icon: Icons.group_outlined,
+            activeIcon: Icons.group_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabAdminMentors,
+            icon: Icons.verified_user_outlined,
+            activeIcon: Icons.verified_user_rounded,
+            badge: pendingApps,
+          ),
+          _NavTabSpec(
+            label: l10n.tabAdminContent,
+            icon: Icons.library_books_outlined,
+            activeIcon: Icons.library_books_rounded,
+          ),
+          _NavTabSpec(
+            label: l10n.tabAdminSettings,
+            icon: Icons.settings_outlined,
+            activeIcon: Icons.settings_rounded,
+          ),
+        ];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final p = context.palette;
+    final session = ref.watch(appSessionProvider).asData?.value;
+    final tabs = _tabsForRole(l10n, session?.uid);
+    final selectedIndex = widget.navigationShell.currentIndex.clamp(
+      0,
+      tabs.length - 1,
+    );
+    final wide = MediaQuery.sizeOf(context).width >= 760;
+
+    if (wide) {
       return Scaffold(
-        backgroundColor: AppColors.canvas,
         body: Row(
           children: [
-            SideNav(
-              tabs: tabs,
-              index: shell.currentIndex,
-              onTap: onTap,
-              badges: badges,
-              role: role,
+            NavigationRail(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: _onSelectTab,
+              labelType: NavigationRailLabelType.all,
+              backgroundColor: p.surface,
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  children: [
+                    AppAvatar(
+                      initialsOf(session?.displayLabel ?? 'UB'),
+                      tone: Tone.info,
+                      size: 40,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.role.displayLabel,
+                      style: AppText.caption.copyWith(color: p.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              destinations: [
+                for (final t in tabs)
+                  NavigationRailDestination(
+                    icon: _NavBadgeIcon(icon: t.icon, count: t.badge),
+                    selectedIcon: _NavBadgeIcon(
+                      icon: t.activeIcon,
+                      count: t.badge,
+                    ),
+                    label: Text(t.label),
+                  ),
+              ],
             ),
-            const VerticalDivider(
-              width: 1,
-              thickness: 1,
-              color: AppColors.borderSubtle,
-            ),
-            Expanded(child: shell),
+            VerticalDivider(width: 1, color: p.borderSubtle),
+            Expanded(child: widget.navigationShell),
           ],
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: shell,
-      bottomNavigationBar: AppTabBar(
-        tabs: tabs,
-        index: shell.currentIndex,
-        onTap: onTap,
-        badges: badges,
-      ),
-    );
-  }
-}
-
-/// Cross-fades between tab branches while keeping each branch's state alive.
-class BranchSwitcher extends StatelessWidget {
-  const BranchSwitcher({
-    super.key,
-    required this.index,
-    required this.children,
-  });
-
-  final int index;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        for (var i = 0; i < children.length; i++)
-          _Branch(active: i == index, child: children[i]),
-      ],
-    );
-  }
-}
-
-class _Branch extends StatelessWidget {
-  const _Branch({required this.active, required this.child});
-
-  final bool active;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      ignoring: !active,
-      child: TickerMode(
-        enabled: active,
-        child: ExcludeFocus(
-          excluding: !active,
-          child: ExcludeSemantics(
-            excluding: !active,
-            child: AnimatedOpacity(
-              opacity: active ? 1 : 0,
-              duration: Motion.base,
-              curve: Motion.curve,
-              child: AnimatedSlide(
-                offset: active ? Offset.zero : const Offset(0, 0.012),
-                duration: Motion.base,
-                curve: Motion.curve,
-                child: HeroMode(enabled: active, child: child),
+      body: widget.navigationShell,
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: p.surface,
+          border: Border(top: BorderSide(color: p.borderSubtle)),
+        ),
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          onDestinationSelected: _onSelectTab,
+          backgroundColor: p.surface,
+          indicatorColor: p.infoSubtle,
+          elevation: 0,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            for (final t in tabs)
+              NavigationDestination(
+                icon: _NavBadgeIcon(icon: t.icon, count: t.badge),
+                selectedIcon: _NavBadgeIcon(icon: t.activeIcon, count: t.badge),
+                label: t.label,
               ),
-            ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class AppTabBar extends StatelessWidget {
-  const AppTabBar({
-    super.key,
-    required this.tabs,
-    required this.index,
-    required this.onTap,
-    this.badges = const {},
-  });
+class _NavBadgeIcon extends StatelessWidget {
+  const _NavBadgeIcon({required this.icon, required this.count});
 
-  final List<TabItem> tabs;
-  final int index;
-  final ValueChanged<int> onTap;
-  final Map<int, int> badges;
+  final IconData icon;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.borderSubtle)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 62,
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final w = c.maxWidth / tabs.length;
-              return Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: Motion.slow,
-                    curve: Motion.emphasized,
-                    left: w * index + w * 0.3,
-                    width: w * 0.4,
-                    top: 0,
-                    height: 3,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      for (var i = 0; i < tabs.length; i++)
-                        Expanded(
-                          child: _TabButton(
-                            item: tabs[i],
-                            active: i == index,
-                            badge: badges[i] ?? 0,
-                            onTap: () => onTap(i),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  const _TabButton({
-    required this.item,
-    required this.active,
-    required this.badge,
-    required this.onTap,
-  });
-
-  final TabItem item;
-  final bool active;
-  final int badge;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? AppColors.textPrimary : AppColors.textMuted;
-    return Semantics(
-      selected: active,
-      button: true,
-      label: badge > 0 ? '${item.label}, $badge waiting' : item.label,
-      child: ExcludeSemantics(
-        child: Pressable(
-          onTap: onTap,
-          scale: 0.9,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  AnimatedSwitcher(
-                    duration: Motion.base,
-                    switchInCurve: Motion.emphasized,
-                    transitionBuilder: (child, a) => ScaleTransition(
-                      scale: Tween(begin: 0.7, end: 1.0).animate(a),
-                      child: FadeTransition(opacity: a, child: child),
-                    ),
-                    child: Icon(
-                      active ? item.activeIcon : item.icon,
-                      key: ValueKey(active),
-                      size: 24,
-                      color: color,
-                    ),
-                  ),
-                  if (badge > 0)
-                    Positioned(
-                      right: -10,
-                      top: -4,
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: 1),
-                        duration: Motion.slow,
-                        curve: Motion.emphasized,
-                        builder: (context, v, child) =>
-                            Transform.scale(scale: v, child: child),
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 18),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppColors.surface,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Text(
-                            '$badge',
-                            textAlign: TextAlign.center,
-                            style: AppText.tab.copyWith(
-                              color: AppColors.onPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: Motion.fast,
-                style: AppText.tab.copyWith(
-                  color: color,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                ),
-                child: Text(item.label),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Sidebar navigation for tablets and desktop.
-class SideNav extends ConsumerWidget {
-  const SideNav({
-    super.key,
-    required this.tabs,
-    required this.index,
-    required this.onTap,
-    required this.badges,
-    required this.role,
-  });
-
-  final List<TabItem> tabs;
-  final int index;
-  final ValueChanged<int> onTap;
-  final Map<int, int> badges;
-  final Role role;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(verifiedSessionProvider).asData?.value;
-    final demoUser = ref.watch(appStoreProvider.select((s) => s.user));
-    final hasLiveSession =
-        session != null && session.signedIn && session.emailVerified;
-    final displayName = hasLiveSession ? session.displayLabel : demoUser?.name;
-    final displayInitials = hasLiveSession
-        ? session.initials
-        : demoUser?.initials;
-    final displayRole = hasLiveSession
-        ? session.role.label
-        : demoUser?.role.label;
-
-    return Container(
-      width: 248,
-      color: AppColors.surface,
-      child: SafeArea(
-        right: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 8),
-                child: UpBridgeLogo(markWidth: 44, horizontal: true),
-              ),
-              const SizedBox(height: 28),
-              Padding(
-                padding: const EdgeInsets.only(left: 8, bottom: 8),
-                child: MonoLabel(
-                  role == Role.youth ? 'MENU' : '${role.label} workspace',
-                ),
-              ),
-              for (var i = 0; i < tabs.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Pressable(
-                    onTap: () => onTap(i),
-                    scale: 0.98,
-                    child: AnimatedContainer(
-                      duration: Motion.base,
-                      curve: Motion.curve,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 11,
-                      ),
-                      decoration: BoxDecoration(
-                        color: i == index
-                            ? AppColors.sunken
-                            : Colors.transparent,
-                        borderRadius: Radii.rMd,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            i == index ? tabs[i].activeIcon : tabs[i].icon,
-                            size: 21,
-                            color: i == index
-                                ? AppColors.textPrimary
-                                : AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              tabs[i].label,
-                              style: AppText.bodyMStrong.copyWith(
-                                color: i == index
-                                    ? AppColors.textPrimary
-                                    : AppColors.textSecondary,
-                                fontWeight: i == index
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          if ((badges[i] ?? 0) > 0)
-                            StatusBadge('${badges[i]}', tone: Tone.accent),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              if (displayName != null &&
-                  displayInitials != null &&
-                  displayRole != null)
-                Row(
-                  children: [
-                    AppAvatar(displayInitials, size: 36, tone: Tone.accent),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName,
-                            style: AppText.bodySStrong,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(displayRole, style: AppText.caption),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+    if (count <= 0) return Icon(icon);
+    return Badge.count(count: count, child: Icon(icon));
   }
 }

@@ -1,4 +1,4 @@
-// Canonical paths used by startup redirects and shared navigation.
+/// Canonical route paths used by startup redirects, role shells, and guards.
 abstract final class AppRoutes {
   static const splash = '/splash';
   static const welcome = '/welcome';
@@ -7,8 +7,14 @@ abstract final class AppRoutes {
   static const forgotPassword = '/forgot';
   static const passwordUpdated = '/password-updated';
   static const verifyEmail = '/verify-email';
+  static const accountDeactivated = '/account-deactivated';
+  static const mentorPending = '/mentor-pending';
+  static const mentorApply = '/mentor-apply';
+  static const notifications = '/notifications';
   static const language = '/language';
-  static const youthHome = '/home';
+  static const onboardingGoal = '/onboarding/goal';
+  static const onboardingInterests = '/onboarding/interests';
+  static const studentHome = '/home';
   static const mentorHome = '/m/home';
   static const adminOverview = '/a/overview';
 }

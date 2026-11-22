@@ -1,10 +1,8 @@
-// Provides animated skeleton placeholders for loading content.
 import 'package:flutter/material.dart';
-
 import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/core/themes/app_tokens.dart';
 
-/// Animated light sweep over skeleton placeholders (J1a · loading).
+/// Animated light sweep over skeleton placeholders; disables sweep under reduced motion.
 class Shimmer extends StatefulWidget {
   const Shimmer({super.key, required this.child});
 
@@ -15,7 +13,20 @@ class Shimmer extends StatefulWidget {
 }
 
 class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1300))..repeat();
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -25,6 +36,13 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return widget.child;
+    }
+    final highlight = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF263554)
+        : const Color(0xFFFFFFFF);
     return AnimatedBuilder(
       animation: _c,
       child: widget.child,
@@ -35,8 +53,12 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
           shaderCallback: (rect) => LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: const [AppColors.sunken, Color(0xFFF8F6F2), AppColors.sunken],
-            stops: [(t - 0.3).clamp(0.0, 1.0), t.clamp(0.0, 1.0), (t + 0.3).clamp(0.0, 1.0)],
+            colors: [p.sunken, highlight, p.sunken],
+            stops: [
+              (t - 0.3).clamp(0.0, 1.0),
+              t.clamp(0.0, 1.0),
+              (t + 0.3).clamp(0.0, 1.0),
+            ],
           ).createShader(rect),
           child: child,
         );
@@ -46,7 +68,12 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
 }
 
 class SkeletonBox extends StatelessWidget {
-  const SkeletonBox({super.key, this.width, required this.height, this.radius = Radii.sm});
+  const SkeletonBox({
+    super.key,
+    this.width,
+    required this.height,
+    this.radius = Radii.sm,
+  });
 
   final double? width;
   final double height;
@@ -54,8 +81,11 @@ class SkeletonBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(color: AppColors.sunken, borderRadius: BorderRadius.circular(radius)),
-      );
+    width: width,
+    height: height,
+    decoration: BoxDecoration(
+      color: context.palette.sunken,
+      borderRadius: BorderRadius.circular(radius),
+    ),
+  );
 }

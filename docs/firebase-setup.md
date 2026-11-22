@@ -1,67 +1,96 @@
-# Firebase setup
+# Firebase Setup & Admin Provisioning (`upridge-rwanda-dev` — Spark Free Plan)
 
-The configured project ID is `upridge-rwanda-dev`. It matches `firebase.json`,
-the local Android configuration, and the FlutterFire Android/iOS/web options.
-The local Android package is `com.example.upbridge`. Android configuration and
-`lib/firebase_options.dart` are ignored by Git; the Android file is present in
-this checkout. The iOS `GoogleService-Info.plist` is absent locally, so iOS
-native builds need the approved file from the project owner. FlutterFire options
-do not currently configure Windows, macOS, or Linux desktop.
+UpBridge Rwanda (`upridge-rwanda-dev`) is configured strictly for the **Firebase Spark (free) plan**:
 
-There is no `.firebaserc`; Firebase CLI commands must name the project to avoid
-relying on a developer's implicit project selection. Keep local work on the
-development project and never deploy rules or indexes without project-lead
-approval.
+- **Included on Spark**:
+  - Firebase Authentication (Email/Password + mandatory Email Verification link)
+  - Cloud Firestore + `firestore.rules` + `firestore.indexes.json`
+  - Local Firebase Emulators for Auth (`9099`), Firestore (`8080`), and Emulator UI (`4000`)
+- **Not required (Blaze-only features removed)**:
+  - No Firebase Cloud Functions deployment (`firebase.json` has no `"functions"` target)
+  - No Google Cloud Secret Manager (`firebase functions:secrets:set`)
+  - No billing account configuration required
 
-## Local prerequisites
+---
 
-- Flutter/Dart versions allowed by `pubspec.yaml`.
-- Firebase CLI and Java for the Emulator Suite.
-- Individual Firebase Console access granted by the project lead.
-- Project-specific platform files supplied through the team's approved process.
+## Console Prerequisites
 
-Run `flutter pub get`. Local `android/app/google-services.json` and
-`ios/Runner/GoogleService-Info.plist` are ignored by Git. Do not create or share
-service-account keys. The Dart options contain client identifiers, not
-privileged credentials.
+1. **Authentication -> Sign-in method**: Enable **Email/Password**.
+2. **Authentication -> Templates -> Email address verification**: Confirm sender name and authorized continue domains match your Firebase configuration.
+3. Ensure `android/app/google-services.json` (gitignored) matches package `com.example.upbridge`, and provide `ios/Runner/GoogleServiceInfo.plist` for iOS builds.
 
-## Email verification requirement
+---
 
-Firebase Auth must have the **Email/Password** provider enabled in the existing project (`Authentication → Sign-in method`). The default Firebase Auth verification template sends the link; configure its sender name and continue URL in `Authentication → Templates`, and make sure the continue URL's host is an authorized domain. The app calls `User.sendEmailVerification()`, reloads the Firebase user after the link is clicked, and refreshes the ID token. Firestore rules require the verified-email token claim. These Console settings have not been changed or verified in this pass.
+## Deploy Security Rules & Composite Indexes (Spark-Compatible)
 
-The current auth screens still use the demo store and phone-based UI. Ghislaine must connect signup/login to Firebase Email/Password and navigate a newly created user to `/verify-email`; until then, the real account flow is not usable end to end. Do not turn demo login into a production bypass.
+```bash
+firebase deploy --only firestore:rules,firestore:indexes --project upridge-rwanda-dev
+```
 
-Start the Auth and Firestore emulators on Windows from the repository root with
-`.\scripts\start_firebase_emulators.ps1`. The helper selects an installed
-Node version directly when NVM is present and explicitly uses
-`upridge-rwanda-dev`, matching the Flutter app. On other platforms, run
-`firebase emulators:start --project upridge-rwanda-dev --only auth,firestore`.
-The configured ports are Auth `9099`, Firestore `8080`, and Emulator UI `4000`.
-In another terminal, launch Flutter with
-`flutter run --dart-define=USE_FIREBASE_EMULATORS=true`. Android emulators use
-`10.0.2.2`; desktop and simulators default to `127.0.0.1`. A physical phone must
-use the development computer's reachable LAN address, for example:
-`flutter run --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=192.168.1.12`.
-Replace that example with the computer's current LAN address and allow the
-emulator ports through the local firewall. Emulator settings are debug-only;
-the switch is ignored in release builds.
+---
 
-Stop emulators with Ctrl+C. Restarting without an export directory clears emulator data. Never point emulator or integration-test data at the production project.
+## One-Time Admin Account Bootstrap (`authapp05@gmail.com`)
 
-## Project access
+Admin privileges (`{ "role": "admin" }`) can **never** be self-assigned from the client app or edited directly in Firestore. Provision `authapp05@gmail.com` using the trusted local Admin SDK script:
 
-Ask the Firebase project owner to invite each developer from **Project settings → Users and permissions** using their own Google account. Grant only the project permissions needed for their assigned tasks. A Firebase collaborator is a Console/IAM identity; an Authentication user is an app account; `youth`, `mentor`, and `admin` are separate application roles. Admin application roles must be assigned through trusted custom claims, never by a client profile edit.
+1. **Register & Verify Email**:
+   - Open the UpBridge app -> **Sign Up** with `authapp05@gmail.com` and your chosen password.
+   - Open the Firebase email verification link sent to your inbox and tap **I verified my email**.
+2. **Grant Admin Custom Claim**:
+   - Download a temporary Firebase Admin service-account JSON key from **Firebase Console -> Project Settings -> Service accounts** (keep offline, never commit, delete after use).
+   - Run:
+     ```bash
+     # Production (upridge-rwanda-dev)
+     GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
+       node scripts/bootstrap_admin.mjs --project upridge-rwanda-dev --email authapp05@gmail.com
+     ```
+     Or for local emulators:
+     ```powershell
+     $env:FIREBASE_AUTH_EMULATOR_HOST="127.0.0.1:9099"
+     $env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
+     node scripts/bootstrap_admin.mjs --email authapp05@gmail.com
+     ```
+3. **Refresh Session**: Sign out and sign back in inside the app so your ID token picks up `{ "role": "admin" }` and routes to `/a/overview`.
 
-Verify configuration with `firebase projects:list`, `firebase apps:list --project upridge-rwanda-dev`, and `firebase firestore:databases:list --project upridge-rwanda-dev`. Do not deploy rules or indexes without project lead approval.
+---
 
-## Current blockers
+## Admin Privileged Workflows on the Spark Plan
 
-The local emulator startup and Firestore rules parsing were verified on
-13 Nov 2026 with Firebase CLI 15.35.0 and Java 21. Enabled Authentication
-providers and verification-email template settings remain unverified in
-Firebase Console. Confirm Email/Password before live sign-in work. Public
-profile/portfolio images can use the Cloudinary unsigned preset service after
-account setup; do not upload certificates or private documents through that
-client-side preset. See the README for required `--dart-define` values. The
-Firebase CLI project-list commands below are read-only; do not run deploy
-commands as part of local setup.
+Because client SDKs cannot mint Firebase Auth custom claims or revoke refresh tokens safely, UpBridge uses a **Spark hybrid workflow** (`lib/core/services/admin_operations_service.dart`):
+
+| Operation | In-App Spark Support | Optional Admin SDK / External API Action |
+|---|---|---|
+| **Approve mentor application (`pending -> approved`)** | Runs directly in-app (`AdminMentorReviewScreen`) via verified `isAdmin()` Firestore batch: approves `mentorApplications/{uid}`, promotes `users/{uid}` (`role='mentor'`, `isApproved=true`), seeds `profiles/{uid}`, and notifies applicant | `scripts/review_mentor.mjs --project upridge-rwanda-dev --uid <uid> --decision approve` (or `ADMIN_API_BASE_URL`) also mints `{ role: 'mentor' }` custom claim + records `auditLogs` |
+| **Reject mentor application (`pending -> rejected`)** | Runs directly in-app (`AdminMentorReviewScreen`) via `isAdmin()` Firestore rules + writes applicant notification | Optional audit log via `scripts/review_mentor.mjs --decision reject` |
+| **Activate / deactivate user account** | Updates `users/{uid}.status` directly in-app via `isAdmin()` rules; app session guard immediately redirects deactivated users to `/account-deactivated` | `scripts/set_user_status.mjs --uid <uid> --status deactivated` also sets Auth `disabled: true`, revokes refresh tokens, and records `auditLogs` |
+
+### Optional Free-Tier External Admin Backend (`ADMIN_API_BASE_URL`)
+
+If you later host a standalone Express/Node REST service outside Firebase Cloud Functions (for example on Render/Fly/Cloud Run free tier) using the endpoints `/admin/review-mentor-application` and `/admin/set-user-status`, pass its base URL when building:
+
+```bash
+flutter run --dart-define=ADMIN_API_BASE_URL=https://your-admin-service.example.com
+```
+
+Without `ADMIN_API_BASE_URL`, `SparkAdminOperationsClient` safely stays on Firebase Spark with zero Cloud Functions dependencies.
+
+---
+
+## Local Firebase Emulators & Security Rules Tests
+
+Ports configured in `firebase.json`:
+- **Auth Emulator**: `9099`
+- **Firestore Emulator**: `8080`
+- **Emulator UI**: `4000`
+
+Start local emulators:
+
+```powershell
+.\scripts\start_firebase_emulators.ps1
+```
+
+Run automated Firestore security rules tests:
+
+```powershell
+.\scripts\run_rules_tests.ps1
+```

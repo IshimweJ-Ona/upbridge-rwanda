@@ -12,9 +12,6 @@ void main() {
 
   test('calculates Kigali midnight as a UTC instant', () {
     final instant = DateTime.utc(2026, 11, 13, 22, 30);
-    expect(
-      KigaliTime.startOfDayUtc(instant),
-      DateTime.utc(2026, 11, 13, 22),
-    );
+    expect(KigaliTime.startOfDayUtc(instant), DateTime.utc(2026, 11, 13, 22));
   });
 }

@@ -1,19 +1,17 @@
-// Lists platform accounts from Firestore for live admins or clearly labeled sample users in demo mode.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:upbridge/features/admin/presentation/providers/admin_providers.dart';
-import 'package:upbridge/shared/models/models.dart';
-import 'package:upbridge/shared/services/demo/app_store.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
+import 'package:upbridge/core/providers/live_data_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
+import 'package:upbridge/core/services/admin_operations_service.dart';
+import 'package:upbridge/core/widgets/prompt_sheet.dart';
+import 'package:upbridge/core/widgets/skeleton_loaders.dart';
+import 'package:upbridge/features/auth/domain/models/app_user_account.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
 
-final _liveAdminUsersProvider = FutureProvider<List<PlatformUser>>((ref) {
-  return ref.watch(adminUsersRepositoryProvider).listUsers(limit: 100);
-});
-
-/// AD2 · Users.
 class AdminUsersScreen extends ConsumerStatefulWidget {
   const AdminUsersScreen({super.key});
 
@@ -22,221 +20,305 @@ class AdminUsersScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
-  static const _filters = ['All', 'Youth', 'Mentors', 'Admins'];
-  String _filter = 'All';
+  final _searchCtrl = TextEditingController();
   String _query = '';
+  UserRole? _roleFilter;
+  AccountStatus? _statusFilter;
+  final Set<String> _busyUids = {};
 
-  void _details(PlatformUser u) {
-    showAppSheet<void>(
-      context,
-      title: u.name,
-      builder: (ctx) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          KeyValueTable([
-            ('Role', u.role.label),
-            ('Phone', u.phone.isEmpty ? 'Not recorded' : u.phone),
-            ('District', u.district.isEmpty ? 'Not recorded' : u.district),
-            (
-              'Joined',
-              u.joined.replaceFirst(
-                RegExp(r'^(Joined|Verified|Admin since) '),
-                '',
-              ),
-            ),
-            ('Activity', u.detail.isEmpty ? 'No summary yet' : u.detail),
-            ('Status', u.status),
-          ]),
-          const SizedBox(height: 16),
-          AppButton(
-            'Send an SMS reminder',
-            variant: ButtonVariant.secondary,
-            leadingIcon: Icons.sms_outlined,
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              showToast(
-                context,
-                'Demo reminder queued for ${u.name.split(' ').first}',
-                icon: Icons.sms_outlined,
-              );
-            },
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
-  List<PlatformUser> _applyFilter(List<PlatformUser> users) {
-    final q = _query.trim().toLowerCase();
-    return users.where((u) {
-      final roleOk = switch (_filter) {
-        'Youth' => u.role == Role.youth,
-        'Mentors' => u.role == Role.mentor,
-        'Admins' => u.role == Role.admin,
-        _ => true,
-      };
-      return roleOk &&
-          (q.isEmpty ||
-              u.name.toLowerCase().contains(q) ||
-              u.phone.replaceAll(' ', '').contains(q.replaceAll(' ', '')) ||
-              u.district.toLowerCase().contains(q));
-    }).toList();
+  Future<void> _revokeMentor(AppUserAccount user, String? selfUid) async {
+    if (user.ownerUid == selfUid) return;
+    final reason = await showTextPromptSheet(
+      context,
+      title: 'Revoke mentor access?',
+      subtitle:
+          'Immediately returns ${user.displayName.isEmpty ? user.email : user.displayName} to Student role and hides their mentor directory card while preserving history.',
+      fieldLabel: 'Revocation reason (required)',
+      hint: 'Explain why mentor access is being revoked',
+      confirmLabel: 'Revoke mentor',
+      destructive: true,
+      minLength: 5,
+      minLengthError: 'Provide a reason (min 5 characters).',
+      maxLines: 2,
+    );
+    if (reason == null || !mounted) return;
+
+    setState(() => _busyUids.add(user.ownerUid));
+    try {
+      final result = await ref
+          .read(adminOperationsClientProvider)
+          .revokeMentorRole(targetUid: user.ownerUid, reason: reason);
+      ref.invalidate(platformMetricsProvider);
+      ref.invalidate(allMentorApplicationsProvider);
+      if (mounted) showToast(context, result.message, tone: Tone.warning);
+    } catch (e) {
+      if (mounted) showToast(context, errorMessage(e), tone: Tone.danger);
+    } finally {
+      if (mounted) setState(() => _busyUids.remove(user.ownerUid));
+    }
+  }
+
+  Future<void> _toggleAccountStatus(
+    AppUserAccount user,
+    String? selfUid,
+  ) async {
+    if (user.ownerUid == selfUid) {
+      showToast(
+        context,
+        'You cannot deactivate your own admin account.',
+        tone: Tone.warning,
+      );
+      return;
+    }
+
+    final targetStatus = user.status == AccountStatus.active
+        ? AccountStatus.deactivated
+        : AccountStatus.active;
+    final deactivating = targetStatus == AccountStatus.deactivated;
+    final reason = await showTextPromptSheet(
+      context,
+      title: deactivating
+          ? 'Deactivate ${user.displayName.isEmpty ? user.email : user.displayName}?'
+          : 'Reactivate ${user.displayName.isEmpty ? user.email : user.displayName}?',
+      subtitle:
+          'Updates account status in Firestore under verified admin rules.',
+      fieldLabel: deactivating ? 'Reason (required)' : 'Reason (optional)',
+      hint: deactivating
+          ? 'Policy violation or user request'
+          : 'Account restored after review',
+      confirmLabel: deactivating ? 'Deactivate account' : 'Reactivate account',
+      destructive: deactivating,
+      minLength: deactivating ? 5 : 0,
+      minLengthError: 'Provide a reason (min 5 characters).',
+      maxLines: 2,
+    );
+    if (reason == null || !mounted) return;
+
+    setState(() => _busyUids.add(user.ownerUid));
+    try {
+      final result = await ref
+          .read(adminOperationsClientProvider)
+          .setUserAccountStatus(
+            targetUid: user.ownerUid,
+            status: targetStatus,
+            reason: reason,
+          );
+      ref.invalidate(platformMetricsProvider);
+      if (mounted) {
+        showToast(
+          context,
+          result.message,
+          tone: targetStatus == AccountStatus.deactivated
+              ? Tone.warning
+              : Tone.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) showToast(context, errorMessage(e), tone: Tone.danger);
+    } finally {
+      if (mounted) setState(() => _busyUids.remove(user.ownerUid));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(verifiedSessionProvider).asData?.value;
-    final isLiveAdmin =
-        session != null &&
-        session.firebaseInitialized &&
-        session.signedIn &&
-        session.emailVerified &&
-        session.role == Role.admin;
-
-    if (isLiveAdmin) {
-      final usersAsync = ref.watch(_liveAdminUsersProvider);
-      final totalCount =
-          ref.watch(adminUserCountProvider).asData?.value ??
-          usersAsync.asData?.value.length ??
-          0;
-
-      return PageFrame(
-        largeTitle: 'Users',
-        eyebrow: '$totalCount registered accounts in Firestore',
-        onRefresh: () async {
-          ref.invalidate(_liveAdminUsersProvider);
-          ref.invalidate(adminUserCountProvider);
-        },
-        children: [
-          const SizedBox(height: 14),
-          AppTextField(
-            label: 'Search',
-            hint: 'Name, phone or district',
-            suffixIcon: Icons.search_rounded,
-            onChanged: (v) => setState(() => _query = v),
-          ),
-          const SizedBox(height: 12),
-          ChipBar(
-            options: _filters,
-            selected: _filter,
-            padding: EdgeInsets.zero,
-            onSelected: (v) => setState(() => _filter = v),
-          ),
-          const SizedBox(height: 14),
-          usersAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, _) => EmptyState(
-              icon: Icons.cloud_off_outlined,
-              title: 'Could not load users',
-              body: errorMessage(error),
-              action: 'Try again',
-              onAction: () => ref.invalidate(_liveAdminUsersProvider),
-            ),
-            data: (users) {
-              final list = _applyFilter(users);
-              return _userList(list);
-            },
-          ),
-        ],
-      );
-    }
-
-    final users = ref.watch(appStoreProvider.select((s) => s.platformUsers));
-    final list = _applyFilter(users);
+    final l10n = AppLocalizations.of(context);
+    final p = context.palette;
+    final selfUid = ref.watch(appSessionProvider).asData?.value.uid;
+    final filter = (role: _roleFilter, status: _statusFilter);
+    final usersAsync = ref.watch(adminUsersFilterProvider(filter));
 
     return PageFrame(
-      largeTitle: 'Users',
-      eyebrow: 'Sample directory · ${users.length} demonstration accounts',
-      actions: [
-        CircleIconButton(
-          icon: Icons.person_add_alt_1_outlined,
-          tooltip: 'Add user',
-          onTap: () => context.push('/a-new-user'),
-        ),
-        const SizedBox(width: 4),
-      ],
+      largeTitle: l10n.tabAdminUsers,
+      subtitle: 'Search and manage platform accounts',
+      onRefresh: () async {
+        ref.invalidate(adminUsersFilterProvider(filter));
+        ref.invalidate(platformMetricsProvider);
+      },
       children: [
-        const SizedBox(height: 10),
-        const NoticeCard(
-          icon: Icons.info_outline_rounded,
-          title: 'Demonstration data',
-          body: 'These sample user accounts are not live Firestore records.',
-        ),
-        const SizedBox(height: 14),
-        AppTextField(
-          label: 'Search',
-          hint: 'Name, phone or district',
-          suffixIcon: Icons.search_rounded,
+        const SizedBox(height: 12),
+        AppSearchField(
+          controller: _searchCtrl,
+          hint: 'Search name, email, phone, or UID',
           onChanged: (v) => setState(() => _query = v),
         ),
         const SizedBox(height: 12),
-        ChipBar(
-          options: _filters,
-          selected: _filter,
-          padding: EdgeInsets.zero,
-          onSelected: (v) => setState(() => _filter = v),
-        ),
-        const SizedBox(height: 14),
-        _userList(list),
-        const SizedBox(height: 12),
-        Text(
-          'Showing ${list.length} sample accounts.',
-          style: AppText.caption,
-          textAlign: TextAlign.center,
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final role in <UserRole?>[
+                null,
+                UserRole.student,
+                UserRole.mentor,
+                UserRole.admin,
+              ]) ...[
+                SelectChip(
+                  label: switch (role) {
+                    null => 'All',
+                    UserRole.student => 'Youth',
+                    UserRole.mentor => 'Mentors',
+                    UserRole.admin => 'Admins',
+                  },
+                  selected: _roleFilter == role,
+                  showCheck: false,
+                  onTap: () => setState(() => _roleFilter = role),
+                ),
+                const SizedBox(width: 8),
+              ],
+              for (final st in <AccountStatus>[
+                AccountStatus.active,
+                AccountStatus.deactivated,
+              ]) ...[
+                SelectChip(
+                  label: st.label,
+                  selected: _statusFilter == st,
+                  showCheck: false,
+                  onTap: () => setState(
+                    () => _statusFilter = _statusFilter == st ? null : st,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: 16),
-        AppButton(
-          'Add user',
-          variant: ButtonVariant.secondary,
-          leadingIcon: Icons.person_add_alt_1_outlined,
-          onPressed: () => context.push('/a-new-user'),
+        usersAsync.when(
+          loading: () => const SkeletonListLoader(rows: 5),
+          error: (error, _) => EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load users',
+            body: errorMessage(error),
+            action: l10n.retry,
+            onAction: () => ref.invalidate(adminUsersFilterProvider(filter)),
+          ),
+          data: (users) {
+            final q = _query.trim().toLowerCase();
+            final filtered = users
+                .where((u) {
+                  if (q.isEmpty) return true;
+                  return u.displayName.toLowerCase().contains(q) ||
+                      u.email.toLowerCase().contains(q) ||
+                      u.phone.toLowerCase().contains(q) ||
+                      u.ownerUid.toLowerCase().contains(q);
+                })
+                .toList(growable: false);
+
+            if (filtered.isEmpty) {
+              return const EmptyState(
+                icon: Icons.group_off_outlined,
+                title: 'No matching users',
+                body: 'Adjust your search query or role/status filters.',
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${filtered.length} account${filtered.length == 1 ? '' : 's'}',
+                  style: AppText.caption.copyWith(color: p.textMuted),
+                ),
+                const SizedBox(height: 8),
+                ListGroup(
+                  children: [
+                    for (final user in filtered)
+                      UserListTile(
+                        name: user.displayName,
+                        email: user.email,
+                        imageUrl: user.photoAsset?.url,
+                        avatarTone: user.role == UserRole.mentor
+                            ? Tone.info
+                            : user.role == UserRole.admin
+                            ? Tone.warning
+                            : Tone.neutral,
+                        onTap: () =>
+                            context.push('/user-profile/${user.ownerUid}'),
+                        badges: [
+                          StatusBadge(
+                            user.role == UserRole.student
+                                ? 'Youth'
+                                : user.role.label,
+                            tone: Tone.info,
+                          ),
+                          StatusBadge(
+                            user.status.label,
+                            tone: user.isActive ? Tone.success : Tone.danger,
+                          ),
+                        ],
+                        trailing: _busyUids.contains(user.ownerUid)
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Padding(
+                                  padding: EdgeInsets.all(2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : PopupMenuButton<String>(
+                                tooltip: 'User actions',
+                                icon: Icon(
+                                  Icons.more_vert_rounded,
+                                  color: p.textSecondary,
+                                ),
+                                onSelected: (action) {
+                                  switch (action) {
+                                    case 'profile':
+                                      context.push(
+                                        '/user-profile/${user.ownerUid}',
+                                      );
+                                    case 'revoke':
+                                      _revokeMentor(user, selfUid);
+                                    case 'toggle':
+                                      _toggleAccountStatus(user, selfUid);
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(
+                                    value: 'profile',
+                                    child: Text('View profile'),
+                                  ),
+                                  if (user.ownerUid != selfUid &&
+                                      user.role == UserRole.mentor &&
+                                      user.isApproved)
+                                    PopupMenuItem(
+                                      value: 'revoke',
+                                      child: Text(
+                                        l10n.revokeMentorLabel,
+                                        style: TextStyle(color: p.dangerText),
+                                      ),
+                                    ),
+                                  if (user.ownerUid != selfUid)
+                                    PopupMenuItem(
+                                      value: 'toggle',
+                                      child: Text(
+                                        user.isActive
+                                            ? 'Deactivate'
+                                            : 'Reactivate',
+                                        style: user.isActive
+                                            ? TextStyle(color: p.dangerText)
+                                            : null,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
       ],
-    );
-  }
-
-  Widget _userList(List<PlatformUser> list) {
-    return AnimatedSwitcher(
-      duration: Motion.base,
-      child: list.isEmpty
-          ? const EmptyState(
-              key: ValueKey('empty'),
-              icon: Icons.person_search_outlined,
-              title: 'No one matches',
-              body: 'Try a phone number without spaces.',
-            )
-          : ListGroup(
-              key: ValueKey('$_filter|${_query.trim()}|${list.length}'),
-              children: [
-                for (final u in list)
-                  ListRow(
-                    leading: AppAvatar(
-                      u.initials,
-                      size: 38,
-                      tone: switch (u.role) {
-                        Role.youth => Tone.accent,
-                        Role.mentor => Tone.info,
-                        Role.admin => Tone.warning,
-                      },
-                    ),
-                    title: u.name,
-                    subtitle: u.detail.isEmpty ? u.phone : u.detail,
-                    meta: '${u.role.label} · ${u.district} · ${u.joined}',
-                    trailing: u.status == 'Active'
-                        ? null
-                        : StatusBadge(
-                            u.status,
-                            tone: u.status == 'Invited'
-                                ? Tone.info
-                                : Tone.warning,
-                          ),
-                    onTap: () => _details(u),
-                  ),
-              ],
-            ),
     );
   }
 }
