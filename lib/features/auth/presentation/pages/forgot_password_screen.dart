@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:upbridge/shared/shared.dart';
 import 'package:upbridge/features/auth/domain/validators.dart';
 import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 
 /// A5 · Forgot password — send a Firebase password-reset email.
@@ -51,30 +52,39 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
     return DetailPage(
-      title: 'Reset password',
+      title: l10n?.resetPasswordTitle ?? 'Reset password',
       backFallback: '/login',
       footer: [
-        AppButton('Send reset email', loading: _loading, onPressed: _send),
+        AppButton(
+          l10n?.sendResetEmailCta ?? 'Send reset email',
+          loading: _loading,
+          onPressed: _send,
+        ),
       ],
       children: [
-        const PageHeading(
-          title: 'Reset your password',
-          body: 'Enter the email address on your account. We’ll send you a secure reset link.',
+        PageHeading(
+          title: l10n?.resetPasswordHeading ?? 'Reset your password',
+          body:
+              l10n?.resetPasswordBody ??
+              'Enter the email address on your account. We’ll send you a secure reset link.',
         ),
-        Shake(
-          trigger: _shake,
-          child: AppTextField(
-            label: 'Email address',
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            error: _error,
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
+        SurfaceCard(
+          child: Shake(
+            trigger: _shake,
+            child: AppTextField(
+              label: l10n?.emailLabel ?? 'Email address',
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              error: _error,
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+            ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         const NoticeCard(
           icon: Icons.mark_email_unread_outlined,
           title: 'No email ?',

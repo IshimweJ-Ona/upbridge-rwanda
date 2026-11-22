@@ -7,7 +7,13 @@ import 'package:upbridge/core/themes/app_tokens.dart';
 
 /// Counts a number up from zero the first time it appears.
 class CountUp extends StatelessWidget {
-  const CountUp({super.key, required this.value, required this.style, this.suffix = '', this.duration = const Duration(milliseconds: 900)});
+  const CountUp({
+    super.key,
+    required this.value,
+    required this.style,
+    this.suffix = '',
+    this.duration = const Duration(milliseconds: 900),
+  });
 
   final int value;
   final TextStyle style;
@@ -16,9 +22,13 @@ class CountUp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dur = Motion.durationFor(context, duration);
+    if (dur == Duration.zero) {
+      return Text('$value$suffix', style: style);
+    }
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: value.toDouble()),
-      duration: duration,
+      duration: dur,
       curve: Motion.curve,
       builder: (context, v, _) => Text('${v.round()}$suffix', style: style),
     );
@@ -37,7 +47,10 @@ class Shake extends StatefulWidget {
 }
 
 class _ShakeState extends State<Shake> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
 
   @override
   void didUpdateWidget(Shake old) {
@@ -66,16 +79,25 @@ class _ShakeState extends State<Shake> with SingleTickerProviderStateMixin {
 
 /// Smoothly animates a fraction between 0 and 1 (progress bars, objective meters).
 class AnimatedFraction extends StatelessWidget {
-  const AnimatedFraction({super.key, required this.value, required this.builder});
+  const AnimatedFraction({
+    super.key,
+    required this.value,
+    required this.builder,
+  });
 
   final double value;
   final Widget Function(BuildContext context, double value) builder;
 
   @override
   Widget build(BuildContext context) {
+    final target = value.clamp(0.0, 1.0);
+    final dur = Motion.durationFor(context, const Duration(milliseconds: 420));
+    if (dur == Duration.zero) {
+      return builder(context, target);
+    }
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
-      duration: const Duration(milliseconds: 900),
+      tween: Tween(begin: 0, end: target),
+      duration: dur,
       curve: Motion.curve,
       builder: (context, v, _) => builder(context, v),
     );

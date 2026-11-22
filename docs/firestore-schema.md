@@ -1,27 +1,36 @@
-# Firestore contract (updated team integration baseline)
+# Firestore Schema & Status Lifecycle Contract
 
-See [`firestore-erd.md`](firestore-erd.md) for the code-backed ERD draft and remaining open decisions.
+All Firestore documents include `ownerUid`, `status`, `createdAt`, and `updatedAt`.
+Cloudinary attachments store only `{ url, publicId, resourceType, size, ownerUid, createdAt }`.
+Administrator privileges rely strictly on Firebase Auth custom claims (`request.auth.token.role == 'admin'`). Mentor privileges on Firebase Spark are granted/revoked in `users/{uid}` (`role: 'mentor'`, `isApproved: true`) and optionally mirrored via `scripts/review_mentor.mjs` (`role: 'mentor'` claim + refresh token revocation).
 
-This document describes the shared names in `Fs` and the finalized Firestore rules enforced in `firestore.rules`. All operations require an authenticated Firebase user with `email_verified == true`. Role privileges (`admin`, `mentor`) are trusted **only** from Firebase Auth custom claims (`request.auth.token.role`), never from mutable Firestore document fields.
+## Collections
 
-| Collection | Purpose / document ID | Current known fields and rules status |
-|---|---|---|
-| `users` | User profile; Firebase UID | `role` (`youth` on client create), `accountStatus` (`active` on client create), `displayName`, `photoUrl`, `phone`, `interests`, `learningGoal`, `onboarded`, `updatedAt`; owner reads & edits safe profile fields; admin full access |
-| `mentorProfiles` | Public & mentor-managed mentor profile; mentor UID | Confirmed with Boaz (`MentorFields` / `MentorProfileFields`): signed-in reads; admin create/delete; mentor (`role == 'mentor'`) updates only `meetingLink`, `menteeLimit`, `availabilityWindows`, `accepting`, `availability`, `openSlots`, `updatedAt` (cannot self-verify or forge counters) |
-| `mentorSessions` | Mentorship session lifecycle; generated ID | Confirmed with Boaz (`SessionFields`, `MentorSessionStatus`): admin or participant (`requesterId` or `mentorId`) read; youth creates `requested`; youth cancels or deletes pending (`requested`); mentor confirms/declines/completes/cancels |
-| `opportunities` | Opportunity catalog; feature-defined ID | Confirmed with Kellen (`OpportunityModel`): published records (`status == 'published'`) readable by verified users; admin writes |
-| `applications` | Youth application; `{uid}_{opportunityId}` | Confirmed with Kellen (`ApplicationModel`): `userId`, `userName`, `opportunityId`, `projectIds` (>= 1), `note` (>= 60 chars), `status`, `ref`, `createdAt`, `updatedAt`; owner read/create/withdraw; admin manage |
-| `notifications` | Per-user notification; feature-defined ID | `userId`, `title`, `body`, optional `route`, `createdAt`, `isRead`, `readAt`; owner reads and updates only `isRead: true` + `readAt`; client create/delete disabled even for admin |
-| `checkIns` | Monthly outcome response; `{uid}_{YYYY-MM}` | `userId`, `monthKey`, `usefulness` (1-5), `applied`, `changeNote` (<= 500 chars), `createdAt`; owner create once; immutable (`update, delete` denied for all clients including admins) |
-| `auditLogs` | Trusted administrative audit events | Admin reads; client writes denied |
-| `appSettings` | Shared pilot settings | Signed-in reads; admin writes |
-| `learningPaths`, `learningTasks` | Learning catalog | Published (`status == 'published'`) reads; admin writes |
-| `taskProgress`, `submissions`, `reviews`, `projects` | Learning & portfolio records | Pending Lisa's data-layer persistence contract (`projects` top-level vs `users/{uid}/projects` still open); client writes stay closed in `firestore.rules` until finalized |
+| Collection | Document ID | Key Fields | Access Summary |
+|---|---|---|---|
+| `users` | `{uid}` | `ownerUid`, `email`, `displayName`, `phone`, `role` (`student\|mentor\|admin`), `isApproved`, `status` (`active\|deactivated`), `onboarded`, `preferredLocale`, `photoAsset`, `createdAt`, `updatedAt` | Owner reads even when deactivated; active owner updates safe profile fields; self-create locked to `role='student'`, `isApproved=false`, `status='active'`; admin/Admin SDK controls privileged role & status |
+| `profiles` | `{uid}` | `ownerUid`, `displayName`, `headline`, `location`, `about`, `photoAsset`, `cvAsset`, `skills`, `interests`, `learningGoal`, `professionalLinks[]`, `education[]`, `experience[]`, `certificates[]`, `isMentorPublic`, `mentorExpertise[]`, `mentorExperienceYears`, `mentorAvailability`, `mentorMaxMentees`, `mentorBio`, `status` (`active\|archived`), `createdAt`, `updatedAt` | Active signed-in read when `status='active'`; owner updates CV/portfolio/links; only approved mentors/admin can set `isMentorPublic=true` and mentor fields |
+| `projects` | Auto ID | `ownerUid`, `title`, `description`, `skills[]`, `projectUrl`, `repoUrl`, `images[]`, `attachments[]`, `courseId`, `isPublic`, `status` (`draft\|published\|archived`), `createdAt`, `updatedAt` | Active owner CRUD (validated keys/media limits); active signed-in read when `isPublic=true && status='published'`; admin read |
+| `mentorApplications` | `{uid}` | `ownerUid`, `applicantName`, `applicantEmail`, `headline`, `bio`, `expertise[]`, `experienceYears`, `availability`, `cvAsset`, `supportingLinks[]`, `status` (`pending\|approved\|rejected\|revoked`), `rejectionReason`, `reviewedBy`, `reviewedAt`, `createdAt`, `updatedAt` | Owner read/create `pending` or resubmit from `rejected`/`revoked`; admin reviews `pending -> approved \| rejected` and revokes `approved -> revoked` |
+| `mentorRequests` | Auto ID | `ownerUid`, `studentUid`, `studentName`, `studentPhotoUrl`, `mentorUid`, `mentorName`, `mentorPhotoUrl`, `message`, `goals`, `status` (`pending\|accepted\|declined\|cancelled`), `responseNote`, `respondedAt`, `createdAt`, `updatedAt` | Student participant reads & creates/cancels `pending`; approved mentor (`isApprovedMentor()`) reads & accepts/declines `pending` |
+| `mentorships` | `{requestId}` | `ownerUid`, `studentUid`, `studentName`, `mentorUid`, `mentorName`, `requestId`, `goalSummary`, `status` (`active\|completed\|ended`), `feedbackRating`, `feedbackComment`, `endedByUid`, `endedAt`, `createdAt`, `updatedAt` | Active student participant or approved mentor reads; mentor creates atomically when accepting `mentorRequests/{requestId}`; participants end/complete and student submits `1..5` feedback |
+| `sessions` | Auto ID | `ownerUid`, `mentorshipId`, `studentUid`, `studentName`, `mentorUid`, `mentorName`, `topic`, `notes`, `meetingMode`, `meetingLink`, `scheduledAt`, `durationMinutes`, `status` (`scheduled\|completed\|cancelled`), `cancelReason`, `completedAt`, `createdAt`, `updatedAt` | Active participants read; participants schedule `scheduled`; approved mentor completes, updates `notes`, and reschedules `scheduled`; either participant cancels `scheduled` |
+| `courses` | Auto ID | `ownerUid`, `ownerName`, `title`, `summary`, `category` (`it\|softSkills\|career\|...`), `customCategory`, `level`, `estimatedMinutes`, `learningObjectives[]`, `resources[]`, `modules[]`, `skills[]`, `coverAsset`, `status` (`draft\|published\|archived`), `createdAt`, `updatedAt` | Signed-in users read `published`; approved mentor reads/creates/edits/transitions own courses (`ownerUid`) & deletes own `draft`; admin manages all |
+| `courseProgress` | `{uid}_{courseId}` | `ownerUid`, `courseId`, `courseTitle`, `courseOwnerUid`, `completedModuleIds[]`, `progressPercent`, `evidenceUrl`, `evidenceAsset`, `status` (`notStarted\|inProgress\|completed`), `completedAt`, `createdAt`, `updatedAt` | Owner student read/write; owning approved mentor (`courseOwnerUid`) & admin read engagement |
+| `opportunities` | Auto ID | `ownerUid`, `title`, `organization`, `location`, `type` (`internship\|job\|gig\|training\|scholarship\|custom`), `customType`, `workMode`, `compensation`, `coverAsset`, `description`, `requirements[]`, `skills[]`, `applyUrl`, `deadline`, `status` (`draft\|published\|closed\|archived`), `createdAt`, `updatedAt` | Signed-in active users read when `status='published'`; admin write |
+| `applications` | `{uid}_{oppId}` | `ownerUid`, `opportunityId`, `opportunityTitle`, `organization`, `studentName`, `projectIds[]`, `coverNote`, `cvAsset`, `status` (`submitted\|underReview\|accepted\|rejected\|withdrawn`), `createdAt`, `updatedAt` | Owner read/create `submitted` (when opportunity `published`)/withdraw/resubmit; admin review transitions |
+| `notifications` | Auto ID | `ownerUid`, `title`, `body`, `type`, `route`, `sourceCollection`, `sourceId`, `isRead`, `readAt`, `status` (`unread\|read`), `createdAt`, `updatedAt` | Active owner reads & marks read; created by verified admin OR verified participant linked via `getAfter` to `mentorRequests`/`mentorships`/`sessions` for counterpart |
+| `auditLogs` | Auto ID | `ownerUid`, `actorUid`, `actorEmail`, `action`, `targetCollection`, `targetId`, `details`, `status` (`recorded`), `createdAt`, `updatedAt` | Admin read & append-only `create` with validated schema (`actorUid == request.auth.uid`); `update` and `delete` denied for all users |
 
-## Composite indexes (`firestore.indexes.json`)
+## Allowed Status Transitions (`StatusTransitions`)
 
-- `projects`: `ownerId` ASC, `createdAt` DESC
-- `submissions`: `userId` ASC, `submittedAt` DESC
-- `opportunities`: `status` ASC, `deadline` ASC
-- `notifications`: `userId` ASC, `createdAt` DESC
-- `notifications`: `userId` ASC, `isRead` ASC, `createdAt` DESC
+- `mentorApplications`: `pending -> approved | rejected`; `approved -> revoked`; `rejected -> pending`; `revoked -> pending`
+- `mentorRequests`: `pending -> accepted | declined | cancelled`
+- `mentorships`: `active -> completed | ended`
+- `sessions`: `scheduled -> completed | cancelled`
+- `courses`: `draft <-> published`, `draft | published -> archived`, `archived -> draft`
+- `courseProgress`: `notStarted -> inProgress | completed`, `inProgress -> completed`
+- `opportunities`: `draft <-> published`, `published -> closed | archived`, `closed -> published | archived`, `archived -> draft`
+- `applications`: `submitted -> underReview | withdrawn`, `underReview -> accepted | rejected | withdrawn`, `withdrawn -> submitted`
+- `projects`: `draft <-> published <-> archived`
+- `users.status`: `active <-> deactivated`

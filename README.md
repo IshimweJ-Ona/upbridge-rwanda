@@ -1,131 +1,68 @@
 # UpBridge Rwanda
 
-UpBridge Rwanda is a Flutter career development app for young people in Rwanda. It brings together practical learning, portfolios, mentorship, and career opportunities. The project is actively developed; some screens still use clearly labeled sample data, and feature completion varies by team owner.
+UpBridge Rwanda is a production Flutter + Firebase mobile application enabling Rwandan youth (`student`) to build IT and soft skills, connect with verified mentors (`mentor`), publish CVs and evidence-backed portfolios, and apply to career opportunities. Platform operators (`admin`) manage user status, mentor review, and content catalogs while keeping infrastructure 100% on the **Firebase Spark (free) plan** and **Cloudinary Free plan** (`vbzq5ssu`).
 
-## Current status
+## Architecture Overview
 
-- The app starts on a branded splash screen with a bundled Kigali night image.
-- Flutter, Riverpod, and GoRouter provide the app foundation and shared navigation.
-- Firebase Core, Authentication, and Cloud Firestore are configured for local development and emulator use.
-- Shared routing includes email-verification and role-area guards. Authentication screens and role provisioning still need their feature owner to connect real account flows.
-- Jonathan's home and admin integration includes Firestore read boundaries, monthly check-ins, notifications, route policy, and shared app components. Screens backed by `AppStore` remain demo data and are labeled as such.
-- Firestore rules and indexes are present locally. They have not been deployed to the development or production Firebase project.
-- Cloudinary's public-image uploader uses the shared demo cloud name and `upbridge_public_images` preset by default. The preset must exist and be restricted to public images. It rejects documents and certificates; private files require a trusted signing service.
+- **State & Routing**: Riverpod (`flutter_riverpod`) + `go_router` using role-scoped `StatefulShellRoute.indexedStack` shells with isolated per-tab navigators and claims-based route guards.
+- **Database (Spark Plan)**: Cloud Firestore (`upridge-rwanda-dev`) using strict ownership, lifecycle status enums/transitions, and custom-claim role enforcement via `firestore.rules` and `firestore.indexes.json` — zero Cloud Functions or Secret Manager dependencies.
+- **Media Storage (Cloudinary Free Plan)**: Direct frontend unsigned uploads (`POST https://api.cloudinary.com/v1_1/vbzq5ssu/image/upload`) using upload preset `upbridge_public_images` for validated `jpg`/`jpeg`/`png`/`webp` images (`<= 10 MB`). Firestore stores only `{ url, publicId, resourceType, size, ownerUid, createdAt }`.
+- **Admin Privileged Operations**: In-app `isAdmin()` Firestore controls handle mentor rejection and user status updates; Auth custom-claim mentor promotion (`role: 'mentor'`) and token revocation run via trusted local Admin SDK scripts (`scripts/review_mentor.mjs`, `scripts/set_user_status.mjs`) or an optional external REST backend (`ADMIN_API_BASE_URL`).
+- **Localization & Theming**: Full `AppLocalizations` (`en`, `rw`, `fr`) plus adaptive light/dark Material 3 themes (`AppPalette`).
 
-Follow [`docs/cloudinary-setup.md`](docs/cloudinary-setup.md) to create the restricted image preset; the shared demo defaults are already in the app.
-
-See [`docs/firestore-schema.md`](docs/firestore-schema.md) and [`docs/integration-guide.md`](docs/integration-guide.md) for contract ownership and handoffs.
-
-## Technology
-
-| Technology | Use |
-|---|---|
-| Flutter and Dart | Cross-platform app and UI |
-| Riverpod | State and dependency management |
-| GoRouter | Navigation and role-aware routing |
-| Firebase Core | Firebase initialization |
-| Firebase Authentication | Auth service and email-verification integration points |
-| Cloud Firestore | Shared repository and data-source integration |
-
-## Project layout
+## Project Layout
 
 ```text
 lib/
-  app/          App shell, routing, splash, and unavailable states
-  core/         Shared constants, errors, themes, and utilities
-  features/     Feature-owned presentation, domain, and data code
-  shared/       Shared models, Firebase services, and reusable widgets
-test/           Unit and widget tests
-scripts/        Local Firebase emulator helpers and rule smoke test
-docs/           Firebase setup, schemas, integration, and testing notes
-firestore.rules Firestore authorization rules (local only)
+  app/                 App bootstrap, startup splash, verification & router/shells
+  core/                Schema constants, lifecycle enums, models, providers, themes, Spark admin & Cloudinary services
+  features/            Feature-first modules (auth, onboarding, home, learning, mentorship, mentor_workspace, opportunities, profile, notifications, admin)
+  l10n/                ARB translations (app_en.arb, app_rw.arb, app_fr.arb) and generated localizations
+  shared/              Shared Material 3 widgets, animation helpers, Firebase service wrappers
+rules_tests/           Firebase Emulator Suite security rules tests (@firebase/rules-unit-testing)
+scripts/               Emulator launcher, rules test runner, admin bootstrap, mentor review & user status Admin SDK scripts
+test/                  Unit & widget tests across all phases
+integration_test/      End-to-end Flutter integration tests
 ```
 
-Feature code belongs to its assigned owner. Coordinate changes to shared routes, models, Firebase configuration, rules, and indexes with Jonathan. Do not implement another feature owner's schema based on assumptions; agree on its fields and access rules first.
-
-## Requirements
-
-- Flutter and Dart versions compatible with [`pubspec.yaml`](pubspec.yaml)
-- Git
-- For Android: Android Studio and an emulator or device
-- For Firebase emulator checks: Firebase CLI, Node.js, and Java
-- For iOS builds: macOS and Xcode
-
-## Get started
+## Quick Start
 
 ```bash
-git clone https://github.com/IshimweJ-Ona/upbridge-rwanda.git
-cd upbridge-rwanda
 flutter pub get
+flutter gen-l10n
 flutter analyze
 flutter test
-flutter devices
-flutter run
 ```
 
-Some platform Firebase files are local and ignored by Git. Follow [`docs/firebase-setup.md`](docs/firebase-setup.md) for the approved setup; do not commit service account keys or secrets.
+See:
+- [`docs/integration-guide.md`](docs/integration-guide.md) — Post-rework team integration, branch sync, and PR handoff workflow.
+- [`docs/firebase-setup.md`](docs/firebase-setup.md) — Spark Firebase setup, rules/indexes deployment, emulators, and admin scripts (`authapp05@gmail.com`).
+- [`docs/cloudinary-setup.md`](docs/cloudinary-setup.md) — Free-plan unsigned Cloudinary setup (`vbzq5ssu` / `upbridge_public_images`) and Console security hardening.
+- [`docs/firestore-schema.md`](docs/firestore-schema.md) — Collections, fields, status lifecycles, and composite index contracts.
 
-## Firebase emulators
+## Local Emulators & Security Rules Tests
 
-Use Auth and Firestore emulators for local Firebase work. The app connects to them in debug builds with:
-
-```bash
-flutter run --dart-define=USE_FIREBASE_EMULATORS=true
-```
-
-On Windows, start the emulators with:
+Start Auth and Firestore emulators on Windows:
 
 ```powershell
 .\scripts\start_firebase_emulators.ps1
 ```
 
-Elsewhere, use:
+Run the Flutter app against local emulators:
 
 ```bash
-firebase emulators:start --project upridge-rwanda-dev --only auth,firestore
+flutter run --dart-define=USE_FIREBASE_EMULATORS=true
 ```
 
-The default ports are Auth `9099`, Firestore `8080`, and Emulator UI `4000`. Android emulators connect through `10.0.2.2`; physical devices need the computer's reachable LAN address via `FIREBASE_EMULATOR_HOST`. See [`docs/firebase-setup.md`](docs/firebase-setup.md) for platform details.
-
-### Firestore rules smoke test
-
-This check starts isolated demo emulators, verifies email through the Auth Emulator's local verification code, and exercises profile ownership rules. It deletes its temporary emulator accounts and documents when it finishes. Stop other emulators first so the default ports are available:
+Run Firestore security rules unit tests (starts isolated emulator and runs Mocha suite):
 
 ```powershell
-.\scripts\test_firebase_emulator_rules.ps1
+.\scripts\run_rules_tests.ps1
 ```
 
-The smoke test starts isolated Auth and Firestore emulators under a unique `demo-*` project and checks email verification, profile ownership, and check-in rules. It shuts down afterward and removes temporary emulator data. Never use production data for tests.
+## Security Principles
 
-## Tests
-
-Run before opening a pull request:
-
-```bash
-flutter analyze
-flutter test
-```
-
-Current unit and widget coverage includes routing policy, splash behavior, shared Firebase helpers, Kigali time and formatting, check-in validation, admin listing validation, Cloudinary request validation, and demo-state labeling. See [`test_plan.md`](test_plan.md) for latest results and remaining gaps.
-
-## Team ownership
-
-| Owner | Area |
-|---|---|
-| Jonathan Ishimwe | App integration, Firebase setup, shared infrastructure, home, admin, and project-wide testing |
-| Ghislaine Marie Inez | Authentication, onboarding, and user management |
-| Lisa Ineza | Learning, submissions, progress, and portfolio |
-| Boaz Prince Iza | Mentorship and mentor workspace |
-| Kellen Ashley Mutoni | Opportunities and applications |
-
-The authentication screens are not yet connected end to end to Firebase. Admin operations that depend on another owner's unconfirmed Firestore contract remain behind integration boundaries until that contract is agreed. Refer to [`docs/integration-guide.md`](docs/integration-guide.md) for owner-specific handoffs.
-
-## Security and contribution
-
-- Never commit passwords, access tokens, private keys, or service account files.
-- Keep local tests on Firebase emulators; do not deploy rules/indexes or modify production data without explicit project approval.
-- Work in your assigned feature area and coordinate shared API or schema changes.
-- Run analysis and tests, describe known gaps, and submit work through a reviewed pull request.
-- Do not push unfinished work directly to `main`.
-
-Repository: [github.com/IshimweJ-Ona/upbridge-rwanda](https://github.com/IshimweJ-Ona/upbridge-rwanda)
+- Self-registration creates only `role = student`. Client apps cannot self-assign `role`, `isApproved`, or `status`.
+- Mentor onboarding creates a `mentorApplications/{uid}` record in `pending` state; only a verified `admin` executing `scripts/review_mentor.mjs` (or optional external Admin API) grants `{ role: 'mentor' }` custom claims.
+- Account deactivation runs via verified `isAdmin()` Firestore status rules (`active <-> deactivated`) and optional `scripts/set_user_status.mjs` for Auth token revocation + immutable `auditLogs`.
+- Never commit `.env`, service-account JSON keys, or Cloudinary API secrets.

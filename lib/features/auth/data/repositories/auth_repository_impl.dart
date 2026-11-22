@@ -4,8 +4,7 @@ import 'package:upbridge/features/auth/data/datasources/auth_remote_data_source.
 import 'package:upbridge/features/auth/domain/repositories/auth_repository.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
-  AuthRepositoryImpl({required AuthRemoteDataSource dataSource})
-    : _dataSource = dataSource;
+  AuthRepositoryImpl({required this._dataSource});
   final AuthRemoteDataSource _dataSource;
 
   @override
