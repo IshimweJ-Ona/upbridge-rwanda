@@ -1,4 +1,3 @@
-// Tests bundled splash asset, viewport layout, auto-routing, and real auth button navigation.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,15 +6,20 @@ import 'package:upbridge/app/splash/splash_screen.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
 
 void main() {
-  testWidgets('bundled splash photograph is available offline', (tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: SplashScreen())),
+  testWidgets('SVG brand logo and generated splash mark assets load offline', (
+    tester,
+  ) async {
+    final svg = await rootBundle.loadString(
+      'assets/images/upbridge_logo_on_dark.svg',
     );
-    final image = await rootBundle.load('assets/images/kigali_night.jpg');
-    expect(image.lengthInBytes, greaterThan(0));
+    final splashPng = await rootBundle.load('assets/images/splash_mark.png');
+    expect(svg, contains('<svg'));
+    expect(splashPng.lengthInBytes, greaterThan(0));
   });
 
-  testWidgets('splash stays within compact and wide viewports', (tester) async {
+  testWidgets('splash renders cleanly on compact and wide viewports', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
@@ -27,11 +31,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('splash-background')), findsOneWidget);
+      expect(find.byKey(const ValueKey('splash-mark')), findsOneWidget);
     }
   });
 
-  testWidgets('splash routes once after its configured duration', (
+  testWidgets('splash routes once after intro duration without flash', (
     tester,
   ) async {
     final destinations = <String>[];
@@ -46,10 +50,7 @@ void main() {
       ),
     );
 
-    expect(
-      find.text('Turn what you learn into proof employers trust.'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('splash-mark')), findsOneWidget);
     expect(destinations, isEmpty);
 
     await tester.pump(const Duration(milliseconds: 250));
@@ -57,53 +58,5 @@ void main() {
 
     await tester.pump(const Duration(seconds: 1));
     expect(destinations, [AppRoutes.welcome]);
-  });
-
-  testWidgets('registration button navigates directly to signup', (
-    tester,
-  ) async {
-    final destinations = <String>[];
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: SplashScreen(
-            duration: const Duration(milliseconds: 250),
-            onNavigate: destinations.add,
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('Create free account'));
-    await tester.pump();
-
-    expect(find.text('Waiting for registration screen'), findsNothing);
-    expect(destinations, [AppRoutes.signup]);
-
-    await tester.pump(const Duration(seconds: 1));
-    expect(destinations, [AppRoutes.signup]);
-  });
-
-  testWidgets('login button navigates directly to login', (tester) async {
-    final destinations = <String>[];
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: SplashScreen(
-            duration: const Duration(milliseconds: 250),
-            onNavigate: destinations.add,
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('I already have an account'));
-    await tester.pump();
-
-    expect(find.text('Waiting for login screen'), findsNothing);
-    expect(destinations, [AppRoutes.login]);
-
-    await tester.pump(const Duration(seconds: 1));
-    expect(destinations, [AppRoutes.login]);
   });
 }

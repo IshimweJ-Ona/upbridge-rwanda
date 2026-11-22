@@ -32,6 +32,7 @@ String _authMessage(String code) => switch (code) {
 
 String _firebaseMessage(String code) => switch (code) {
   'permission-denied' => 'You do not have permission to do that.',
+  'failed-precondition' => 'A required database index is missing or still building. Deploy firestore.indexes.json and retry.',
   'unavailable' || 'deadline-exceeded' => AppCopy.offlineError,
   'not-found' => 'That information is no longer available.',
   'already-exists' => 'This item already exists.',

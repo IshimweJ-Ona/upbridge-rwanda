@@ -6,7 +6,13 @@ import 'package:upbridge/core/themes/app_tokens.dart';
 
 /// Gives any widget a soft press-down scale and a light haptic tick.
 class Pressable extends StatefulWidget {
-  const Pressable({super.key, required this.child, this.onTap, this.scale = 0.97, this.haptic = true});
+  const Pressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.scale = 0.97,
+    this.haptic = true,
+  });
 
   final Widget child;
   final VoidCallback? onTap;
@@ -40,7 +46,7 @@ class _PressableState extends State<Pressable> {
             },
       child: AnimatedScale(
         scale: _down ? widget.scale : 1,
-        duration: Motion.fast,
+        duration: Motion.durationFor(context, Motion.fast),
         curve: Motion.curve,
         child: widget.child,
       ),

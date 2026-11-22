@@ -8,25 +8,41 @@ import 'package:upbridge/shared/widgets/feedback.dart';
 
 /// Opens a link in the browser or the right app (Google Meet, WhatsApp…).
 Future<void> openLink(BuildContext context, String url) async {
-  final uri = Uri.tryParse(url.startsWith('http') ? url : 'https://$url');
+  final trimmed = url.trim();
   var ok = false;
-  if (uri != null) {
-    try {
-      ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      ok = false;
+  if (trimmed.isNotEmpty) {
+    final normalized = trimmed.contains('://') ? trimmed : 'https://$trimmed';
+    final uri = Uri.tryParse(normalized);
+    if (uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.isNotEmpty) {
+      try {
+        ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        ok = false;
+      }
     }
   }
   if (!ok && context.mounted) {
-    showToast(context, 'Couldn’t open the link. Check your connection.', icon: Icons.wifi_off_rounded, tone: Tone.warning);
+    showToast(
+      context,
+      'Couldn’t open the link. Check the URL and your connection.',
+      icon: Icons.link_off_rounded,
+      tone: Tone.warning,
+    );
   }
 }
 
 /// Copies text and confirms with a toast.
-Future<void> copyText(BuildContext context, String text, {String message = 'Copied'}) async {
+Future<void> copyText(
+  BuildContext context,
+  String text, {
+  String message = 'Copied',
+}) async {
   await Clipboard.setData(ClipboardData(text: text));
   if (context.mounted) showToast(context, message, icon: Icons.copy_rounded);
 }
 
 /// Short, readable form of a URL for display.
-String displayUrl(String url) => url.replaceFirst(RegExp(r'^https?://'), '').replaceFirst(RegExp(r'/$'), '');
+String displayUrl(String url) =>
+    url.replaceFirst(RegExp(r'^https?://'), '').replaceFirst(RegExp(r'/$'), '');

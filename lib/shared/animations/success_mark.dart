@@ -18,10 +18,20 @@ class SuccessMark extends StatefulWidget {
   State<SuccessMark> createState() => _SuccessMarkState();
 }
 
-class _SuccessMarkState extends State<SuccessMark> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
-  late final Animation<double> _pop = CurvedAnimation(parent: _c, curve: const Interval(0, 0.55, curve: Motion.emphasized));
-  late final Animation<double> _draw = CurvedAnimation(parent: _c, curve: const Interval(0.35, 1, curve: Motion.curve));
+class _SuccessMarkState extends State<SuccessMark>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+  late final Animation<double> _pop = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0, 0.55, curve: Motion.emphasized),
+  );
+  late final Animation<double> _draw = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.35, 1, curve: Motion.curve),
+  );
 
   @override
   void dispose() {
@@ -38,8 +48,16 @@ class _SuccessMarkState extends State<SuccessMark> with SingleTickerProviderStat
         child: Container(
           width: widget.size,
           height: widget.size,
-          decoration: BoxDecoration(color: widget.tone.background, shape: BoxShape.circle),
-          child: CustomPaint(painter: _TickPainter(progress: _draw.value, color: widget.tone.foreground)),
+          decoration: BoxDecoration(
+            color: widget.tone.background,
+            shape: BoxShape.circle,
+          ),
+          child: CustomPaint(
+            painter: _TickPainter(
+              progress: _draw.value,
+              color: widget.tone.foreground,
+            ),
+          ),
         ),
       ),
     );
@@ -73,5 +91,6 @@ class _TickPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_TickPainter old) => old.progress != progress || old.color != color;
+  bool shouldRepaint(_TickPainter old) =>
+      old.progress != progress || old.color != color;
 }
