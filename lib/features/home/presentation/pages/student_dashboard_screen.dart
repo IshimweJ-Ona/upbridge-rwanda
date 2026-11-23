@@ -10,6 +10,7 @@ import 'package:upbridge/features/learning/domain/models/course.dart';
 import 'package:upbridge/features/learning/domain/models/course_progress.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/mentorship/presentation/widgets/book_session_sheet.dart';
 import 'package:upbridge/features/opportunities/domain/models/opportunity_listing.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
@@ -71,6 +72,32 @@ class StudentDashboardScreen extends ConsumerWidget {
     final completedCourses = progressList
         .where((p) => p.status == CourseProgressStatus.completed)
         .length;
+    final availableMentors = mentors
+        .where((m) => m.ownerUid != uid)
+        .toList(growable: false);
+    final activeMentorshipByMentor = <String, Mentorship>{
+      for (final m in mentorships)
+        if (m.status == MentorshipStatus.active) m.mentorUid: m,
+    };
+    final actorName = profile?.displayName.trim().isNotEmpty == true
+        ? profile!.displayName.trim()
+        : session.displayLabel;
+
+    Future<void> openBookSession() async {
+      final booked = await showBookSessionSheet(
+        context,
+        actorUid: uid,
+        actorName: actorName,
+        mentorship: availableMentors.isEmpty ? activeMentorship : null,
+        availableMentors: availableMentors,
+        activeMentorshipsByMentor: activeMentorshipByMentor,
+        submitLabel: 'Book session',
+        title: 'Book 1-on-1 session',
+      );
+      if (booked && context.mounted) {
+        showToast(context, 'Session booked');
+      }
+    }
 
     return PageFrame(
       largeTitle: l10n.greeting(session.firstName),
@@ -141,12 +168,26 @@ class StudentDashboardScreen extends ConsumerWidget {
             onAction: () => ref.invalidate(studentSessionsProvider(uid)),
           ),
         ] else if (upcomingSession != null) ...[
-          SectionLabel(l10n.upcomingSessionLabel),
+          SectionLabel(
+            l10n.upcomingSessionLabel,
+            action: (availableMentors.isNotEmpty || activeMentorship != null)
+                ? 'Book session'
+                : null,
+            onAction: (availableMentors.isNotEmpty || activeMentorship != null)
+                ? openBookSession
+                : null,
+          ),
           SurfaceCard(
             padding: EdgeInsets.zero,
             child: ListRow(
-              onTap: () =>
-                  context.push('/mentorship/${upcomingSession.mentorshipId}'),
+              onTap: () => upcomingSession.mentorshipId.isNotEmpty
+                  ? context.push('/mentorship/${upcomingSession.mentorshipId}')
+                  : showSessionDetailSheet(
+                      context,
+                      session: upcomingSession,
+                      actorUid: uid,
+                      isMentor: false,
+                    ),
               leading: const IconTile(Icons.videocam_outlined, tone: Tone.info),
               title: upcomingSession.topic,
               subtitle: 'With ${upcomingSession.mentorName}',
@@ -224,8 +265,7 @@ class StudentDashboardScreen extends ConsumerWidget {
         else
           ListGroup(
             children: [
-              for (final mentor
-                  in mentors.where((m) => m.ownerUid != uid).take(3))
+              for (final mentor in availableMentors.take(3))
                 ListRow(
                   leading: AppAvatar(
                     initialsOf(mentor.displayName),
@@ -239,6 +279,25 @@ class StudentDashboardScreen extends ConsumerWidget {
                       ? mentor.mentorExpertise.take(3).join(' · ')
                       : mentor.headline,
                   meta: mentor.mentorExpertise.take(2).join(' · '),
+                  trailing: TextButton(
+                    onPressed: () async {
+                      final booked = await showBookSessionSheet(
+                        context,
+                        actorUid: uid,
+                        actorName: actorName,
+                        mentorship: activeMentorshipByMentor[mentor.ownerUid],
+                        mentor: activeMentorshipByMentor[mentor.ownerUid] == null
+                            ? mentor
+                            : null,
+                        submitLabel: 'Book session',
+                        title: 'Book 1-on-1 session',
+                      );
+                      if (booked && context.mounted) {
+                        showToast(context, 'Session booked');
+                      }
+                    },
+                    child: const Text('Book'),
+                  ),
                   onTap: () => context.push('/mentor/${mentor.ownerUid}'),
                 ),
             ],
@@ -309,8 +368,14 @@ class StudentDashboardScreen extends ConsumerWidget {
         body:
             'Session with ${upcomingSession.mentorName} on ${DateFormat('EEE d MMM · HH:mm').format(upcomingSession.scheduledAt.toLocal())}.',
         actionLabel: 'View session',
-        onTap: () =>
-            context.push('/mentorship/${upcomingSession.mentorshipId}'),
+        onTap: () => upcomingSession.mentorshipId.isNotEmpty
+            ? context.push('/mentorship/${upcomingSession.mentorshipId}')
+            : showSessionDetailSheet(
+                context,
+                session: upcomingSession,
+                actorUid: upcomingSession.studentUid,
+                isMentor: false,
+              ),
       );
     }
     if (courses.isNotEmpty) {

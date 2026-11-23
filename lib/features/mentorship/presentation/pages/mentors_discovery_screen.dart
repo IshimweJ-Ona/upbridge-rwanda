@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
@@ -9,6 +10,8 @@ import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentor_request.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/mentorship/presentation/widgets/book_session_sheet.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
@@ -55,6 +58,38 @@ class _MentorsDiscoveryScreenState
     }
   }
 
+  Future<void> _openBookSession({
+    required AppSession session,
+    required List<UserProfile> availableMentors,
+    required Map<String, Mentorship> activeMentorshipByMentor,
+  }) async {
+    final uid = session.uid;
+    if (uid == null) return;
+    if (availableMentors.isEmpty && activeMentorshipByMentor.isEmpty) {
+      showToast(
+        context,
+        'No mentors available to book yet.',
+        tone: Tone.warning,
+      );
+      return;
+    }
+    final booked = await showBookSessionSheet(
+      context,
+      actorUid: uid,
+      actorName: session.displayLabel,
+      mentorship: availableMentors.isEmpty
+          ? activeMentorshipByMentor.values.first
+          : null,
+      availableMentors: availableMentors,
+      activeMentorshipsByMentor: activeMentorshipByMentor,
+      submitLabel: 'Book session',
+      title: 'Book 1-on-1 session',
+    );
+    if (booked && mounted) {
+      showToast(context, 'Session booked');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -85,6 +120,22 @@ class _MentorsDiscoveryScreenState
     final pendingRequests = requests
         .where((r) => r.status == MentorRequestStatus.pending)
         .toList(growable: false);
+    final sessions = uid == null
+        ? const <MentorshipSession>[]
+        : ref.watch(studentSessionsProvider(uid)).asData?.value ??
+              const <MentorshipSession>[];
+    final availableMentors =
+        (mentorsAsync.asData?.value ?? const <UserProfile>[])
+            .where((m) => uid == null || m.ownerUid != uid)
+            .toList(growable: false);
+    final orderedSessions = [...sessions]
+      ..sort((a, b) {
+        if (a.status != b.status) {
+          if (a.status == SessionStatus.scheduled) return -1;
+          if (b.status == SessionStatus.scheduled) return 1;
+        }
+        return a.scheduledAt.compareTo(b.scheduledAt);
+      });
 
     return PageFrame(
       largeTitle: l10n.tabMentors,
@@ -94,10 +145,79 @@ class _MentorsDiscoveryScreenState
         if (uid != null) {
           ref.invalidate(studentRequestsProvider(uid));
           ref.invalidate(studentMentorshipsProvider(uid));
+          ref.invalidate(studentSessionsProvider(uid));
         }
       },
       children: [
         const SizedBox(height: 12),
+        if (session != null &&
+            uid != null &&
+            session.role == UserRole.student &&
+            (availableMentors.isNotEmpty || orderedSessions.isNotEmpty)) ...[
+          SectionLabel(
+            'Booked sessions',
+            top: 4,
+            action: availableMentors.isNotEmpty ? 'Book session' : null,
+            onAction: availableMentors.isEmpty
+                ? null
+                : () => _openBookSession(
+                    session: session,
+                    availableMentors: availableMentors,
+                    activeMentorshipByMentor: activeMentorshipByMentor,
+                  ),
+          ),
+          if (orderedSessions.isEmpty)
+            SurfaceCard(
+              padding: EdgeInsets.zero,
+              accentEdge: context.palette.actionPrimary,
+              child: ListRow(
+                onTap: () => _openBookSession(
+                  session: session,
+                  availableMentors: availableMentors,
+                  activeMentorshipByMentor: activeMentorshipByMentor,
+                ),
+                leading: const IconTile(
+                  Icons.event_available_outlined,
+                  tone: Tone.info,
+                ),
+                title: 'Book a 1-on-1 mentor session',
+                subtitle: 'Choose a mentor, topic, date & time slot',
+                trailing: const StatusBadge('Book', tone: Tone.info),
+              ),
+            )
+          else
+            for (final s in orderedSessions.take(4)) ...[
+              SurfaceCard(
+                padding: EdgeInsets.zero,
+                child: ListRow(
+                  onTap: () => showSessionDetailSheet(
+                    context,
+                    session: s,
+                    actorUid: uid,
+                    isMentor: false,
+                  ),
+                  leading: const IconTile(
+                    Icons.videocam_outlined,
+                    tone: Tone.info,
+                  ),
+                  title: s.topic,
+                  subtitle: 'With ${s.mentorName}',
+                  meta:
+                      '${DateFormat('EEE d MMM · HH:mm').format(s.scheduledAt.toLocal())} · ${s.durationMinutes} min · ${s.meetingMode}',
+                  trailing: StatusBadge(
+                    s.status.label,
+                    tone: switch (s.status) {
+                      SessionStatus.scheduled => Tone.info,
+                      SessionStatus.completed => Tone.success,
+                      SessionStatus.cancelled => Tone.neutral,
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          const SizedBox(height: 6),
+        ],
         if (activeMentorships.isNotEmpty) ...[
           for (final m in activeMentorships) ...[
             SurfaceCard(

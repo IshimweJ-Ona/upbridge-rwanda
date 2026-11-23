@@ -15,8 +15,19 @@ class FirestoreSessionRepository implements SessionRepository {
   CollectionReference<Map<String, dynamic>> get _notifications =>
       _firestore.collection(Fs.notifications);
 
+  String _sessionRoute({
+    required String mentorshipId,
+    required String recipientUid,
+    required String mentorUid,
+  }) {
+    final trimmed = mentorshipId.trim();
+    if (trimmed.isNotEmpty) return '/mentorship/$trimmed';
+    return recipientUid == mentorUid ? '/m/sessions' : '/mentors';
+  }
+
   Map<String, dynamic> _sessionNotification({
     required String recipientUid,
+    required String mentorUid,
     required String title,
     required String body,
     required String type,
@@ -25,9 +36,13 @@ class FirestoreSessionRepository implements SessionRepository {
   }) => {
     'ownerUid': recipientUid,
     'title': title,
-    'body': body,
+    'body': body.length > 900 ? '${body.substring(0, 897)}...' : body,
     'type': type,
-    'route': '/mentorship/$mentorshipId',
+    'route': _sessionRoute(
+      mentorshipId: mentorshipId,
+      recipientUid: recipientUid,
+      mentorUid: mentorUid,
+    ),
     'sourceCollection': Fs.sessions,
     'sourceId': sessionId,
     'isRead': false,
@@ -90,16 +105,24 @@ class FirestoreSessionRepository implements SessionRepository {
 
   @override
   Future<String> scheduleSession(MentorshipSession session) async {
+    final topic = session.topic.trim();
+    if (topic.length < 3) {
+      throw StateError('Session topic must be at least 3 characters.');
+    }
+    if (session.studentUid == session.mentorUid) {
+      throw StateError('You cannot book a session with yourself.');
+    }
     final docRef = _sessions.doc();
     final batch = _firestore.batch();
+    final mentorshipId = session.mentorshipId.trim();
     batch.set(docRef, {
       'ownerUid': session.ownerUid,
-      'mentorshipId': session.mentorshipId,
+      'mentorshipId': mentorshipId,
       'studentUid': session.studentUid,
       'studentName': session.studentName.trim(),
       'mentorUid': session.mentorUid,
       'mentorName': session.mentorName.trim(),
-      'topic': session.topic.trim(),
+      'topic': topic,
       'notes': session.notes.trim(),
       'meetingMode': session.meetingMode.trim(),
       'meetingLink': session.meetingLink.trim(),
@@ -111,18 +134,27 @@ class FirestoreSessionRepository implements SessionRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    final recipientUid = session.ownerUid == session.studentUid
+    final bookedByStudent = session.ownerUid == session.studentUid;
+    final recipientUid = bookedByStudent
         ? session.mentorUid
         : session.studentUid;
     if (recipientUid.isNotEmpty && recipientUid != session.ownerUid) {
+      final studentLabel = session.studentName.trim().isNotEmpty
+          ? session.studentName.trim()
+          : 'A student';
       batch.set(
         _notifications.doc('sess_new_${docRef.id}'),
         _sessionNotification(
           recipientUid: recipientUid,
-          title: 'New mentorship session scheduled',
-          body: 'Topic: ${session.topic.trim()}',
+          mentorUid: session.mentorUid,
+          title: bookedByStudent
+              ? 'New session booked'
+              : 'New mentorship session scheduled',
+          body: bookedByStudent
+              ? '$studentLabel booked "$topic" (${session.durationMinutes} min · ${session.meetingMode.trim()}).'
+              : 'Topic: $topic',
           type: 'sessionScheduled',
-          mentorshipId: session.mentorshipId,
+          mentorshipId: mentorshipId,
           sessionId: docRef.id,
         ),
       );
@@ -139,6 +171,7 @@ class FirestoreSessionRepository implements SessionRepository {
     String? meetingMode,
     String? meetingLink,
     String? topic,
+    String? notes,
     String? actorUid,
   }) async {
     final ref = _sessions.doc(sessionId);
@@ -158,6 +191,7 @@ class FirestoreSessionRepository implements SessionRepository {
         if (meetingMode != null) 'meetingMode': meetingMode.trim(),
         if (meetingLink != null) 'meetingLink': meetingLink.trim(),
         if (topic != null && topic.trim().isNotEmpty) 'topic': topic.trim(),
+        if (notes != null) 'notes': notes.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
       final studentUid = data['studentUid'] as String? ?? '';
@@ -172,6 +206,7 @@ class FirestoreSessionRepository implements SessionRepository {
           ),
           _sessionNotification(
             recipientUid: recipientUid,
+            mentorUid: mentorUid,
             title: 'Session rescheduled',
             body: '${topic?.trim().isNotEmpty == true ? topic!.trim() : (data['topic'] as String? ?? 'Mentorship session')} has a new time.',
             type: 'sessionRescheduled',
@@ -234,6 +269,7 @@ class FirestoreSessionRepository implements SessionRepository {
             _notifications.doc('sess_${nextStatus.value}_$sessionId'),
             _sessionNotification(
               recipientUid: recipientUid,
+              mentorUid: mentorUid,
               title: nextStatus == SessionStatus.completed
                   ? 'Session completed'
                   : 'Session cancelled',

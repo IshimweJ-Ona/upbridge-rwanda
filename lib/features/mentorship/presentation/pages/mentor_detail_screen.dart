@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
@@ -8,6 +9,8 @@ import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentor_request.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/mentorship/presentation/widgets/book_session_sheet.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
@@ -95,6 +98,31 @@ class _MentorDetailScreenState extends ConsumerState<MentorDetailScreen> {
     }
   }
 
+  Future<void> _openBookSession({
+    required AppSession session,
+    required UserProfile? studentProfile,
+    required UserProfile mentor,
+    required Mentorship? activeMentorship,
+  }) async {
+    final uid = session.uid;
+    if (uid == null) return;
+    final actorName = studentProfile?.displayName.trim().isNotEmpty == true
+        ? studentProfile!.displayName.trim()
+        : session.displayLabel;
+    final booked = await showBookSessionSheet(
+      context,
+      actorUid: uid,
+      actorName: actorName,
+      mentorship: activeMentorship,
+      mentor: activeMentorship == null ? mentor : null,
+      submitLabel: 'Book session',
+      title: 'Book 1-on-1 session',
+    );
+    if (booked && mounted) {
+      showToast(context, 'Session booked with ${mentor.displayName.isEmpty ? "mentor" : mentor.displayName}');
+    }
+  }
+
   Future<void> _cancelRequest(MentorRequest request) async {
     final confirm = await showAppDialog(
       context,
@@ -139,6 +167,12 @@ class _MentorDetailScreenState extends ConsumerState<MentorDetailScreen> {
         ? const <Mentorship>[]
         : ref.watch(studentMentorshipsProvider(currentUid)).asData?.value ??
               const <Mentorship>[];
+    final sessionsWithMentor = currentUid == null
+        ? const <MentorshipSession>[]
+        : (ref.watch(studentSessionsProvider(currentUid)).asData?.value ??
+                  const <MentorshipSession>[])
+              .where((s) => s.mentorUid == widget.mentorUid)
+              .toList(growable: false);
 
     final activeMentorship = mentorships
         .where(
@@ -296,6 +330,74 @@ class _MentorDetailScreenState extends ConsumerState<MentorDetailScreen> {
                     ),
                 ],
               ),
+            ],
+            if (session != null &&
+                !isSelf &&
+                session.role == UserRole.student &&
+                currentUid != null) ...[
+              const SectionLabel('1-on-1 Sessions'),
+              SurfaceCard(
+                accentEdge: p.actionPrimary,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Book a 1-on-1 coaching session',
+                      style: AppText.titleS,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      mentor.mentorAvailability.isNotEmpty
+                          ? 'Preferred availability: ${mentor.mentorAvailability}. Choose a topic, date, and format.'
+                          : 'Pick a topic, date, time, and format (Online or In-person) with $name.',
+                      style: AppText.bodyS.copyWith(color: p.textSecondary),
+                    ),
+                    const SizedBox(height: 12),
+                    AppButton(
+                      'Book a session',
+                      icon: Icons.event_available_outlined,
+                      onPressed: () => _openBookSession(
+                        session: session,
+                        studentProfile: studentProfile,
+                        mentor: mentor,
+                        activeMentorship: activeMentorship,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (sessionsWithMentor.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                for (final s in sessionsWithMentor) ...[
+                  SurfaceCard(
+                    padding: EdgeInsets.zero,
+                    child: ListRow(
+                      onTap: () => showSessionDetailSheet(
+                        context,
+                        session: s,
+                        actorUid: currentUid,
+                        isMentor: false,
+                      ),
+                      leading: const IconTile(
+                        Icons.videocam_outlined,
+                        tone: Tone.info,
+                      ),
+                      title: s.topic,
+                      subtitle:
+                          '${DateFormat('EEE d MMM · HH:mm').format(s.scheduledAt.toLocal())} · ${s.durationMinutes} min · ${s.meetingMode}',
+                      trailing: StatusBadge(
+                        s.status.label,
+                        tone: switch (s.status) {
+                          SessionStatus.scheduled => Tone.info,
+                          SessionStatus.completed => Tone.success,
+                          SessionStatus.cancelled => Tone.neutral,
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ],
             ],
             const SectionLabel('Mentorship connection'),
             if (isSelf)

@@ -91,6 +91,34 @@ service cloud.firestore {
       return value is string && value.size() >= minLen && value.size() <= maxLen;
     }
 
+    function isPublicApprovedMentorTarget(mentorUid) {
+      return mentorUid is string
+        && mentorUid.size() > 0
+        && mentorUid != request.auth.uid
+        && exists(/databases/$(database)/documents/profiles/$(mentorUid))
+        && get(/databases/$(database)/documents/profiles/$(mentorUid)).data.isMentorPublic == true
+        && (
+          !userDocExists(mentorUid)
+          || (('role' in userDoc(mentorUid))
+            && ('isApproved' in userDoc(mentorUid))
+            && userDoc(mentorUid).role == 'mentor'
+            && userDoc(mentorUid).isApproved == true
+            && (!('approvalStatus' in userDoc(mentorUid))
+              || userDoc(mentorUid).approvalStatus == 'approved')
+            && isUserDocActive(userDoc(mentorUid)))
+        );
+    }
+
+    function validSessionDetails(data) {
+      return validStr(data.topic, 3, 200)
+        && (!('notes' in data) || validStr(data.notes, 0, 1000))
+        && (!('meetingMode' in data) || validStr(data.meetingMode, 2, 40))
+        && (!('meetingLink' in data) || validStr(data.meetingLink, 0, 500))
+        && data.durationMinutes is int
+        && data.durationMinutes >= 15
+        && data.durationMinutes <= 180;
+    }
+
     function validOptionalAsset(asset, ownerUid) {
       return asset == null || (
         asset is map
@@ -509,22 +537,10 @@ service cloud.firestore {
       allow create: if isStudent()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.studentUid == request.auth.uid
-        && request.resource.data.mentorUid != request.auth.uid
         && request.resource.data.status == 'pending'
         && validStr(request.resource.data.message, 10, 1500)
         && validStr(request.resource.data.goals, 0, 1000)
-        && exists(/databases/$(database)/documents/profiles/$(request.resource.data.mentorUid))
-        && get(/databases/$(database)/documents/profiles/$(request.resource.data.mentorUid)).data.isMentorPublic == true
-        && (
-          !userDocExists(request.resource.data.mentorUid)
-          || (('role' in userDoc(request.resource.data.mentorUid))
-            && ('isApproved' in userDoc(request.resource.data.mentorUid))
-            && userDoc(request.resource.data.mentorUid).role == 'mentor'
-            && userDoc(request.resource.data.mentorUid).isApproved == true
-            && (!('approvalStatus' in userDoc(request.resource.data.mentorUid))
-              || userDoc(request.resource.data.mentorUid).approvalStatus == 'approved')
-            && isUserDocActive(userDoc(request.resource.data.mentorUid)))
-        );
+        && isPublicApprovedMentorTarget(request.resource.data.mentorUid);
 
       allow update: if isAdmin() || (
         isActiveUser()
@@ -621,15 +637,25 @@ service cloud.firestore {
           request.resource.data.studentUid == request.auth.uid
           || (isApprovedMentor() && request.resource.data.mentorUid == request.auth.uid)
         )
+        && request.resource.data.studentUid != request.resource.data.mentorUid
         && request.resource.data.status == 'scheduled'
-        && validStr(request.resource.data.topic, 3, 200)
-        && request.resource.data.durationMinutes is int
-        && request.resource.data.durationMinutes >= 15
-        && request.resource.data.durationMinutes <= 180
-        && exists(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId))
-        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == 'active'
-        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentUid == request.resource.data.studentUid
-        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorUid == request.resource.data.mentorUid;
+        && validSessionDetails(request.resource.data)
+        && (
+          (
+            request.resource.data.mentorshipId is string
+            && request.resource.data.mentorshipId.size() > 0
+            && exists(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId))
+            && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == 'active'
+            && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentUid == request.resource.data.studentUid
+            && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorUid == request.resource.data.mentorUid
+          )
+          || (
+            isStudent()
+            && request.resource.data.studentUid == request.auth.uid
+            && (!('mentorshipId' in request.resource.data) || request.resource.data.mentorshipId == '')
+            && isPublicApprovedMentorTarget(request.resource.data.mentorUid)
+          )
+        );
 
       allow update: if isAdmin() || (
         isActiveUser()
@@ -637,10 +663,24 @@ service cloud.firestore {
         && (
           (
             resource.data.studentUid == request.auth.uid
-            && request.resource.data.status == 'cancelled'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'cancelReason', 'updatedAt'
-            ])
+            && (
+              (
+                request.resource.data.status == 'cancelled'
+                && (!('cancelReason' in request.resource.data)
+                  || validStr(request.resource.data.cancelReason, 0, 500))
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'status', 'cancelReason', 'updatedAt'
+                ])
+              )
+              || (
+                request.resource.data.status == 'scheduled'
+                && validSessionDetails(request.resource.data)
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'topic', 'notes', 'meetingMode', 'meetingLink', 'scheduledAt',
+                  'durationMinutes', 'updatedAt'
+                ])
+              )
+            )
           )
           || (
             isApprovedMentor()
@@ -648,10 +688,7 @@ service cloud.firestore {
             && (
               (
                 request.resource.data.status == 'scheduled'
-                && validStr(request.resource.data.topic, 3, 200)
-                && request.resource.data.durationMinutes is int
-                && request.resource.data.durationMinutes >= 15
-                && request.resource.data.durationMinutes <= 180
+                && validSessionDetails(request.resource.data)
                 && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                   'topic', 'notes', 'meetingMode', 'meetingLink', 'scheduledAt',
                   'durationMinutes', 'updatedAt'

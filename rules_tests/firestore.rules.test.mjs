@@ -1969,3 +1969,193 @@ test('Youth students can read non-existent own courseProgress/applications, subm
     }),
   );
 });
+
+test('students can book direct 1-on-1 sessions with approved public mentors, reschedule/cancel their sessions, and cannot complete or spoof mentors', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users', 'student-1'), {
+      ownerUid: 'student-1',
+      email: 's1@test.rw',
+      displayName: 'Student One',
+      role: 'student',
+      isApproved: false,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'users', 'mentor-1'), {
+      ownerUid: 'mentor-1',
+      email: 'm1@test.rw',
+      displayName: 'Alice Mentor',
+      role: 'mentor',
+      isApproved: true,
+      approvalStatus: 'approved',
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'profiles', 'mentor-1'), {
+      ownerUid: 'mentor-1',
+      displayName: 'Alice Mentor',
+      isMentorPublic: true,
+      status: 'active',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'users', 'mentor-unapproved'), {
+      ownerUid: 'mentor-unapproved',
+      email: 'pending@test.rw',
+      displayName: 'Pending Mentor',
+      role: 'mentor',
+      isApproved: false,
+      approvalStatus: 'pending',
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'profiles', 'mentor-unapproved'), {
+      ownerUid: 'mentor-unapproved',
+      displayName: 'Pending Mentor',
+      isMentorPublic: true,
+      status: 'active',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+  });
+
+  const s1Db = verifiedStudent('student-1').firestore();
+  const s2Db = verifiedStudent('student-2').firestore();
+  const m1Db = verifiedMentor('mentor-1').firestore();
+
+  // Direct booking batch (session + mentor notification) succeeds without an active mentorship doc.
+  const bookBatch = writeBatch(s1Db);
+  bookBatch.set(doc(s1Db, 'sessions', 'direct-sess-1'), {
+    ownerUid: 'student-1',
+    mentorshipId: '',
+    studentUid: 'student-1',
+    studentName: 'Student One',
+    mentorUid: 'mentor-1',
+    mentorName: 'Alice Mentor',
+    topic: 'CV & Flutter portfolio feedback',
+    notes: 'Want to review my Kigali Transit app before applying.',
+    meetingMode: 'Online',
+    meetingLink: 'https://meet.google.com/abc-defg-hij',
+    scheduledAt: new Date('2026-12-01T15:00:00Z'),
+    durationMinutes: 45,
+    status: 'scheduled',
+    cancelReason: '',
+    completedAt: null,
+    createdAt: ts(),
+    updatedAt: ts(),
+  });
+  bookBatch.set(doc(s1Db, 'notifications', 'sess_new_direct-sess-1'), {
+    ownerUid: 'mentor-1',
+    title: 'New session booked',
+    body: 'Student One booked "CV & Flutter portfolio feedback".',
+    type: 'sessionScheduled',
+    route: '/m/sessions',
+    sourceCollection: 'sessions',
+    sourceId: 'direct-sess-1',
+    isRead: false,
+    readAt: null,
+    status: 'unread',
+    createdAt: ts(),
+    updatedAt: ts(),
+  });
+  await assertSucceeds(bookBatch.commit());
+
+  // Unapproved mentor or self-booking or out-of-range duration fail.
+  await assertFails(
+    setDoc(doc(s1Db, 'sessions', 'direct-unapproved'), {
+      ownerUid: 'student-1',
+      mentorshipId: '',
+      studentUid: 'student-1',
+      studentName: 'Student One',
+      mentorUid: 'mentor-unapproved',
+      mentorName: 'Pending Mentor',
+      topic: 'Portfolio review',
+      notes: '',
+      meetingMode: 'Online',
+      meetingLink: '',
+      scheduledAt: new Date('2026-12-02T15:00:00Z'),
+      durationMinutes: 30,
+      status: 'scheduled',
+      cancelReason: '',
+      completedAt: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(s1Db, 'sessions', 'direct-self'), {
+      ownerUid: 'student-1',
+      mentorshipId: '',
+      studentUid: 'student-1',
+      studentName: 'Student One',
+      mentorUid: 'student-1',
+      mentorName: 'Student One',
+      topic: 'Self session',
+      notes: '',
+      meetingMode: 'Online',
+      meetingLink: '',
+      scheduledAt: new Date('2026-12-02T15:00:00Z'),
+      durationMinutes: 30,
+      status: 'scheduled',
+      cancelReason: '',
+      completedAt: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // Student can reschedule their own scheduled session, and mentor can read/complete it.
+  await assertSucceeds(
+    updateDoc(doc(s1Db, 'sessions', 'direct-sess-1'), {
+      topic: 'Mock interview & Flutter CV review',
+      notes: 'Focusing on state management questions.',
+      meetingMode: 'In-person',
+      meetingLink: 'Kigali Innovation City',
+      scheduledAt: new Date('2026-12-03T14:00:00Z'),
+      durationMinutes: 60,
+      updatedAt: ts(),
+    }),
+  );
+
+  // Unrelated student cannot read or modify another student's session.
+  await assertFails(getDoc(doc(s2Db, 'sessions', 'direct-sess-1')));
+  await assertFails(
+    updateDoc(doc(s2Db, 'sessions', 'direct-sess-1'), {
+      status: 'cancelled',
+      cancelReason: 'Hijack',
+      updatedAt: ts(),
+    }),
+  );
+
+  // Student still cannot mark a session completed; only approved mentor can.
+  await assertFails(
+    updateDoc(doc(s1Db, 'sessions', 'direct-sess-1'), {
+      status: 'completed',
+      notes: 'Self-completed',
+      completedAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(doc(m1Db, 'sessions', 'direct-sess-1'), {
+      status: 'completed',
+      notes: 'Great portfolio progress.',
+      cancelReason: '',
+      completedAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+});

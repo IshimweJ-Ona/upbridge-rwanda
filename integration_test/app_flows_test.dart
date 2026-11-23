@@ -958,6 +958,7 @@ class _FakeE2ESessionRepo implements SessionRepository {
     String? meetingMode,
     String? meetingLink,
     String? topic,
+    String? notes,
     String? actorUid,
   }) async {}
 

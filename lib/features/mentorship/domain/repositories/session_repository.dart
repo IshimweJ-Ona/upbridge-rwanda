@@ -22,6 +22,7 @@ abstract interface class SessionRepository {
     String? meetingMode,
     String? meetingLink,
     String? topic,
+    String? notes,
     String? actorUid,
   });
   Future<void> updateSessionNotes({

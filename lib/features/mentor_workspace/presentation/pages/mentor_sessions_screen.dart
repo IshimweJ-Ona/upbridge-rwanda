@@ -11,6 +11,7 @@ import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/features/auth/domain/validators.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/mentorship/presentation/widgets/book_session_sheet.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -184,7 +185,14 @@ class _MentorSessionsScreenState extends ConsumerState<MentorSessionsScreen> {
               children: [
                 for (final s in filtered) ...[
                   SurfaceCard(
-                    onTap: () => context.push('/mentorship/${s.mentorshipId}'),
+                    onTap: () => s.mentorshipId.isNotEmpty
+                        ? context.push('/mentorship/${s.mentorshipId}')
+                        : showSessionDetailSheet(
+                            context,
+                            session: s,
+                            actorUid: uid,
+                            isMentor: true,
+                          ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

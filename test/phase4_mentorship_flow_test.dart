@@ -405,6 +405,7 @@ class _InMemorySessionRepo implements SessionRepository {
       mentorUid: session.mentorUid,
       mentorName: session.mentorName,
       topic: session.topic,
+      notes: session.notes,
       meetingMode: session.meetingMode,
       meetingLink: session.meetingLink,
       scheduledAt: session.scheduledAt,
@@ -425,8 +426,23 @@ class _InMemorySessionRepo implements SessionRepository {
     String? meetingMode,
     String? meetingLink,
     String? topic,
+    String? notes,
     String? actorUid,
-  }) async {}
+  }) async {
+    for (var i = 0; i < _sessions.length; i++) {
+      if (_sessions[i].id == sessionId) {
+        _sessions[i] = _sessions[i].copyWith(
+          scheduledAt: scheduledAt,
+          durationMinutes: durationMinutes,
+          meetingMode: meetingMode,
+          meetingLink: meetingLink,
+          topic: topic,
+          notes: notes,
+        );
+      }
+    }
+    _ctrl.add(List.unmodifiable(_sessions));
+  }
 
   @override
   Future<void> transitionSession({

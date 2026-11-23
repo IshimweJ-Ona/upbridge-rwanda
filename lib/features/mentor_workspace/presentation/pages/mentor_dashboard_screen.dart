@@ -13,6 +13,7 @@ import 'package:upbridge/features/learning/domain/models/course.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentor_request.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/mentorship/presentation/widgets/book_session_sheet.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
@@ -394,7 +395,14 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
             SurfaceCard(
               padding: EdgeInsets.zero,
               child: ListRow(
-                onTap: () => context.push('/mentorship/${s.mentorshipId}'),
+                onTap: () => s.mentorshipId.isNotEmpty
+                    ? context.push('/mentorship/${s.mentorshipId}')
+                    : showSessionDetailSheet(
+                        context,
+                        session: s,
+                        actorUid: uid,
+                        isMentor: true,
+                      ),
                 leading: const IconTile(
                   Icons.videocam_outlined,
                   tone: Tone.info,
@@ -520,7 +528,9 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
           title: 'Session: ${session.topic}',
           subtitle:
               '${session.studentName} · ${session.status.label}',
-          route: '/mentorship/${session.mentorshipId}',
+          route: session.mentorshipId.isNotEmpty
+              ? '/mentorship/${session.mentorshipId}'
+              : '/m/sessions',
           timestamp: session.updatedAt,
           icon: Icons.event_outlined,
           tone: session.status == SessionStatus.completed

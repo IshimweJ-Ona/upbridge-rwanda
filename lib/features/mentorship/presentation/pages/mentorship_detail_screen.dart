@@ -9,6 +9,7 @@ import 'package:upbridge/core/widgets/prompt_sheet.dart';
 import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/mentorship/presentation/widgets/book_session_sheet.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -29,17 +30,22 @@ class _MentorshipDetailScreenState
 
   Future<void> _openScheduleSheet(
     Mentorship mentorship,
-    String actorUid,
-  ) async {
-    final scheduled = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) =>
-          _ScheduleSessionSheet(mentorship: mentorship, actorUid: actorUid),
+    String actorUid, {
+    MentorshipSession? existing,
+  }) async {
+    final scheduled = await showBookSessionSheet(
+      context,
+      actorUid: actorUid,
+      mentorship: mentorship,
+      existing: existing,
+      submitLabel: 'Schedule session',
+      title: 'Schedule 1-on-1 session',
     );
-    if (scheduled == true && mounted) {
-      showToast(context, 'Session scheduled');
+    if (scheduled && mounted) {
+      showToast(
+        context,
+        existing == null ? 'Session scheduled' : 'Session rescheduled',
+      );
     }
   }
 
@@ -300,6 +306,10 @@ class _MentorshipDetailScreenState
                       _SessionTile(
                         session: session,
                         isMentor: isMentorOwner,
+                        canReschedule:
+                            isActive &&
+                            (isStudent || isMentorOwner) &&
+                            session.status == SessionStatus.scheduled,
                         canCancel:
                             isActive &&
                             (isStudent || isMentorOwner) &&
@@ -309,6 +319,13 @@ class _MentorshipDetailScreenState
                             isMentorOwner &&
                             session.status == SessionStatus.scheduled,
                         onEditNotes: () => _editNotes(session),
+                        onReschedule: uid == null
+                            ? null
+                            : () => _openScheduleSheet(
+                                mentorship,
+                                uid,
+                                existing: session,
+                              ),
                         onComplete: () => _updateSessionStatus(
                           session,
                           SessionStatus.completed,
@@ -329,205 +346,6 @@ class _MentorshipDetailScreenState
           ],
         );
       },
-    );
-  }
-}
-
-class _ScheduleSessionSheet extends ConsumerStatefulWidget {
-  const _ScheduleSessionSheet({
-    required this.mentorship,
-    required this.actorUid,
-  });
-
-  final Mentorship mentorship;
-  final String actorUid;
-
-  @override
-  ConsumerState<_ScheduleSessionSheet> createState() =>
-      _ScheduleSessionSheetState();
-}
-
-class _ScheduleSessionSheetState extends ConsumerState<_ScheduleSessionSheet> {
-  final _topicCtrl = TextEditingController();
-  final _linkCtrl = TextEditingController();
-  String _mode = 'Online';
-  int _duration = 45;
-  DateTime _scheduledAt = DateTime.now().add(const Duration(days: 2, hours: 2));
-  bool _busy = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _topicCtrl.dispose();
-    _linkCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final topic = _topicCtrl.text.trim();
-    if (topic.length < 3) {
-      setState(() => _error = 'Enter a session topic (min 3 characters).');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final now = DateTime.now().toUtc();
-      await ref
-          .read(sessionRepositoryProvider)
-          .scheduleSession(
-            MentorshipSession(
-              id: '',
-              ownerUid: widget.actorUid,
-              mentorshipId: widget.mentorship.id,
-              studentUid: widget.mentorship.studentUid,
-              studentName: widget.mentorship.studentName,
-              mentorUid: widget.mentorship.mentorUid,
-              mentorName: widget.mentorship.mentorName,
-              topic: topic,
-              meetingMode: _mode,
-              meetingLink: _linkCtrl.text.trim(),
-              scheduledAt: _scheduledAt.toUtc(),
-              durationMinutes: _duration,
-              createdAt: now,
-              updatedAt: now,
-            ),
-          );
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (error) {
-      if (mounted) setState(() => _error = errorMessage(error));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        Space.gutter,
-        20,
-        Space.gutter,
-        MediaQuery.viewInsetsOf(context).bottom + 24,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Schedule 1-on-1 session', style: AppText.titleM),
-            const SizedBox(height: 14),
-            AppTextField(
-              label: 'Session topic',
-              hint: 'e.g. Portfolio review & mock interview',
-              controller: _topicCtrl,
-              error: _error,
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: SurfaceCard(
-                    onTap: () async {
-                      final pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: _scheduledAt,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 180)),
-                      );
-                      if (pickedDate == null || !mounted) return;
-                      setState(() {
-                        _scheduledAt = DateTime(
-                          pickedDate.year,
-                          pickedDate.month,
-                          pickedDate.day,
-                          _scheduledAt.hour,
-                          _scheduledAt.minute,
-                        );
-                      });
-                    },
-                    child: ListRow(
-                      padding: EdgeInsets.zero,
-                      title: 'Date',
-                      subtitle: DateFormat('EEE, d MMM').format(_scheduledAt),
-                      chevron: false,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SurfaceCard(
-                    onTap: () async {
-                      final pickedTime = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay.fromDateTime(_scheduledAt),
-                      );
-                      if (pickedTime == null || !mounted) return;
-                      setState(() {
-                        _scheduledAt = DateTime(
-                          _scheduledAt.year,
-                          _scheduledAt.month,
-                          _scheduledAt.day,
-                          pickedTime.hour,
-                          pickedTime.minute,
-                        );
-                      });
-                    },
-                    child: ListRow(
-                      padding: EdgeInsets.zero,
-                      title: 'Time',
-                      subtitle: DateFormat('HH:mm').format(_scheduledAt),
-                      chevron: false,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final opt in ['Online', 'In-person'])
-                  ChoiceChip(
-                    label: Text(opt),
-                    selected: _mode == opt,
-                    onSelected: (_) => setState(() => _mode = opt),
-                  ),
-                for (final mins in [30, 45, 60])
-                  ChoiceChip(
-                    label: Text('$mins min'),
-                    selected: _duration == mins,
-                    onSelected: (_) => setState(() => _duration = mins),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            AppTextField(
-              label: _mode == 'Online'
-                  ? 'Meeting link (optional)'
-                  : 'Location details (optional)',
-              hint: _mode == 'Online'
-                  ? 'https://meet.google.com/...'
-                  : 'e.g. Kigali Innovation City hub',
-              controller: _linkCtrl,
-            ),
-            const SizedBox(height: 16),
-            AppButton('Schedule session', loading: _busy, onPressed: _submit),
-            const SizedBox(height: 6),
-            Text(
-              'Both student and mentor see scheduled sessions in real time.',
-              style: AppText.caption.copyWith(color: p.textMuted),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -671,18 +489,22 @@ class _SessionTile extends StatelessWidget {
   const _SessionTile({
     required this.session,
     required this.isMentor,
+    required this.canReschedule,
     required this.canCompleteOrEdit,
     required this.canCancel,
     required this.onEditNotes,
+    required this.onReschedule,
     required this.onComplete,
     required this.onCancel,
   });
 
   final MentorshipSession session;
   final bool isMentor;
+  final bool canReschedule;
   final bool canCompleteOrEdit;
   final bool canCancel;
   final VoidCallback onEditNotes;
+  final VoidCallback? onReschedule;
   final VoidCallback onComplete;
   final VoidCallback onCancel;
 
@@ -724,7 +546,7 @@ class _SessionTile extends StatelessWidget {
               style: AppText.bodyS.copyWith(color: p.textSecondary),
             ),
           ],
-          if (canCompleteOrEdit || canCancel) ...[
+          if (canCompleteOrEdit || canReschedule || canCancel) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -746,6 +568,14 @@ class _SessionTile extends StatelessWidget {
                     onPressed: onComplete,
                   ),
                 ],
+                if (canReschedule && onReschedule != null)
+                  AppButton(
+                    'Reschedule',
+                    size: ButtonSize.small,
+                    variant: ButtonVariant.secondary,
+                    expand: false,
+                    onPressed: onReschedule,
+                  ),
                 if (canCancel)
                   AppButton(
                     'Cancel',
