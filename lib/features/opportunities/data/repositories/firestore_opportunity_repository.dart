@@ -138,9 +138,7 @@ class FirestoreOpportunityRepository implements OpportunityRepository {
         );
       }
 
-      tx.set(ref, {
-        'ownerUid': application.ownerUid,
-        'opportunityId': application.opportunityId,
+      final updatePayload = <String, dynamic>{
         'opportunityTitle': application.opportunityTitle.trim(),
         'organization': application.organization.trim(),
         'studentName': application.studentName.trim(),
@@ -148,11 +146,19 @@ class FirestoreOpportunityRepository implements OpportunityRepository {
         'coverNote': application.coverNote.trim(),
         'cvAsset': application.cvAsset?.toJson(),
         'status': OpportunityApplicationStatus.submitted.value,
-        'createdAt': existing.exists && existingData?['createdAt'] != null
-            ? existingData!['createdAt']
-            : FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (!existing.exists) {
+        tx.set(ref, {
+          ...updatePayload,
+          'ownerUid': application.ownerUid,
+          'opportunityId': application.opportunityId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        tx.update(ref, updatePayload);
+      }
     });
   }
 

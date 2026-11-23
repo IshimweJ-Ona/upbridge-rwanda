@@ -1,5 +1,6 @@
 import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/models/media_asset.dart';
+import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/core/utils/firestore_parsers.dart';
 
 enum OpportunityType {
@@ -83,6 +84,44 @@ class OpportunityListing {
   }
 
   bool get isExpired => deadline.isBefore(DateTime.now().toUtc());
+
+  /// Whole calendar days between [now] (local) and [deadline] (local).
+  /// Returns negative values once the deadline calendar date has passed.
+  int daysUntilDeadline({DateTime? now}) {
+    final refLocal = (now ?? DateTime.now()).toLocal();
+    final dueLocal = deadline.toLocal();
+    final refDate = DateTime.utc(refLocal.year, refLocal.month, refLocal.day);
+    final dueDate = DateTime.utc(dueLocal.year, dueLocal.month, dueLocal.day);
+    return dueDate.difference(refDate).inDays;
+  }
+
+  /// True when the deadline is within 7 days (inclusive) or already passed.
+  bool isDeadlineNear({DateTime? now}) => daysUntilDeadline(now: now) <= 7;
+
+  /// Red (`Tone.danger`) when 7 days or fewer remain; yellow-orange (`Tone.warning`) otherwise.
+  Tone deadlineTone({DateTime? now}) =>
+      isDeadlineNear(now: now) ? Tone.danger : Tone.warning;
+
+  String deadlineStatusLabel({DateTime? now}) {
+    final reference = (now ?? DateTime.now()).toLocal();
+    final days = daysUntilDeadline(now: reference);
+    if (days < 0 || (days == 0 && deadline.toLocal().isBefore(reference))) {
+      return 'Closed';
+    }
+    if (days == 0) return 'Closes today';
+    if (days == 1) return '1 day left';
+    return '$days days left';
+  }
+
+  String deadlineCompactLabel({DateTime? now}) {
+    final reference = (now ?? DateTime.now()).toLocal();
+    final days = daysUntilDeadline(now: reference);
+    if (days < 0 || (days == 0 && deadline.toLocal().isBefore(reference))) {
+      return 'Closed';
+    }
+    if (days == 0) return 'Today';
+    return '${days}d left';
+  }
 
   factory OpportunityListing.fromJson(Map<String, dynamic> json, {String? id}) {
     final now = DateTime.now().toUtc();

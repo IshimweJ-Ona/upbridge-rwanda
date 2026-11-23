@@ -269,6 +269,11 @@ class StudentDashboardScreen extends ConsumerWidget {
                   subtitle: '${opp.organization} · ${opp.location}',
                   meta:
                       '${opp.displayType}${opp.workMode.isNotEmpty ? ' · ${opp.workMode}' : ''} · Closes ${DateFormat('d MMM').format(opp.deadline.toLocal())}',
+                  metaColor: opp.deadlineTone().foregroundFor(context),
+                  trailing: StatusBadge(
+                    opp.deadlineCompactLabel(),
+                    tone: opp.deadlineTone(),
+                  ),
                   onTap: () => context.push('/opportunity/${opp.id}'),
                 ),
             ],

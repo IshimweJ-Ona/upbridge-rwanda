@@ -73,7 +73,9 @@ service cloud.firestore {
 
     function isStudent() {
       return isSignedIn()
-        && (!('role' in request.auth.token) || request.auth.token.role == 'student')
+        && (!('role' in request.auth.token)
+          || request.auth.token.role == null
+          || request.auth.token.role in ['student', 'youth'])
         && (
           (userDocExists(request.auth.uid)
             && isUserDocActive(userDoc(request.auth.uid))
@@ -81,7 +83,7 @@ service cloud.firestore {
             && userDoc(request.auth.uid).role in ['student', 'youth'])
           || (!userDocExists(request.auth.uid)
             && ('role' in request.auth.token)
-            && request.auth.token.role == 'student')
+            && request.auth.token.role in ['student', 'youth'])
         );
     }
 
@@ -670,7 +672,14 @@ service cloud.firestore {
     }
 
     match /courses/{courseId} {
-      allow read: if isAdmin() || (
+      allow get: if isAdmin() || (
+        isActiveUser() && (
+          resource == null
+          || resource.data.status == 'published'
+          || (isApprovedMentor() && resource.data.ownerUid == request.auth.uid)
+        )
+      );
+      allow list: if isAdmin() || (
         isActiveUser() && (
           resource.data.status == 'published'
           || (isApprovedMentor() && resource.data.ownerUid == request.auth.uid)
@@ -777,7 +786,18 @@ service cloud.firestore {
     }
 
     match /courseProgress/{progressId} {
-      allow read: if isAdmin() || (
+      allow get: if isAdmin() || (
+        isActiveUser() && (
+          (resource == null
+            && progressId.size() > request.auth.uid.size() + 1
+            && progressId[0:request.auth.uid.size() + 1] == request.auth.uid + '_')
+          || (resource != null && (
+            resource.data.ownerUid == request.auth.uid
+            || (isApprovedMentor() && resource.data.courseOwnerUid == request.auth.uid)
+          ))
+        )
+      );
+      allow list: if isAdmin() || (
         isActiveUser() && (
           resource.data.ownerUid == request.auth.uid
           || (isApprovedMentor() && resource.data.courseOwnerUid == request.auth.uid)
@@ -798,6 +818,8 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.status == 'published'
         && (
           !('ownerUid' in get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data)
+          || get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid == null
+          || get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid == ''
           || request.resource.data.courseOwnerUid
             == get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid
         )
@@ -825,6 +847,8 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.status == 'published'
         && (
           !('ownerUid' in get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data)
+          || get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid == null
+          || get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid == ''
           || request.resource.data.courseOwnerUid
             == get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.ownerUid
         )
@@ -842,12 +866,26 @@ service cloud.firestore {
     }
 
     match /opportunities/{opportunityId} {
-      allow read: if isAdmin() || (isActiveUser() && resource.data.status == 'published');
+      allow get: if isAdmin() || (
+        isActiveUser() && (
+          resource == null
+          || resource.data.status == 'published'
+        )
+      );
+      allow list: if isAdmin() || (isActiveUser() && resource.data.status == 'published');
       allow create, update, delete: if isAdmin();
     }
 
     match /applications/{applicationId} {
-      allow read: if isAdmin() || (isActiveUser() && resource.data.ownerUid == request.auth.uid);
+      allow get: if isAdmin() || (
+        isActiveUser() && (
+          (resource == null
+            && applicationId.size() > request.auth.uid.size() + 1
+            && applicationId[0:request.auth.uid.size() + 1] == request.auth.uid + '_')
+          || (resource != null && resource.data.ownerUid == request.auth.uid)
+        )
+      );
+      allow list: if isAdmin() || (isActiveUser() && resource.data.ownerUid == request.auth.uid);
 
       allow create: if isStudent()
         && applicationId == request.auth.uid + '_' + request.resource.data.opportunityId
@@ -873,8 +911,10 @@ service cloud.firestore {
             && validStr(request.resource.data.coverNote, 20, 2500)
             && request.resource.data.projectIds is list
             && validOptionalAsset(request.resource.data.cvAsset, request.auth.uid)
+            && exists(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId))
+            && get(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId)).data.status == 'published'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'studentName', 'projectIds', 'coverNote', 'cvAsset', 'status', 'updatedAt'
+              'opportunityTitle', 'organization', 'studentName', 'projectIds', 'coverNote', 'cvAsset', 'status', 'updatedAt'
             ]))
         )
       );

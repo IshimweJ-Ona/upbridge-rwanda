@@ -239,8 +239,12 @@ class _OpportunityListingCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
-          MonoLabel(
-            'Deadline ${DateFormat('d MMM yyyy').format(listing.deadline.toLocal())}',
+          StatusBadge(
+            'Deadline ${DateFormat('d MMM yyyy').format(listing.deadline.toLocal())} · ${listing.deadlineStatusLabel()}',
+            tone: listing.deadlineTone(),
+            icon: listing.isDeadlineNear()
+                ? Icons.warning_amber_rounded
+                : Icons.schedule_rounded,
           ),
         ],
       ),

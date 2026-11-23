@@ -83,6 +83,14 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
       showToast(context, urlError, tone: Tone.warning);
       return;
     }
+    if (link.length > 500) {
+      showToast(
+        context,
+        'Project or repository link must be 500 characters or fewer.',
+        tone: Tone.warning,
+      );
+      return;
+    }
     if (link.isEmpty && _evidenceAsset == null) {
       showToast(
         context,

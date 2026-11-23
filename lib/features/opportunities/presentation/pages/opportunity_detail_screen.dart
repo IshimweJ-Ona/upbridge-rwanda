@@ -51,6 +51,12 @@ class _OpportunityDetailScreenState
       );
       return;
     }
+    if (note.length > 2500) {
+      setState(
+        () => _error = 'Cover note must be 2500 characters or fewer.',
+      );
+      return;
+    }
     final uid = session.uid;
     if (uid == null) return;
     setState(() {
@@ -200,9 +206,13 @@ class _OpportunityDetailScreenState
                       color: context.palette.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  MonoLabel(
-                    'Closes ${DateFormat('EEE d MMM yyyy').format(opp.deadline.toLocal())}',
+                  const SizedBox(height: 8),
+                  StatusBadge(
+                    'Closes ${DateFormat('EEE d MMM yyyy').format(opp.deadline.toLocal())} · ${opp.deadlineStatusLabel()}',
+                    tone: opp.deadlineTone(),
+                    icon: opp.isDeadlineNear()
+                        ? Icons.warning_amber_rounded
+                        : Icons.schedule_rounded,
                   ),
                   const SizedBox(height: 12),
                   Text(

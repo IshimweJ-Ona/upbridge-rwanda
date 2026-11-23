@@ -483,6 +483,47 @@ class ProfileScreen extends ConsumerWidget {
                 );
             final projects =
                 projectsAsync.asData?.value ?? const <PortfolioProject>[];
+            final cvReport = CvCompletenessReport.evaluate(profile, session);
+            final strengthReport = ProfileStrengthReport.evaluate(
+              profile,
+              projects,
+            );
+            final portfolioTargetCount = 2;
+            final portfolioCompletedCount = projects.length.clamp(
+              0,
+              portfolioTargetCount,
+            );
+            final portfolioPercent =
+                ((portfolioCompletedCount / portfolioTargetCount) * 100)
+                    .round();
+
+            final trackers = ref.watch(profileProgressTrackerProvider);
+            final baseline = trackers[uid];
+            final streamsSettled =
+                !profileAsync.isLoading && !projectsAsync.isLoading;
+            if (streamsSettled) {
+              final needsRecord =
+                  baseline == null ||
+                  baseline.cvPercent != cvReport.percent ||
+                  baseline.strengthPercent != strengthReport.percent ||
+                  baseline.portfolioPercent != portfolioPercent;
+              if (needsRecord) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  ref
+                      .read(profileProgressTrackerProvider.notifier)
+                      .record(
+                        uid: uid,
+                        cvPercent: cvReport.percent,
+                        strengthPercent: strengthReport.percent,
+                        portfolioPercent: portfolioPercent,
+                      );
+                });
+              }
+            }
+
+            final cvIncrease = baseline?.cvIncrease ?? 0;
+            final strengthIncrease = baseline?.strengthIncrease ?? 0;
+            final portfolioIncrease = baseline?.portfolioIncrease ?? 0;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -598,11 +639,27 @@ class ProfileScreen extends ConsumerWidget {
                 CvCompletenessCard(
                   profile: profile,
                   session: session,
+                  percentIncrease: cvIncrease,
                   onEditProfile: () => context.push('/profile-edit'),
                   onAddEducation: () =>
                       _showEducationSheet(context, ref, profile),
                   onAddExperience: () =>
                       _showExperienceSheet(context, ref, profile),
+                ),
+
+                // Overall Profile & Portfolio Strength indicator (tracks projects, certificates & CV)
+                const SizedBox(height: 12),
+                ProfileStrengthCard(
+                  report: strengthReport,
+                  percentIncrease: strengthIncrease,
+                  onEditProfile: () => context.push('/profile-edit'),
+                  onAddProject: () => context.push('/project-new'),
+                  onAddEducation: () =>
+                      _showEducationSheet(context, ref, profile),
+                  onAddExperience: () =>
+                      _showExperienceSheet(context, ref, profile),
+                  onAddCertificate: () =>
+                      _showCertificateSheet(context, ref, profile),
                 ),
 
                 // About & Skills
@@ -640,6 +697,60 @@ class ProfileScreen extends ConsumerWidget {
                   action: l10n.addProjectCta,
                   onAction: () => context.push('/project-new'),
                 ),
+                SurfaceCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              projects.length >= portfolioTargetCount
+                                  ? '${projects.length} portfolio projects published'
+                                  : '$portfolioCompletedCount of $portfolioTargetCount showcase projects',
+                              style: AppText.bodySStrong.copyWith(
+                                color: p.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (portfolioIncrease > 0) ...[
+                            StatusBadge(
+                              '+$portfolioIncrease%',
+                              tone: Tone.success,
+                              icon: Icons.arrow_upward_rounded,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          StatusBadge(
+                            '$portfolioPercent%',
+                            tone: portfolioPercent >= 100
+                                ? Tone.success
+                                : (portfolioPercent > 0
+                                      ? Tone.info
+                                      : Tone.warning),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ProgressLine(
+                        portfolioPercent / 100,
+                        color: portfolioPercent >= 100
+                            ? p.successText
+                            : p.actionPrimary,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        projects.isEmpty
+                            ? 'Add your first project to boost your profile by +10%.'
+                            : (projects.length == 1
+                                  ? '1st project added (+10% profile boost). Add 1 more for +5%.'
+                                  : 'Maximum +15% portfolio showcase boost earned.'),
+                        style: AppText.caption.copyWith(color: p.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 if (projects.isEmpty)
                   EmptyState(
                     icon: Icons.folder_open_outlined,
@@ -900,6 +1011,360 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
+/// Session-scoped progress snapshot used to compute exact percent increases on ProfileScreen.
+class ProfileProgressBaseline {
+  const ProfileProgressBaseline({
+    required this.cvPercent,
+    required this.strengthPercent,
+    required this.portfolioPercent,
+    this.cvIncrease = 0,
+    this.strengthIncrease = 0,
+    this.portfolioIncrease = 0,
+  });
+
+  final int cvPercent;
+  final int strengthPercent;
+  final int portfolioPercent;
+  final int cvIncrease;
+  final int strengthIncrease;
+  final int portfolioIncrease;
+}
+
+class ProfileProgressTrackerNotifier
+    extends Notifier<Map<String, ProfileProgressBaseline>> {
+  @override
+  Map<String, ProfileProgressBaseline> build() => const {};
+
+  void record({
+    required String uid,
+    required int cvPercent,
+    required int strengthPercent,
+    required int portfolioPercent,
+  }) {
+    final prev = state[uid];
+    if (prev == null) {
+      state = {
+        ...state,
+        uid: ProfileProgressBaseline(
+          cvPercent: cvPercent,
+          strengthPercent: strengthPercent,
+          portfolioPercent: portfolioPercent,
+        ),
+      };
+      return;
+    }
+
+    if (prev.cvPercent == cvPercent &&
+        prev.strengthPercent == strengthPercent &&
+        prev.portfolioPercent == portfolioPercent) {
+      return;
+    }
+
+    final cvDelta = cvPercent - prev.cvPercent;
+    final strengthDelta = strengthPercent - prev.strengthPercent;
+    final portfolioDelta = portfolioPercent - prev.portfolioPercent;
+
+    state = {
+      ...state,
+      uid: ProfileProgressBaseline(
+        cvPercent: cvPercent,
+        strengthPercent: strengthPercent,
+        portfolioPercent: portfolioPercent,
+        cvIncrease: cvDelta > 0
+            ? cvDelta
+            : (cvDelta < 0 ? 0 : prev.cvIncrease),
+        strengthIncrease: strengthDelta > 0
+            ? strengthDelta
+            : (strengthDelta < 0 ? 0 : prev.strengthIncrease),
+        portfolioIncrease: portfolioDelta > 0
+            ? portfolioDelta
+            : (portfolioDelta < 0 ? 0 : prev.portfolioIncrease),
+      ),
+    };
+  }
+}
+
+final profileProgressTrackerProvider =
+    NotifierProvider<
+      ProfileProgressTrackerNotifier,
+      Map<String, ProfileProgressBaseline>
+    >(ProfileProgressTrackerNotifier.new);
+
+/// Evaluates overall Profile & Portfolio Strength (0..100%) across CV fields,
+/// portfolio projects (+10% first, +5% second), certificates (+10%), and links (+5%).
+class ProfileStrengthReport {
+  const ProfileStrengthReport({
+    required this.photoPoints,
+    required this.headlinePoints,
+    required this.bioPoints,
+    required this.skillsPoints,
+    required this.linksPoints,
+    required this.cvAssetPoints,
+    required this.educationPoints,
+    required this.experiencePoints,
+    required this.projectPoints,
+    required this.certificatePoints,
+    required this.projectCount,
+    required this.certificateCount,
+  });
+
+  final int photoPoints;
+  final int headlinePoints;
+  final int bioPoints;
+  final int skillsPoints;
+  final int linksPoints;
+  final int cvAssetPoints;
+  final int educationPoints;
+  final int experiencePoints;
+  final int projectPoints;
+  final int certificatePoints;
+  final int projectCount;
+  final int certificateCount;
+
+  int get percent =>
+      (photoPoints +
+              headlinePoints +
+              bioPoints +
+              skillsPoints +
+              linksPoints +
+              cvAssetPoints +
+              educationPoints +
+              experiencePoints +
+              projectPoints +
+              certificatePoints)
+          .clamp(0, 100);
+
+  bool get isComplete => percent >= 100;
+
+  static ProfileStrengthReport evaluate(
+    UserProfile profile,
+    List<PortfolioProject> projects,
+  ) {
+    final projectPoints = projects.isEmpty
+        ? 0
+        : (projects.length == 1 ? 10 : 15);
+    return ProfileStrengthReport(
+      photoPoints: profile.photoAsset != null ? 10 : 0,
+      headlinePoints: profile.headline.trim().isNotEmpty ? 10 : 0,
+      bioPoints: profile.about.trim().length >= 10 ? 10 : 0,
+      skillsPoints: profile.skills.length >= 3 ? 10 : 0,
+      linksPoints: profile.professionalLinks.isNotEmpty ? 5 : 0,
+      cvAssetPoints: profile.cvAsset != null ? 10 : 0,
+      educationPoints: profile.education.isNotEmpty ? 10 : 0,
+      experiencePoints: profile.experience.isNotEmpty ? 10 : 0,
+      projectPoints: projectPoints,
+      certificatePoints: profile.certificates.isNotEmpty ? 10 : 0,
+      projectCount: projects.length,
+      certificateCount: profile.certificates.length,
+    );
+  }
+}
+
+/// Interactive Profile & Portfolio Strength card showing overall score, project boosts, and percent increases.
+class ProfileStrengthCard extends StatelessWidget {
+  const ProfileStrengthCard({
+    super.key,
+    required this.report,
+    this.percentIncrease = 0,
+    this.onEditProfile,
+    this.onAddProject,
+    this.onAddEducation,
+    this.onAddExperience,
+    this.onAddCertificate,
+  });
+
+  final ProfileStrengthReport report;
+  final int percentIncrease;
+  final VoidCallback? onEditProfile;
+  final VoidCallback? onAddProject;
+  final VoidCallback? onAddEducation;
+  final VoidCallback? onAddExperience;
+  final VoidCallback? onAddCertificate;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final isComplete = report.isComplete;
+    final tone = isComplete
+        ? Tone.success
+        : (report.percent >= 50 ? Tone.info : Tone.warning);
+
+    final boosts = <(String, int, IconData, VoidCallback?)>[];
+    if (report.projectCount == 0) {
+      boosts.add(('Portfolio project', 10, Icons.folder_open_outlined, onAddProject));
+    } else if (report.projectCount == 1) {
+      boosts.add(('2nd project', 5, Icons.create_new_folder_outlined, onAddProject));
+    }
+    if (report.certificatePoints == 0) {
+      boosts.add(('Certificate', 10, Icons.workspace_premium_outlined, onAddCertificate));
+    }
+    if (report.linksPoints == 0) {
+      boosts.add(('Professional link', 5, Icons.link_rounded, onEditProfile));
+    }
+    if (report.educationPoints == 0) {
+      boosts.add(('Education', 10, Icons.school_outlined, onAddEducation ?? onEditProfile));
+    }
+    if (report.experiencePoints == 0) {
+      boosts.add(('Experience', 10, Icons.work_outline_rounded, onAddExperience ?? onEditProfile));
+    }
+    if (report.photoPoints == 0) {
+      boosts.add(('Profile photo', 10, Icons.add_a_photo_outlined, onEditProfile));
+    }
+    if (report.headlinePoints == 0) {
+      boosts.add(('Headline', 10, Icons.badge_outlined, onEditProfile));
+    }
+    if (report.bioPoints == 0) {
+      boosts.add(('About / Bio', 10, Icons.description_outlined, onEditProfile));
+    }
+    if (report.skillsPoints == 0) {
+      boosts.add(('Skills (3+)', 10, Icons.psychology_outlined, onEditProfile));
+    }
+    if (report.cvAssetPoints == 0) {
+      boosts.add(('Attached CV', 10, Icons.upload_file_outlined, onEditProfile));
+    }
+
+    final targetFraction = (report.percent / 100.0).clamp(0.0, 1.0);
+    final beginFraction =
+        ((report.percent - percentIncrease).clamp(0, 100) / 100.0);
+
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconTile(
+                isComplete ? Icons.auto_awesome_rounded : Icons.insights_rounded,
+                tone: tone,
+                size: 34,
+              ),
+              const SizedBox(width: Space.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Profile & Portfolio Strength',
+                      style: AppText.bodyMStrong.copyWith(color: p.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      percentIncrease > 0
+                          ? '${report.percent}% complete · +$percentIncrease% improved'
+                          : '${report.percent}% complete across CV & projects',
+                      style: AppText.caption.copyWith(
+                        color: percentIncrease > 0
+                            ? p.successText
+                            : (isComplete ? p.successText : p.textSecondary),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (percentIncrease > 0) ...[
+                StatusBadge(
+                  '+$percentIncrease%',
+                  tone: Tone.success,
+                  icon: Icons.arrow_upward_rounded,
+                ),
+                const SizedBox(width: 6),
+              ],
+              StatusBadge(
+                isComplete ? '100%' : '${report.percent}%',
+                tone: tone,
+                icon: isComplete ? Icons.check_circle_rounded : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: SizedBox(
+              height: 8,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: beginFraction, end: targetFraction),
+                duration: Motion.durationFor(
+                  context,
+                  const Duration(milliseconds: 420),
+                ),
+                curve: Motion.curve,
+                builder: (context, v, _) => Stack(
+                  children: [
+                    Container(color: p.sunken),
+                    FractionallySizedBox(
+                      widthFactor: v.clamp(0.0, 1.0),
+                      child: Container(
+                        color: isComplete ? p.successText : p.actionPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isComplete
+                ? 'Your full CV and portfolio showcase are 100% ready for employers!'
+                : 'Add projects, certificates, and profile details to raise your score.',
+            style: AppText.caption.copyWith(
+              color: isComplete ? p.successText : p.textSecondary,
+            ),
+          ),
+          if (boosts.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final item in boosts.take(4))
+                  Pressable(
+                    onTap: item.$4,
+                    scale: 0.96,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: p.canvas,
+                        borderRadius: Radii.rSm,
+                        border: Border.all(color: p.borderSubtle),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(item.$3, size: 13, color: p.actionPrimary),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Add ${item.$1}',
+                            style: AppText.caption.copyWith(
+                              color: p.actionPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${item.$2}%',
+                            style: AppText.caption.copyWith(
+                              color: p.successText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// Evaluates live completion across the 7 required CV dimensions:
 /// photo, headline, bio/about, skills, education, experience, and attached CV asset.
 class CvCompletenessReport {
@@ -964,6 +1429,7 @@ class CvCompletenessCard extends StatelessWidget {
     super.key,
     required this.profile,
     required this.session,
+    this.percentIncrease = 0,
     this.onEditProfile,
     this.onAddEducation,
     this.onAddExperience,
@@ -971,6 +1437,7 @@ class CvCompletenessCard extends StatelessWidget {
 
   final UserProfile profile;
   final AppSession session;
+  final int percentIncrease;
   final VoidCallback? onEditProfile;
   final VoidCallback? onAddEducation;
   final VoidCallback? onAddExperience;
@@ -980,6 +1447,7 @@ class CvCompletenessCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final p = context.palette;
     final report = CvCompletenessReport.evaluate(profile, session);
+    final perItemBoost = (100 / report.totalCount).round();
 
     final missingSections = <(String, IconData, VoidCallback?)>[];
     if (!report.hasPhoto) {
@@ -1022,6 +1490,9 @@ class CvCompletenessCard extends StatelessWidget {
     final tone = isAllComplete
         ? Tone.success
         : (report.percent >= 50 ? Tone.info : Tone.warning);
+    final targetFraction = report.completedCount / report.totalCount.toDouble();
+    final beginFraction =
+        ((report.percent - percentIncrease).clamp(0, 100) / 100.0);
 
     return SurfaceCard(
       child: Column(
@@ -1056,6 +1527,14 @@ class CvCompletenessCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (percentIncrease > 0) ...[
+                StatusBadge(
+                  '+$percentIncrease%',
+                  tone: Tone.success,
+                  icon: Icons.arrow_upward_rounded,
+                ),
+                const SizedBox(width: 6),
+              ],
               StatusBadge(
                 isAllComplete ? l10n.cvCompletedBadge : '${report.percent}%',
                 tone: tone,
@@ -1066,12 +1545,20 @@ class CvCompletenessCard extends StatelessWidget {
           const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(100),
-            child: LinearProgressIndicator(
-              value: report.completedCount / report.totalCount.toDouble(),
-              minHeight: 8,
-              backgroundColor: p.sunken,
-              valueColor: AlwaysStoppedAnimation(
-                isAllComplete ? p.successText : p.actionPrimary,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: beginFraction, end: targetFraction),
+              duration: Motion.durationFor(
+                context,
+                const Duration(milliseconds: 420),
+              ),
+              curve: Motion.curve,
+              builder: (context, animatedValue, _) => LinearProgressIndicator(
+                value: animatedValue.clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: p.sunken,
+                valueColor: AlwaysStoppedAnimation(
+                  isAllComplete ? p.successText : p.actionPrimary,
+                ),
               ),
             ),
           ),
@@ -1122,6 +1609,14 @@ class CvCompletenessCard extends StatelessWidget {
                             style: AppText.caption.copyWith(
                               color: p.actionPrimary,
                               fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+$perItemBoost%',
+                            style: AppText.caption.copyWith(
+                              color: p.successText,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],

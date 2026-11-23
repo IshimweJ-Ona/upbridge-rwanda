@@ -1777,3 +1777,195 @@ test('Phase 2 & 8 hardening: Youth cannot create mentorApplications, demoted adm
     }),
   );
 });
+
+test('Youth students can read non-existent own courseProgress/applications, submit courses (even when course ownerUid is null/empty), and submit/withdraw/resubmit opportunity applications', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users', 'youth-plain'), {
+      ownerUid: 'youth-plain',
+      email: 'plain@upbridge.rw',
+      displayName: 'Plain Youth',
+      phone: '',
+      role: 'student',
+      isApproved: false,
+      approvalStatus: 'notRequired',
+      emailVerified: true,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'users', 'youth-legacy'), {
+      ownerUid: 'youth-legacy',
+      email: 'legacyyouth@upbridge.rw',
+      displayName: 'Legacy Youth',
+      phone: '',
+      role: 'youth',
+      isApproved: false,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'courses', 'course-mentor'), {
+      ownerUid: 'mentor-1',
+      ownerName: 'Mentor One',
+      title: 'Mobile Craft',
+      summary: 'Build mobile interfaces cleanly.',
+      status: 'published',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'courses', 'course-no-owner'), {
+      ownerUid: null,
+      title: 'Admin Legacy Course',
+      summary: 'Legacy course without an ownerUid.',
+      status: 'published',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'opportunities', 'opp-open'), {
+      ownerUid: 'admin-1',
+      title: 'Junior Software Intern',
+      organization: 'Kigali Labs',
+      location: 'Kigali, Rwanda',
+      type: 'internship',
+      description: 'Join our engineering cohort in Kigali.',
+      deadline: ts(),
+      status: 'published',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+  });
+
+  // Note: real email/password youth accounts have NO custom role claim on token.
+  const plainYouthDb = testEnv
+    .authenticatedContext('youth-plain', { email_verified: true })
+    .firestore();
+  const legacyYouthDb = testEnv
+    .authenticatedContext('youth-legacy', {
+      email_verified: true,
+      role: 'youth',
+    })
+    .firestore();
+
+  // 1. Pre-create getDoc on own deterministic IDs must succeed when document does not exist yet (tx.get / snapshots),
+  //    while reading another user's non-existent deterministic doc stays denied.
+  await assertSucceeds(
+    getDoc(doc(plainYouthDb, 'courseProgress', 'youth-plain_course-mentor')),
+  );
+  await assertSucceeds(
+    getDoc(doc(plainYouthDb, 'applications', 'youth-plain_opp-open')),
+  );
+  await assertFails(
+    getDoc(doc(legacyYouthDb, 'courseProgress', 'youth-plain_course-mentor')),
+  );
+  await assertFails(
+    getDoc(doc(legacyYouthDb, 'applications', 'youth-plain_opp-open')),
+  );
+
+  // 2. Submit course completion for mentor-owned course and legacy null-owner course.
+  await assertSucceeds(
+    setDoc(doc(plainYouthDb, 'courseProgress', 'youth-plain_course-mentor'), {
+      ownerUid: 'youth-plain',
+      courseId: 'course-mentor',
+      courseTitle: 'Mobile Craft',
+      courseOwnerUid: 'mentor-1',
+      completedModuleIds: ['m1'],
+      progressPercent: 100,
+      evidenceUrl: 'https://github.com/youth/mobile-craft',
+      evidenceAsset: null,
+      status: 'completed',
+      completedAt: ts(),
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(doc(plainYouthDb, 'courseProgress', 'youth-plain_course-mentor'), {
+      courseTitle: 'Mobile Craft',
+      courseOwnerUid: 'mentor-1',
+      completedModuleIds: ['m1'],
+      progressPercent: 100,
+      evidenceUrl: 'https://github.com/youth/mobile-craft-v2',
+      evidenceAsset: null,
+      status: 'completed',
+      completedAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertSucceeds(
+    setDoc(doc(legacyYouthDb, 'courseProgress', 'youth-legacy_course-no-owner'), {
+      ownerUid: 'youth-legacy',
+      courseId: 'course-no-owner',
+      courseTitle: 'Admin Legacy Course',
+      courseOwnerUid: '',
+      completedModuleIds: [],
+      progressPercent: 100,
+      evidenceUrl: 'https://github.com/youth/legacy',
+      evidenceAsset: null,
+      status: 'completed',
+      completedAt: ts(),
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // 3. Submit opportunity application, withdraw, and resubmit with updated opportunityTitle/organization.
+  await assertSucceeds(
+    setDoc(doc(plainYouthDb, 'applications', 'youth-plain_opp-open'), {
+      ownerUid: 'youth-plain',
+      opportunityId: 'opp-open',
+      opportunityTitle: 'Junior Software Intern',
+      organization: 'Kigali Labs',
+      studentName: 'Plain Youth',
+      projectIds: ['proj-1'],
+      coverNote:
+        'I have built two Flutter apps and want to contribute to Kigali Labs.',
+      cvAsset: null,
+      status: 'submitted',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(doc(plainYouthDb, 'applications', 'youth-plain_opp-open'), {
+      status: 'withdrawn',
+      updatedAt: ts(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(doc(plainYouthDb, 'applications', 'youth-plain_opp-open'), {
+      opportunityTitle: 'Junior Software Intern (Updated)',
+      organization: 'Kigali Labs Rwanda',
+      studentName: 'Plain Youth',
+      projectIds: ['proj-1', 'proj-2'],
+      coverNote:
+        'Re-applying with updated portfolio links and project experience in Kigali.',
+      cvAsset: null,
+      status: 'submitted',
+      updatedAt: ts(),
+    }),
+  );
+
+  // Legacy youth user can also submit opportunity application.
+  await assertSucceeds(
+    setDoc(doc(legacyYouthDb, 'applications', 'youth-legacy_opp-open'), {
+      ownerUid: 'youth-legacy',
+      opportunityId: 'opp-open',
+      opportunityTitle: 'Junior Software Intern',
+      organization: 'Kigali Labs',
+      studentName: 'Legacy Youth',
+      projectIds: [],
+      coverNote:
+        'Excited to learn and contribute as a software intern in Kigali.',
+      cvAsset: null,
+      status: 'submitted',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+});

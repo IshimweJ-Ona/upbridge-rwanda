@@ -567,10 +567,18 @@ class _OpportunitiesCatalogSection extends StatelessWidget {
                                 Text(o.title, style: AppText.titleS),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '${o.organization} · ${o.displayType} · Due ${DateFormat('d MMM y').format(o.deadline.toLocal())}',
+                                  '${o.organization} · ${o.displayType}',
                                   style: AppText.caption.copyWith(
                                     color: p.textMuted,
                                   ),
+                                ),
+                                const SizedBox(height: 6),
+                                StatusBadge(
+                                  'Due ${DateFormat('d MMM y').format(o.deadline.toLocal())} · ${o.deadlineCompactLabel()}',
+                                  tone: o.deadlineTone(),
+                                  icon: o.isDeadlineNear()
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.schedule_rounded,
                                 ),
                               ],
                             ),

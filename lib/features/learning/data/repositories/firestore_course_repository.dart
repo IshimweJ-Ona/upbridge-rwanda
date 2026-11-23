@@ -127,6 +127,12 @@ class FirestoreCourseRepository implements CourseRepository {
         );
   }
 
+  String _safeCourseTitle(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 'Course';
+    return trimmed.length > 160 ? trimmed.substring(0, 160) : trimmed;
+  }
+
   @override
   Future<void> toggleModuleCompletion({
     required String uid,
@@ -135,6 +141,7 @@ class FirestoreCourseRepository implements CourseRepository {
   }) async {
     final docId = CourseProgress.docId(uid, course.id);
     final ref = _progress.doc(docId);
+    final cleanTitle = _safeCourseTitle(course.title);
     await _firestore.runTransaction((tx) async {
       final snap = await tx.get(ref);
       final data = snap.data();
@@ -147,7 +154,7 @@ class FirestoreCourseRepository implements CourseRepository {
       }
 
       final totalModules = course.modules.length;
-      final completedList = existingIds.toList(growable: false);
+      final completedList = existingIds.take(40).toList(growable: false);
       final percent = totalModules == 0
           ? 0
           : ((completedList.length / totalModules) * 100).round().clamp(0, 100);
@@ -161,7 +168,7 @@ class FirestoreCourseRepository implements CourseRepository {
         tx.set(ref, {
           'ownerUid': uid,
           'courseId': course.id,
-          'courseTitle': course.title,
+          'courseTitle': cleanTitle,
           'courseOwnerUid': course.ownerUid,
           'completedModuleIds': completedList,
           'progressPercent': percent,
@@ -176,7 +183,7 @@ class FirestoreCourseRepository implements CourseRepository {
         });
       } else {
         tx.update(ref, {
-          'courseTitle': course.title,
+          'courseTitle': cleanTitle,
           if (course.ownerUid.isNotEmpty) 'courseOwnerUid': course.ownerUid,
           'completedModuleIds': completedList,
           'progressPercent': percent,
@@ -199,13 +206,17 @@ class FirestoreCourseRepository implements CourseRepository {
   }) async {
     final docId = CourseProgress.docId(uid, course.id);
     final ref = _progress.doc(docId);
+    final cleanTitle = _safeCourseTitle(course.title);
+    final allModuleIds = course.modules
+        .map((m) => m.id)
+        .take(40)
+        .toList(growable: false);
     await _firestore.runTransaction((tx) async {
       final existing = await tx.get(ref);
       final payload = <String, dynamic>{
-        'ownerUid': uid,
-        'courseId': course.id,
-        'courseTitle': course.title,
+        'courseTitle': cleanTitle,
         if (course.ownerUid.isNotEmpty) 'courseOwnerUid': course.ownerUid,
+        if (allModuleIds.isNotEmpty) 'completedModuleIds': allModuleIds,
         'evidenceUrl': evidenceUrl.trim(),
         'evidenceAsset': evidenceAsset?.toJson(),
         'status': CourseProgressStatus.completed.value,
@@ -214,12 +225,14 @@ class FirestoreCourseRepository implements CourseRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       };
       if (!existing.exists) {
-        payload['courseOwnerUid'] = course.ownerUid;
-        payload['completedModuleIds'] = course.modules
-            .map((m) => m.id)
-            .toList(growable: false);
-        payload['createdAt'] = FieldValue.serverTimestamp();
-        tx.set(ref, payload);
+        tx.set(ref, {
+          ...payload,
+          'ownerUid': uid,
+          'courseId': course.id,
+          'courseOwnerUid': course.ownerUid,
+          'completedModuleIds': allModuleIds,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       } else {
         tx.update(ref, payload);
       }
