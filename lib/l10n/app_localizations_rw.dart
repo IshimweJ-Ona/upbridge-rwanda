@@ -421,4 +421,106 @@ class AppLocalizationsRw extends AppLocalizations {
   @override
   String get mentorReviewFollowsVerificationBody =>
       'Kwemeza imeli byemeza aderesi yawe gusa — ntibitanga uburenganzira bw\'ubujyanama. Umaze kwemeza imeli, ubusabe bwawe bujya mu isuzumwa ry\'ubuyobozi.';
+
+  @override
+  String get cvCompletenessTitle => 'Ubwuzuzanye bwa CV';
+
+  @override
+  String cvCompletenessSubtitle(int percent) {
+    return 'Byuzuye $percent%';
+  }
+
+  @override
+  String get cvCompletenessComplete =>
+      'CV yawe yuzuye neza kandi yiteguye gusangizwa!';
+
+  @override
+  String get cvCompletenessGuidance =>
+      'Uzuza ibice bibura kugira ngo ugaragare neza ku bajyanama n\'abakoresha.';
+
+  @override
+  String cvMissingCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ibice $count bisigaye',
+      one: 'Igice 1 gisigaye',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cvItemPhoto => 'Ifoto y\'umwirondoro';
+
+  @override
+  String get cvItemHeadline => 'Umutwe w\'umwuga';
+
+  @override
+  String get cvItemBio => 'Incamake kuri wowe';
+
+  @override
+  String get cvItemSkills => 'Ubumenyi (nibura 3)';
+
+  @override
+  String get cvItemEducation => 'Amashuri';
+
+  @override
+  String get cvItemExperience => 'Uburambe bw\'akazi';
+
+  @override
+  String get cvItemCvAsset => 'Inyandiko ya CV';
+
+  @override
+  String get cvMissingBadge => 'Ibibura';
+
+  @override
+  String get cvCompletedBadge => 'Byuzuye';
+
+  @override
+  String get editProfileCta => 'Vugurura umwirondoro na CV';
+
+  @override
+  String get shareExportCvCta => 'Sangiza / Sohobora CV';
+
+  @override
+  String get aboutAndSkillsTitle => 'Ibyerekeye & Ubumenyi';
+
+  @override
+  String get noSkillsYet => 'Nta bumenyi burongerwamo.';
+
+  @override
+  String get educationTitle => 'Amashuri';
+
+  @override
+  String get noEducationYet => 'Nta mashuri arongerwamo';
+
+  @override
+  String get addEducationCta => 'Ongeramo amashuri';
+
+  @override
+  String get experienceTitle => 'Uburambe bw\'akazi';
+
+  @override
+  String get noExperienceYet => 'Nta burambe bw\'akazi burongerwamo';
+
+  @override
+  String get addExperienceCta => 'Ongeramo uburambe';
+
+  @override
+  String get certificatesTitle => 'Impamyabumenyi & Ibihamya';
+
+  @override
+  String get noCertificatesYet => 'Nta mpamyabumenyi zirongerwamo';
+
+  @override
+  String get addCertificateCta => 'Ongeramo impamyabumenyi';
+
+  @override
+  String get portfolioProjectsTitle => 'Imishinga yakozwe';
+
+  @override
+  String get noProjectsYet => 'Nta mishinga irongerwamo kugeza ubu';
+
+  @override
+  String get addProjectCta => 'Ongeraho umushinga';
 }
