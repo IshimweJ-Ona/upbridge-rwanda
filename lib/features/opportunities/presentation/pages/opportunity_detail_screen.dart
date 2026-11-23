@@ -11,6 +11,7 @@ import 'package:upbridge/core/widgets/cloudinary_media_picker.dart';
 import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/features/opportunities/domain/models/opportunity_application.dart';
 import 'package:upbridge/features/opportunities/domain/models/opportunity_listing.dart';
+import 'package:upbridge/features/opportunities/domain/opportunity_filters.dart';
 import 'package:upbridge/features/profile/domain/models/portfolio_project.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -158,6 +159,8 @@ class _OpportunityDetailScreenState
             existingApp != null &&
             existingApp.status != OpportunityApplicationStatus.withdrawn;
 
+        final soon = closingSoonLabel(opp);
+
         return DetailPage(
           title: opp.title,
           backFallback: '/jobs',
@@ -187,6 +190,12 @@ class _OpportunityDetailScreenState
                     runSpacing: 6,
                     children: [
                       StatusBadge(opp.displayType, tone: Tone.info),
+                      if (soon != null)
+                        StatusBadge(
+                          soon,
+                          tone: Tone.warning,
+                          icon: Icons.schedule_rounded,
+                        ),
                       if (opp.location.isNotEmpty) StatusBadge(opp.location),
                       if (opp.workMode.isNotEmpty) StatusBadge(opp.workMode),
                       if (opp.compensation.isNotEmpty)
@@ -249,7 +258,8 @@ class _OpportunityDetailScreenState
                 NoticeCard(
                   tone: Tone.success,
                   icon: Icons.check_circle_outline_rounded,
-                  title: 'Application status: ${existingApp.status.name}',
+                  title:
+                      'Application status: ${applicationStatusLabel(existingApp.status)}',
                   body: existingApp.coverNote,
                 ),
                 const SizedBox(height: 12),
