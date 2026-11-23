@@ -132,5 +132,45 @@
   "alreadyHaveAccountPrompt": "Already have an account?",
   "mentorPendingVerifiedBody": "Your email has been verified successfully. Your mentor application is now awaiting review by the UpBridge Rwanda administration team. Verifying your email does not grant mentor access. You will receive an update once your application has been reviewed.",
   "mentorReviewFollowsVerificationTitle": "Mentor review follows verification",
-  "mentorReviewFollowsVerificationBody": "Verifying your email confirms your address only — it does not approve mentor access. Once verified, your application enters admin review."
+  "mentorReviewFollowsVerificationBody": "Verifying your email confirms your address only — it does not approve mentor access. Once verified, your application enters admin review.",
+  "cvCompletenessTitle": "CV Completeness",
+  "cvCompletenessSubtitle": "{percent}% completed",
+  "@cvCompletenessSubtitle": {
+    "placeholders": {
+      "percent": { "type": "int" }
+    }
+  },
+  "cvCompletenessComplete": "Your CV is complete and ready to share!",
+  "cvCompletenessGuidance": "Complete missing sections to stand out to mentors and employers.",
+  "cvMissingCount": "{count, plural, =1{1 section to complete} other{{count} sections to complete}}",
+  "@cvMissingCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "cvItemPhoto": "Profile photo",
+  "cvItemHeadline": "Professional headline",
+  "cvItemBio": "About / Bio",
+  "cvItemSkills": "Skills (at least 3)",
+  "cvItemEducation": "Education",
+  "cvItemExperience": "Experience",
+  "cvItemCvAsset": "Attached CV file",
+  "cvMissingBadge": "Missing",
+  "cvCompletedBadge": "Completed",
+  "editProfileCta": "Edit profile & CV",
+  "shareExportCvCta": "Share / Export CV",
+  "aboutAndSkillsTitle": "About & Skills",
+  "noSkillsYet": "No skills added yet.",
+  "educationTitle": "Education",
+  "noEducationYet": "No education entries yet",
+  "addEducationCta": "Add education",
+  "experienceTitle": "Experience",
+  "noExperienceYet": "No experience entries yet",
+  "addExperienceCta": "Add experience",
+  "certificatesTitle": "Certificates & evidence",
+  "noCertificatesYet": "No certificates added yet",
+  "addCertificateCta": "Add certificate",
+  "portfolioProjectsTitle": "Portfolio projects",
+  "noProjectsYet": "No portfolio projects yet",
+  "addProjectCta": "Add project"
 }
