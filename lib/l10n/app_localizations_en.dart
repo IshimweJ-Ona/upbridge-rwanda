@@ -420,4 +420,106 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mentorReviewFollowsVerificationBody =>
       'Verifying your email confirms your address only — it does not approve mentor access. Once verified, your application enters admin review.';
+
+  @override
+  String get cvCompletenessTitle => 'CV Completeness';
+
+  @override
+  String cvCompletenessSubtitle(int percent) {
+    return '$percent% completed';
+  }
+
+  @override
+  String get cvCompletenessComplete =>
+      'Your CV is complete and ready to share!';
+
+  @override
+  String get cvCompletenessGuidance =>
+      'Complete missing sections to stand out to mentors and employers.';
+
+  @override
+  String cvMissingCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sections to complete',
+      one: '1 section to complete',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cvItemPhoto => 'Profile photo';
+
+  @override
+  String get cvItemHeadline => 'Professional headline';
+
+  @override
+  String get cvItemBio => 'About / Bio';
+
+  @override
+  String get cvItemSkills => 'Skills (at least 3)';
+
+  @override
+  String get cvItemEducation => 'Education';
+
+  @override
+  String get cvItemExperience => 'Experience';
+
+  @override
+  String get cvItemCvAsset => 'Attached CV file';
+
+  @override
+  String get cvMissingBadge => 'Missing';
+
+  @override
+  String get cvCompletedBadge => 'Completed';
+
+  @override
+  String get editProfileCta => 'Edit profile & CV';
+
+  @override
+  String get shareExportCvCta => 'Share / Export CV';
+
+  @override
+  String get aboutAndSkillsTitle => 'About & Skills';
+
+  @override
+  String get noSkillsYet => 'No skills added yet.';
+
+  @override
+  String get educationTitle => 'Education';
+
+  @override
+  String get noEducationYet => 'No education entries yet';
+
+  @override
+  String get addEducationCta => 'Add education';
+
+  @override
+  String get experienceTitle => 'Experience';
+
+  @override
+  String get noExperienceYet => 'No experience entries yet';
+
+  @override
+  String get addExperienceCta => 'Add experience';
+
+  @override
+  String get certificatesTitle => 'Certificates & evidence';
+
+  @override
+  String get noCertificatesYet => 'No certificates added yet';
+
+  @override
+  String get addCertificateCta => 'Add certificate';
+
+  @override
+  String get portfolioProjectsTitle => 'Portfolio projects';
+
+  @override
+  String get noProjectsYet => 'No portfolio projects yet';
+
+  @override
+  String get addProjectCta => 'Add project';
 }
