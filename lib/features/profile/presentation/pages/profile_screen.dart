@@ -556,14 +556,14 @@ class ProfileScreen extends ConsumerWidget {
                         runSpacing: 8,
                         children: [
                           AppButton(
-                            'Edit CV & Photo',
+                            l10n.editProfileCta,
                             size: ButtonSize.medium,
                             expand: false,
                             leadingIcon: Icons.edit_outlined,
                             onPressed: () => context.push('/profile-edit'),
                           ),
                           AppButton(
-                            'Share / Export CV',
+                            l10n.shareExportCvCta,
                             size: ButtonSize.medium,
                             variant: ButtonVariant.secondary,
                             expand: false,
@@ -594,8 +594,20 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
 
+                // Live CV Completeness indicator
+                const SizedBox(height: 12),
+                CvCompletenessCard(
+                  profile: profile,
+                  session: session,
+                  onEditProfile: () => context.push('/profile-edit'),
+                  onAddEducation: () =>
+                      _showEducationSheet(context, ref, profile),
+                  onAddExperience: () =>
+                      _showExperienceSheet(context, ref, profile),
+                ),
+
                 // About & Skills
-                const SectionLabel('About & Skills'),
+                SectionLabel(l10n.aboutAndSkillsTitle),
                 SurfaceCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,7 +627,7 @@ class ProfileScreen extends ConsumerWidget {
                       const SizedBox(height: Space.s2),
                       profile.skills.isEmpty
                           ? Text(
-                              'No skills added yet.',
+                              l10n.noSkillsYet,
                               style: AppText.bodyS.copyWith(color: p.textMuted),
                             )
                           : TagWrap(profile.skills, tone: Tone.info),
@@ -898,6 +910,243 @@ class ProfileScreen extends ConsumerWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+/// Evaluates live completion across the 7 required CV dimensions:
+/// photo, headline, bio/about, skills, education, experience, and attached CV asset.
+class CvCompletenessReport {
+  const CvCompletenessReport({
+    required this.hasPhoto,
+    required this.hasHeadline,
+    required this.hasBio,
+    required this.hasSkills,
+    required this.hasEducation,
+    required this.hasExperience,
+    required this.hasCvAsset,
+  });
+
+  final bool hasPhoto;
+  final bool hasHeadline;
+  final bool hasBio;
+  final bool hasSkills;
+  final bool hasEducation;
+  final bool hasExperience;
+  final bool hasCvAsset;
+
+  int get completedCount => [
+        hasPhoto,
+        hasHeadline,
+        hasBio,
+        hasSkills,
+        hasEducation,
+        hasExperience,
+        hasCvAsset,
+      ].where((v) => v).length;
+
+  int get totalCount => 7;
+
+  int get percent => ((completedCount / totalCount) * 100).round();
+
+  bool get isComplete => completedCount == totalCount;
+
+  static CvCompletenessReport evaluate(UserProfile profile, [AppSession? session]) {
+    final hasPhoto = profile.photoAsset != null;
+    final hasHeadline = profile.headline.trim().isNotEmpty;
+    final hasBio = profile.about.trim().length >= 10;
+    final hasSkills = profile.skills.length >= 3;
+    final hasEducation = profile.education.isNotEmpty;
+    final hasExperience = profile.experience.isNotEmpty;
+    final hasCvAsset = profile.cvAsset != null;
+
+    return CvCompletenessReport(
+      hasPhoto: hasPhoto,
+      hasHeadline: hasHeadline,
+      hasBio: hasBio,
+      hasSkills: hasSkills,
+      hasEducation: hasEducation,
+      hasExperience: hasExperience,
+      hasCvAsset: hasCvAsset,
+    );
+  }
+}
+
+/// Interactive CV Completeness card with live progress bar and quick links to missing sections.
+class CvCompletenessCard extends StatelessWidget {
+  const CvCompletenessCard({
+    super.key,
+    required this.profile,
+    required this.session,
+    this.onEditProfile,
+    this.onAddEducation,
+    this.onAddExperience,
+  });
+
+  final UserProfile profile;
+  final AppSession session;
+  final VoidCallback? onEditProfile;
+  final VoidCallback? onAddEducation;
+  final VoidCallback? onAddExperience;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final p = context.palette;
+    final report = CvCompletenessReport.evaluate(profile, session);
+
+    final missingSections = <(String, IconData, VoidCallback?)>[];
+    if (!report.hasPhoto) {
+      missingSections.add(
+        (l10n.cvItemPhoto, Icons.add_a_photo_outlined, onEditProfile),
+      );
+    }
+    if (!report.hasHeadline) {
+      missingSections.add(
+        (l10n.cvItemHeadline, Icons.badge_outlined, onEditProfile),
+      );
+    }
+    if (!report.hasBio) {
+      missingSections.add(
+        (l10n.cvItemBio, Icons.description_outlined, onEditProfile),
+      );
+    }
+    if (!report.hasSkills) {
+      missingSections.add(
+        (l10n.cvItemSkills, Icons.psychology_outlined, onEditProfile),
+      );
+    }
+    if (!report.hasEducation) {
+      missingSections.add(
+        (l10n.cvItemEducation, Icons.school_outlined, onAddEducation ?? onEditProfile),
+      );
+    }
+    if (!report.hasExperience) {
+      missingSections.add(
+        (l10n.cvItemExperience, Icons.work_outline_rounded, onAddExperience ?? onEditProfile),
+      );
+    }
+    if (!report.hasCvAsset) {
+      missingSections.add(
+        (l10n.cvItemCvAsset, Icons.upload_file_outlined, onEditProfile),
+      );
+    }
+
+    final isAllComplete = report.isComplete;
+    final tone = isAllComplete
+        ? Tone.success
+        : (report.percent >= 50 ? Tone.info : Tone.warning);
+
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconTile(
+                isAllComplete
+                    ? Icons.verified_outlined
+                    : Icons.trending_up_rounded,
+                tone: tone,
+                size: 34,
+              ),
+              const SizedBox(width: Space.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.cvCompletenessTitle,
+                      style: AppText.bodyMStrong.copyWith(color: p.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.cvCompletenessSubtitle(report.percent),
+                      style: AppText.caption.copyWith(
+                        color: isAllComplete ? p.successText : p.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              StatusBadge(
+                isAllComplete ? l10n.cvCompletedBadge : '${report.percent}%',
+                tone: tone,
+                icon: isAllComplete ? Icons.check_circle_rounded : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: LinearProgressIndicator(
+              value: report.completedCount / report.totalCount.toDouble(),
+              minHeight: 8,
+              backgroundColor: p.sunken,
+              valueColor: AlwaysStoppedAnimation(
+                isAllComplete ? p.successText : p.actionPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isAllComplete
+                ? l10n.cvCompletenessComplete
+                : l10n.cvCompletenessGuidance,
+            style: AppText.caption.copyWith(
+              color: isAllComplete ? p.successText : p.textSecondary,
+            ),
+          ),
+          if (missingSections.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.cvMissingCount(missingSections.length),
+              style: AppText.caption.copyWith(
+                color: p.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final item in missingSections)
+                  Pressable(
+                    onTap: item.$3,
+                    scale: 0.96,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: p.canvas,
+                        borderRadius: Radii.rSm,
+                        border: Border.all(color: p.borderSubtle),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(item.$2, size: 13, color: p.actionPrimary),
+                          const SizedBox(width: 5),
+                          Text(
+                            '+ ${item.$1}',
+                            style: AppText.caption.copyWith(
+                              color: p.actionPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
