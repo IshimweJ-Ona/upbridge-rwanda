@@ -13,6 +13,7 @@ import 'package:upbridge/features/mentorship/domain/models/mentorship_session.da
 import 'package:upbridge/features/opportunities/domain/models/opportunity_listing.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
+import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
 
 class StudentDashboardScreen extends ConsumerWidget {
@@ -102,18 +103,17 @@ class StudentDashboardScreen extends ConsumerWidget {
           action: nextAction.actionLabel,
           onAction: nextAction.onTap,
         ),
-        SectionLabel(l10n.activeMentorshipLabel),
-        if (mentorshipsAsync.isLoading && !mentorshipsAsync.hasValue)
-          const SkeletonCardLoader(lines: 1)
-        else if (activeMentorship == null)
+        if (mentorshipsAsync.hasError && !mentorshipsAsync.hasValue) ...[
+          SectionLabel(l10n.activeMentorshipLabel),
           EmptyState(
-            icon: Icons.people_outline_rounded,
-            title: 'No active mentorship yet',
-            body: 'Explore verified mentors and send a mentorship request.',
-            action: 'Find a mentor',
-            onAction: () => context.go('/mentors'),
-          )
-        else
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load mentorship',
+            body: errorMessage(mentorshipsAsync.error!),
+            action: l10n.retry,
+            onAction: () => ref.invalidate(studentMentorshipsProvider(uid)),
+          ),
+        ] else if (activeMentorship != null) ...[
+          SectionLabel(l10n.activeMentorshipLabel),
           SurfaceCard(
             padding: EdgeInsets.zero,
             child: ListRow(
@@ -130,22 +130,18 @@ class StudentDashboardScreen extends ConsumerWidget {
               trailing: const StatusBadge('Active', tone: Tone.success),
             ),
           ),
-        SectionLabel(l10n.upcomingSessionLabel),
-        if (sessionsAsync.isLoading && !sessionsAsync.hasValue)
-          const SkeletonCardLoader(lines: 1)
-        else if (upcomingSession == null)
+        ],
+        if (sessionsAsync.hasError && !sessionsAsync.hasValue) ...[
+          SectionLabel(l10n.upcomingSessionLabel),
           EmptyState(
-            icon: Icons.event_outlined,
-            title: 'No upcoming session',
-            body: activeMentorship == null
-                ? 'Schedule a session once a mentor accepts your request.'
-                : 'Schedule a 1-on-1 session with ${activeMentorship.mentorName}.',
-            action: activeMentorship == null ? null : 'Open mentorship',
-            onAction: activeMentorship == null
-                ? null
-                : () => context.push('/mentorship/${activeMentorship.id}'),
-          )
-        else
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load sessions',
+            body: errorMessage(sessionsAsync.error!),
+            action: l10n.retry,
+            onAction: () => ref.invalidate(studentSessionsProvider(uid)),
+          ),
+        ] else if (upcomingSession != null) ...[
+          SectionLabel(l10n.upcomingSessionLabel),
           SurfaceCard(
             padding: EdgeInsets.zero,
             child: ListRow(
@@ -158,6 +154,7 @@ class StudentDashboardScreen extends ConsumerWidget {
                   '${DateFormat('EEE d MMM · HH:mm').format(upcomingSession.scheduledAt.toLocal())} · ${upcomingSession.meetingMode}',
             ),
           ),
+        ],
         SectionLabel(
           l10n.learningProgressLabel,
           action: 'Open courses',
@@ -210,6 +207,14 @@ class StudentDashboardScreen extends ConsumerWidget {
         ),
         if (mentorsAsync.isLoading && !mentorsAsync.hasValue)
           const SkeletonCardLoader(lines: 1)
+        else if (mentorsAsync.hasError && !mentorsAsync.hasValue)
+          EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not load mentors',
+            body: errorMessage(mentorsAsync.error!),
+            action: l10n.retry,
+            onAction: () => ref.invalidate(approvedMentorsProvider),
+          )
         else if (mentors.where((m) => m.ownerUid != uid).isEmpty)
           EmptyState(
             icon: Icons.person_search_outlined,

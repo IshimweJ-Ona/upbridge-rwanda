@@ -14,6 +14,7 @@ import {
   deliverMentorApprovalEmail,
   reviewMentorApplicationTx,
   revokeMentorTx,
+  setMentorVisibilityTx,
   setUserStatusTx,
   verifyAdminActor,
 } from './admin_core.mjs';
@@ -75,6 +76,7 @@ export function createAdminServer({
   FieldValue,
   emailSender,
   corsAllowOrigin = process.env.CORS_ALLOW_ORIGIN || '*',
+  healthMeta = {},
 }) {
   return http.createServer(async (req, res) => {
     const pathname = new URL(req.url || '/', 'http://localhost').pathname;
@@ -93,7 +95,7 @@ export function createAdminServer({
       sendJson(
         res,
         200,
-        { ok: true, service: 'skillbridge-admin-backend' },
+        { ok: true, service: 'skillbridge-admin-backend', ...healthMeta },
         corsAllowOrigin,
       );
       return;
@@ -153,6 +155,21 @@ export function createAdminServer({
         return;
       }
 
+      if (pathname === '/admin/set-mentor-visibility') {
+        if (typeof body.isPublic !== 'boolean') {
+          throw new HttpAuthError(400, 'isPublic must be a boolean.');
+        }
+        const result = await setMentorVisibilityTx({
+          db,
+          FieldValue,
+          actor,
+          mentorUid: String(body.mentorUid || '').trim(),
+          isPublic: body.isPublic,
+        });
+        sendJson(res, 200, result, corsAllowOrigin);
+        return;
+      }
+
       if (pathname === '/admin/revoke-mentor-role') {
         const result = await revokeMentorTx({
           auth,
@@ -207,12 +224,38 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   const db = fsPkg.getFirestore();
   const { FieldValue } = fsPkg;
   const emailSender = createEmailSender(process.env);
+  const emailProvider = process.env.RESEND_API_KEY?.trim()
+    ? 'resend'
+    : process.env.SMTP_HOST?.trim()
+      ? 'smtp'
+      : 'unconfigured';
   const host = process.env.HOST || '127.0.0.1';
   const port = Number(process.env.PORT || '8787');
-  const server = createAdminServer({ auth, db, FieldValue, emailSender });
+  const server = createAdminServer({
+    auth,
+    db,
+    FieldValue,
+    emailSender,
+    healthMeta: {
+      projectId,
+      firebaseMode: usingEmulators ? 'emulators' : 'production',
+      emailConfigured: emailProvider !== 'unconfigured',
+      emailProvider,
+    },
+  });
   server.listen(port, host, () => {
     console.log(
-      `SkillBridge Admin Backend listening on http://${host}:${port} (project=${projectId})`,
+      `SkillBridge Admin Backend listening on http://${host}:${port} (project=${projectId}, mode=${usingEmulators ? 'emulators' : 'production'}, email=${emailProvider})`,
     );
+    if (!usingEmulators && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.warn(
+        '[WARN] GOOGLE_APPLICATION_CREDENTIALS is not set; Admin SDK Firestore/Auth calls require Application Default Credentials or a service-account JSON.',
+      );
+    }
+    if (emailProvider === 'unconfigured') {
+      console.warn(
+        '[WARN] Email transport is unconfigured; set RESEND_API_KEY + MAIL_FROM (or SMTP_HOST/SMTP_USER/SMTP_PASS) to send approval emails.',
+      );
+    }
   });
 }

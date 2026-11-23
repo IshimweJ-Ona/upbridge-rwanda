@@ -233,6 +233,150 @@ export async function deliverMentorApprovalEmail({
   }
 }
 
+function buildMentorProfileCreateData({
+  mentorUid,
+  appData,
+  userData,
+  FieldValue,
+  isPublic,
+}) {
+  const expertise = Array.isArray(appData.expertise) ? appData.expertise : [];
+  const skills = Array.isArray(appData.skills) ? appData.skills : [];
+  const supportingLinks = Array.isArray(appData.supportingLinks)
+    ? appData.supportingLinks
+    : [];
+  const mergedSkills = [...new Set([...expertise, ...skills])];
+  const experienceYears = Number(appData.experienceYears || 0);
+  const maxMentees = Math.min(50, Math.max(1, Number(appData.maxMentees || 5)));
+  const availability = String(appData.availability || '');
+  const bio = String(appData.bio || '');
+  const headline = String(appData.headline || '').trim();
+  const displayName = String(
+    appData.applicantName || userData.displayName || 'Mentor',
+  ).trim();
+
+  return {
+    ownerUid: mentorUid,
+    displayName,
+    headline,
+    location: 'Kigali, Rwanda',
+    about: bio,
+    photoAsset: userData.photoAsset ?? null,
+    cvAsset: appData.cvAsset ?? null,
+    skills: mergedSkills,
+    interests: [],
+    learningGoal: '',
+    professionalLinks: supportingLinks,
+    education: [],
+    experience: [],
+    certificates: [],
+    isMentorPublic: isPublic,
+    mentorExpertise: expertise,
+    mentorExperienceYears: experienceYears,
+    mentorAvailability: availability,
+    mentorMaxMentees: maxMentees,
+    mentorBio: bio,
+    status: 'active',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function buildMentorProfileUpdatePatch({
+  existingProfile,
+  appData,
+  userData,
+  FieldValue,
+  isPublic,
+  syncApplicationFields,
+}) {
+  const expertise = Array.isArray(appData.expertise) ? appData.expertise : [];
+  const skills = Array.isArray(appData.skills) ? appData.skills : [];
+  const supportingLinks = Array.isArray(appData.supportingLinks)
+    ? appData.supportingLinks
+    : [];
+  const mergedSkills = [...new Set([...expertise, ...skills])];
+  const experienceYears = Number(appData.experienceYears || 0);
+  const maxMentees = Math.min(50, Math.max(1, Number(appData.maxMentees || 5)));
+  const availability = String(appData.availability || '');
+  const bio = String(appData.bio || '');
+  const headline = String(appData.headline || '').trim();
+  const displayName = String(
+    appData.applicantName || userData.displayName || '',
+  ).trim();
+
+  const patch = {
+    isMentorPublic: isPublic,
+    status: 'active',
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (
+    syncApplicationFields ||
+    ((!Array.isArray(existingProfile.mentorExpertise) ||
+      existingProfile.mentorExpertise.length === 0) &&
+      expertise.length > 0)
+  ) {
+    patch.mentorExpertise = expertise;
+  }
+  if (
+    syncApplicationFields ||
+    (Number(existingProfile.mentorExperienceYears || 0) === 0 &&
+      experienceYears > 0)
+  ) {
+    patch.mentorExperienceYears = experienceYears;
+  }
+  if (
+    syncApplicationFields ||
+    (String(existingProfile.mentorAvailability || '').trim().length === 0 &&
+      availability.trim().length > 0)
+  ) {
+    patch.mentorAvailability = availability;
+  }
+  if (syncApplicationFields || existingProfile.mentorMaxMentees == null) {
+    patch.mentorMaxMentees = maxMentees;
+  }
+  if (
+    syncApplicationFields ||
+    (String(existingProfile.mentorBio || '').trim().length === 0 &&
+      bio.trim().length > 0)
+  ) {
+    patch.mentorBio = bio;
+  }
+  if (
+    displayName &&
+    String(existingProfile.displayName || '').trim().length === 0
+  ) {
+    patch.displayName = displayName;
+  }
+  if (
+    headline &&
+    (syncApplicationFields ||
+      String(existingProfile.headline || '').trim().length === 0)
+  ) {
+    patch.headline = headline;
+  }
+  if (
+    (!Array.isArray(existingProfile.skills) ||
+      existingProfile.skills.length === 0) &&
+    mergedSkills.length > 0
+  ) {
+    patch.skills = mergedSkills;
+  }
+  if (
+    (!Array.isArray(existingProfile.professionalLinks) ||
+      existingProfile.professionalLinks.length === 0) &&
+    supportingLinks.length > 0
+  ) {
+    patch.professionalLinks = supportingLinks;
+  }
+  if (existingProfile.cvAsset == null && appData.cvAsset != null) {
+    patch.cvAsset = appData.cvAsset;
+  }
+
+  return patch;
+}
+
 export async function reviewMentorApplicationTx({
   auth,
   db,
@@ -355,77 +499,30 @@ export async function reviewMentorApplicationTx({
         });
       }
 
-      const expertise = Array.isArray(appData.expertise) ? appData.expertise : [];
-      const skills = Array.isArray(appData.skills) ? appData.skills : [];
-      const supportingLinks = Array.isArray(appData.supportingLinks)
-        ? appData.supportingLinks
-        : [];
-      const mergedSkills = [...new Set([...expertise, ...skills])];
-      const experienceYears = Number(appData.experienceYears || 0);
-      const maxMentees = Math.min(50, Math.max(1, Number(appData.maxMentees || 5)));
-      const availability = String(appData.availability || '');
-      const bio = String(appData.bio || '');
-      const headline = String(appData.headline || '').trim();
-
       if (profileSnap.exists) {
         const existingProfile = profileSnap.data() || {};
-        const patch = {
-          mentorExpertise: expertise,
-          mentorExperienceYears: experienceYears,
-          mentorAvailability: availability,
-          mentorMaxMentees: maxMentees,
-          mentorBio: bio,
-          status: 'active',
-          updatedAt: FieldValue.serverTimestamp(),
-        };
-        if (
-          applicantName &&
-          String(existingProfile.displayName || '').trim().length === 0
-        ) {
-          patch.displayName = applicantName;
-        }
-        if (headline) patch.headline = headline;
-        if (
-          (!Array.isArray(existingProfile.skills) ||
-            existingProfile.skills.length === 0) &&
-          mergedSkills.length > 0
-        ) {
-          patch.skills = mergedSkills;
-        }
-        if (
-          (!Array.isArray(existingProfile.professionalLinks) ||
-            existingProfile.professionalLinks.length === 0) &&
-          supportingLinks.length > 0
-        ) {
-          patch.professionalLinks = supportingLinks;
-        }
-        tx.update(profileRef, patch);
+        tx.update(
+          profileRef,
+          buildMentorProfileUpdatePatch({
+            existingProfile,
+            appData,
+            userData,
+            FieldValue,
+            isPublic: true,
+            syncApplicationFields: true,
+          }),
+        );
       } else {
-        tx.set(profileRef, {
-          ownerUid: applicantUid,
-          displayName: applicantName,
-          headline,
-          location: 'Kigali, Rwanda',
-          about: bio,
-          photoAsset: null,
-          cvAsset: appData.cvAsset ?? null,
-          skills: mergedSkills,
-          interests: [],
-          learningGoal: '',
-          professionalLinks: supportingLinks,
-          education: [],
-          experience: [],
-          certificates: [],
-          isMentorPublic: false,
-          mentorExpertise: expertise,
-          mentorExperienceYears: experienceYears,
-          mentorAvailability: availability,
-          mentorMaxMentees: maxMentees,
-          mentorBio: bio,
-          status: 'active',
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        tx.set(
+          profileRef,
+          buildMentorProfileCreateData({
+            mentorUid: applicantUid,
+            appData,
+            userData,
+            FieldValue,
+            isPublic: true,
+          }),
+        );
       }
 
       tx.set(db.collection('notifications').doc(), {
@@ -721,4 +818,89 @@ export async function setUserStatusTx({
   } catch (_) {}
 
   return { ok: true, status };
+}
+
+export async function setMentorVisibilityTx({
+  db,
+  FieldValue,
+  actor,
+  mentorUid,
+  isPublic,
+}) {
+  if (!mentorUid) {
+    throw new HttpAuthError(400, 'mentorUid is required.');
+  }
+  if (typeof isPublic !== 'boolean') {
+    throw new HttpAuthError(400, 'isPublic must be a boolean.');
+  }
+
+  const appRef = db.collection('mentorApplications').doc(mentorUid);
+  const userRef = db.collection('users').doc(mentorUid);
+  const profileRef = db.collection('profiles').doc(mentorUid);
+
+  await db.runTransaction(async (tx) => {
+    const [appSnap, userSnap, profileSnap] = await Promise.all([
+      tx.get(appRef),
+      tx.get(userRef),
+      tx.get(profileRef),
+    ]);
+
+    const appData = appSnap.exists ? appSnap.data() || {} : {};
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+    const userApproved =
+      userSnap.exists &&
+      userData.role === 'mentor' &&
+      userData.isApproved === true &&
+      (!userData.approvalStatus || userData.approvalStatus === 'approved');
+    const appApproved = appSnap.exists && appData.status === 'approved';
+    if (!userApproved && !appApproved) {
+      throw new HttpAuthError(
+        409,
+        'Mentor must be approved before changing directory visibility.',
+      );
+    }
+
+    if (profileSnap.exists) {
+      const existingProfile = profileSnap.data() || {};
+      tx.update(
+        profileRef,
+        buildMentorProfileUpdatePatch({
+          existingProfile,
+          appData,
+          userData,
+          FieldValue,
+          isPublic,
+          syncApplicationFields: false,
+        }),
+      );
+    } else {
+      tx.set(
+        profileRef,
+        buildMentorProfileCreateData({
+          mentorUid,
+          appData,
+          userData,
+          FieldValue,
+          isPublic,
+        }),
+      );
+    }
+
+    tx.set(db.collection('auditLogs').doc(), {
+      ownerUid: actor.uid,
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      action: isPublic ? 'publishMentorProfile' : 'hideMentorProfile',
+      targetCollection: 'profiles',
+      targetId: mentorUid,
+      details: isPublic
+        ? `Published approved mentor ${mentorUid} to student directory`
+        : `Hid approved mentor ${mentorUid} from student directory`,
+      status: 'recorded',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  return { ok: true, mentorUid, isMentorPublic: isPublic };
 }

@@ -20,6 +20,7 @@ import {
   deliverMentorApprovalEmail,
   reviewMentorApplicationTx,
   revokeMentorTx,
+  setMentorVisibilityTx,
 } from '../server/admin_core.mjs';
 import { createEmailSender } from '../server/email_service.mjs';
 
@@ -88,10 +89,12 @@ if (
   (!args.retryEmail &&
     args.decision !== 'approve' &&
     args.decision !== 'reject' &&
-    args.decision !== 'revoke')
+    args.decision !== 'revoke' &&
+    args.decision !== 'publish' &&
+    args.decision !== 'hide')
 ) {
   console.error(
-    'Usage: node scripts/review_mentor.mjs --uid <uid> (--decision <approve|reject|revoke> [--reason "<text>"] | --retry-email) [--project upridge-rwanda-dev]',
+    'Usage: node scripts/review_mentor.mjs --uid <uid> (--decision <approve|reject|revoke|publish|hide> [--reason "<text>"] | --retry-email) [--project upridge-rwanda-dev]',
   );
   process.exit(1);
 }
@@ -162,6 +165,15 @@ if (args.decision === 'revoke') {
     actor,
     targetUid: args.uid,
     reason: args.reason,
+  });
+  console.log(JSON.stringify({ ...res, uid: args.uid }));
+} else if (args.decision === 'publish' || args.decision === 'hide') {
+  const res = await setMentorVisibilityTx({
+    db,
+    FieldValue,
+    actor,
+    mentorUid: args.uid,
+    isPublic: args.decision === 'publish',
   });
   console.log(JSON.stringify({ ...res, uid: args.uid }));
 } else {

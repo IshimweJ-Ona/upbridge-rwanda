@@ -14,9 +14,14 @@ import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
 
 class AdminMentorReviewScreen extends ConsumerStatefulWidget {
-  const AdminMentorReviewScreen({super.key, required this.applicantUid});
+  const AdminMentorReviewScreen({
+    super.key,
+    required this.applicantUid,
+    @visibleForTesting this.showDirectoryVisibilityInTests = false,
+  });
 
   final String applicantUid;
+  final bool showDirectoryVisibilityInTests;
 
   @override
   ConsumerState<AdminMentorReviewScreen> createState() =>
@@ -140,6 +145,34 @@ class _AdminMentorReviewScreenState
     }
   }
 
+  Future<void> _setDirectoryVisibility(
+    MentorApplication app,
+    bool isPublic,
+  ) async {
+    setState(() => _submitting = true);
+    try {
+      final result = await ref
+          .read(adminOperationsClientProvider)
+          .setMentorDirectoryVisibility(
+            mentorUid: app.ownerUid,
+            isPublic: isPublic,
+          );
+      ref.invalidate(userProfileProvider(app.ownerUid));
+      ref.invalidate(approvedMentorsProvider);
+      if (mounted) {
+        showToast(
+          context,
+          result.message,
+          tone: isPublic ? Tone.success : Tone.warning,
+        );
+      }
+    } catch (error) {
+      if (mounted) showToast(context, errorMessage(error), tone: Tone.danger);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   Future<void> _retryEmail(MentorApplication app) async {
     setState(() => _submitting = true);
     try {
@@ -168,9 +201,12 @@ class _AdminMentorReviewScreenState
     final appAsync = ref.watch(
       mentorApplicationDetailProvider(widget.applicantUid),
     );
-    final profile = Firebase.apps.isNotEmpty
-        ? ref.watch(userProfileProvider(widget.applicantUid)).asData?.value
+    final watchProfile =
+        Firebase.apps.isNotEmpty || widget.showDirectoryVisibilityInTests;
+    final profileAsync = watchProfile
+        ? ref.watch(userProfileProvider(widget.applicantUid))
         : null;
+    final profile = profileAsync?.asData?.value;
     final account = Firebase.apps.isNotEmpty
         ? ref
               .watch(userAccountDetailProvider(widget.applicantUid))
@@ -482,6 +518,40 @@ class _AdminMentorReviewScreenState
                   variant: ButtonVariant.secondary,
                   loading: _submitting,
                   onPressed: () => _retryEmail(app),
+                ),
+              ],
+              if (profileAsync != null && profileAsync.hasValue) ...[
+                const SectionLabel('Student directory visibility'),
+                NoticeCard(
+                  tone: (profile?.isMentorPublic ?? false)
+                      ? Tone.success
+                      : Tone.warning,
+                  icon: (profile?.isMentorPublic ?? false)
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  title: (profile?.isMentorPublic ?? false)
+                      ? 'Visible in student mentor directory'
+                      : 'Hidden from student mentor directory',
+                  body: (profile?.isMentorPublic ?? false)
+                      ? 'Students can discover this mentor and send mentorship requests.'
+                      : 'Students cannot see this mentor yet. Publish their profile to make them discoverable.',
+                ),
+                const SizedBox(height: 10),
+                AppButton(
+                  (profile?.isMentorPublic ?? false)
+                      ? 'Hide from mentor directory'
+                      : 'Publish to mentor directory',
+                  leadingIcon: (profile?.isMentorPublic ?? false)
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  variant: (profile?.isMentorPublic ?? false)
+                      ? ButtonVariant.secondary
+                      : ButtonVariant.primary,
+                  loading: _submitting,
+                  onPressed: () => _setDirectoryVisibility(
+                    app,
+                    !(profile?.isMentorPublic ?? false),
+                  ),
                 ),
               ],
               const SizedBox(height: 12),

@@ -917,6 +917,12 @@ class _RecordingAdminOperations implements AdminOperationsClient {
   }) async => const AdminActionResult(completed: true, message: 'Email sent');
 
   @override
+  Future<AdminActionResult> setMentorDirectoryVisibility({
+    required String mentorUid,
+    required bool isPublic,
+  }) async => const AdminActionResult(completed: true, message: 'OK');
+
+  @override
   Future<AdminActionResult> revokeMentorRole({
     required String targetUid,
     required String reason,

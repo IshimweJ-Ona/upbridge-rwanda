@@ -46,7 +46,7 @@ void main() {
 
   group('Phase 3 Role Dashboards & Profile', () {
     testWidgets(
-      'StudentDashboardScreen renders empty states when Firestore collections are empty',
+      'StudentDashboardScreen hides empty mentorship and session cards when none exist',
       (tester) async {
         const session = AppSession(
           firebaseInitialized: true,
@@ -86,8 +86,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Hello, Aline'), findsWidgets);
-        expect(find.text('No active mentorship yet'), findsOneWidget);
-        expect(find.text('No upcoming session'), findsOneWidget);
+        expect(find.text('No active mentorship yet'), findsNothing);
+        expect(find.text('No upcoming session'), findsNothing);
+        expect(find.text('ACTIVE MENTORSHIP'), findsNothing);
+        expect(find.text('UPCOMING SESSION'), findsNothing);
       },
     );
 

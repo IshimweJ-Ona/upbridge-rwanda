@@ -11,6 +11,7 @@ import {
   deliverMentorApprovalEmail,
   reviewMentorApplicationTx,
   revokeMentorTx,
+  setMentorVisibilityTx,
   verifyAdminActor,
 } from './admin_core.mjs';
 import { createAdminServer } from './index.mjs';
@@ -275,6 +276,8 @@ test('approval triggers email once, retry prevents duplicates, and rejection nev
   assert.equal(db._cols.get('users').get('m1').role, 'mentor');
   assert.equal(db._cols.get('users').get('m1').isApproved, true);
   assert.equal(db._cols.get('users').get('m1').approvalStatus, 'approved');
+  assert.equal(db._cols.get('profiles').get('m1').isMentorPublic, true);
+  assert.equal(db._cols.get('profiles').get('m1').status, 'active');
   assert.equal(db._cols.get('mentorApplications').get('m1').approvalEmailStatus, 'failed');
   assert.equal(claimsSet.length, 1);
 
@@ -455,6 +458,18 @@ test('HTTP Admin server rejects non-admin requests and serves authorized approva
     assert.equal(json.newApprovalStatus, 'approved');
     assert.equal(json.emailDelivery.status, 'sent');
     assert.equal(delivered.length, 1);
+    assert.equal(db._cols.get('profiles').get('m-http').isMentorPublic, true);
+
+    const hideResp = await fetch(`${baseUrl}/admin/set-mentor-visibility`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer admin-jwt',
+      },
+      body: JSON.stringify({ mentorUid: 'm-http', isPublic: false }),
+    });
+    assert.equal(hideResp.status, 200);
+    assert.equal(db._cols.get('profiles').get('m-http').isMentorPublic, false);
 
     const badJsonResp = await fetch(`${baseUrl}/admin/review-mentor-application`, {
       method: 'POST',
@@ -578,4 +593,121 @@ test('concurrent email retries never send duplicate emails, revocation clears ap
     (e) => e instanceof HttpAuthError && e.statusCode === 409,
   );
   assert.equal(db._cols.get('users').get('admin-target').role, 'admin');
+});
+
+test('approval sets isMentorPublic=true on pre-existing hidden profiles and setMentorVisibilityTx repairs/toggles approved mentors', async () => {
+  const db = createMemoryFirestore({
+    users: {
+      'm-pre': {
+        ownerUid: 'm-pre',
+        email: 'pre@skillbridge.rw',
+        displayName: 'Pre Profile Mentor',
+        role: 'mentor',
+        isApproved: false,
+        approvalStatus: 'pending',
+        status: 'active',
+      },
+      'm-legacy-approved': {
+        ownerUid: 'm-legacy-approved',
+        email: 'legacy@skillbridge.rw',
+        displayName: 'Legacy Approved',
+        role: 'mentor',
+        isApproved: true,
+        approvalStatus: 'approved',
+        status: 'active',
+      },
+      'm-pending': {
+        ownerUid: 'm-pending',
+        email: 'pending@skillbridge.rw',
+        displayName: 'Still Pending',
+        role: 'mentor',
+        isApproved: false,
+        approvalStatus: 'pending',
+        status: 'active',
+      },
+    },
+    mentorApplications: {
+      'm-pre': {
+        ownerUid: 'm-pre',
+        applicantName: 'Pre Profile Mentor',
+        applicantEmail: 'pre@skillbridge.rw',
+        headline: 'Mobile Lead',
+        bio: 'Mentoring mobile devs.',
+        expertise: ['Flutter'],
+        experienceYears: 5,
+        status: 'pending',
+      },
+      'm-legacy-approved': {
+        ownerUid: 'm-legacy-approved',
+        applicantName: 'Legacy Approved',
+        applicantEmail: 'legacy@skillbridge.rw',
+        headline: 'Backend Lead',
+        bio: 'Mentoring backend devs.',
+        expertise: ['Node.js'],
+        experienceYears: 7,
+        status: 'approved',
+      },
+      'm-pending': {
+        ownerUid: 'm-pending',
+        applicantName: 'Still Pending',
+        applicantEmail: 'pending@skillbridge.rw',
+        headline: 'Designer',
+        bio: 'UI/UX design.',
+        expertise: ['Design'],
+        experienceYears: 3,
+        status: 'pending',
+      },
+    },
+    profiles: {
+      'm-pre': {
+        ownerUid: 'm-pre',
+        displayName: 'Pre Profile Mentor',
+        isMentorPublic: false,
+        status: 'active',
+      },
+    },
+  });
+  const auth = {
+    async getUser() {
+      return { customClaims: {} };
+    },
+    async setCustomUserClaims() {},
+  };
+  const actor = { uid: 'admin-1', email: 'authapp05@gmail.com' };
+
+  // 1. Approving a mentor whose profiles/{uid} already existed with isMentorPublic=false flips it to true.
+  await reviewMentorApplicationTx({
+    auth,
+    db,
+    FieldValue,
+    actor,
+    applicantUid: 'm-pre',
+    decision: 'approved',
+    emailSender: async () => ({ configured: false, delivered: false }),
+  });
+  assert.equal(db._cols.get('profiles').get('m-pre').isMentorPublic, true);
+
+  // 2. setMentorVisibilityTx creates/publishes profile for an already-approved mentor without one.
+  const pubRes = await setMentorVisibilityTx({
+    db,
+    FieldValue,
+    actor,
+    mentorUid: 'm-legacy-approved',
+    isPublic: true,
+  });
+  assert.equal(pubRes.isMentorPublic, true);
+  assert.equal(db._cols.get('profiles').get('m-legacy-approved').isMentorPublic, true);
+  assert.equal(db._cols.get('profiles').get('m-legacy-approved').headline, 'Backend Lead');
+
+  // 3. Unapproved mentor cannot be published.
+  await assert.rejects(
+    setMentorVisibilityTx({
+      db,
+      FieldValue,
+      actor,
+      mentorUid: 'm-pending',
+      isPublic: true,
+    }),
+    (e) => e instanceof HttpAuthError && e.statusCode === 409,
+  );
 });

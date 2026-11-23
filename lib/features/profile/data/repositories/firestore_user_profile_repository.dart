@@ -103,8 +103,11 @@ class FirestoreUserProfileRepository implements UserProfileRepository {
     MediaAsset? photoAsset,
     bool clearPhotoAsset = false,
   }) async {
-    await _profiles.doc(uid).set({
-      'ownerUid': uid,
+    final ref = _profiles.doc(uid);
+    final existing = await ref.get();
+    final existingData = existing.data() ?? const <String, dynamic>{};
+
+    final payload = <String, dynamic>{
       if (displayName != null) 'displayName': displayName.trim(),
       if (headline != null) 'headline': headline.trim(),
       'professionalLinks': ?professionalLinks,
@@ -120,6 +123,52 @@ class FirestoreUserProfileRepository implements UserProfileRepository {
       'isMentorPublic': isMentorPublic,
       'status': ProfileStatus.active.value,
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+
+    if (!existing.exists) {
+      await ref.set({
+        'ownerUid': uid,
+        'displayName': displayName?.trim() ?? '',
+        'headline': headline?.trim() ?? '',
+        'location': 'Kigali, Rwanda',
+        'about': bio.trim(),
+        'photoAsset': clearPhotoAsset ? null : photoAsset?.toJson(),
+        'cvAsset': null,
+        'skills': expertise,
+        'interests': const <String>[],
+        'learningGoal': '',
+        'professionalLinks': professionalLinks ?? const <String>[],
+        'education': const <Map<String, dynamic>>[],
+        'experience': const <Map<String, dynamic>>[],
+        'certificates': const <Map<String, dynamic>>[],
+        'createdAt': FieldValue.serverTimestamp(),
+        ...payload,
+      });
+      return;
+    }
+
+    // Backfill any required firestore.rules validation fields missing on legacy docs.
+    if (!existingData.containsKey('displayName') &&
+        !payload.containsKey('displayName')) {
+      payload['displayName'] = '';
+    }
+    if (!existingData.containsKey('headline') &&
+        !payload.containsKey('headline')) {
+      payload['headline'] = '';
+    }
+    if (!existingData.containsKey('location')) {
+      payload['location'] = 'Kigali, Rwanda';
+    }
+    if (!existingData.containsKey('about')) {
+      payload['about'] = bio.trim();
+    }
+    if (!existingData.containsKey('photoAsset') &&
+        !payload.containsKey('photoAsset')) {
+      payload['photoAsset'] = null;
+    }
+    if (!existingData.containsKey('cvAsset')) {
+      payload['cvAsset'] = null;
+    }
+    await ref.update(payload);
   }
 }

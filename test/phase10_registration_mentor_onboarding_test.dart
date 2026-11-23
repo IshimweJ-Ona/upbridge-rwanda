@@ -1361,6 +1361,133 @@ void main() {
         expect(find.text('Mentor Access Restricted Screen'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'AdminMentorReviewScreen shows hidden mentor directory status and publishes mentor profile',
+      (tester) async {
+        final spyAdmin = _SpyAdminOperations();
+        final approvedApp = MentorApplication(
+          id: 'u-vis',
+          ownerUid: 'u-vis',
+          applicantName: 'Jean Bosco',
+          applicantEmail: 'jean@upbridge.rw',
+          headline: 'Cloud Engineer',
+          bio: 'Mentoring engineers.',
+          expertise: const ['Cloud'],
+          experienceYears: 5,
+          status: MentorApplicationStatus.approved,
+          createdAt: now,
+          updatedAt: now,
+        );
+        final hiddenProfile = UserProfile(
+          id: 'u-vis',
+          ownerUid: 'u-vis',
+          displayName: 'Jean Bosco',
+          headline: 'Cloud Engineer',
+          location: 'Kigali, Rwanda',
+          about: 'Mentoring engineers.',
+          isMentorPublic: false,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await tester.pumpWidget(
+          wrap(
+            const AdminMentorReviewScreen(
+              applicantUid: 'u-vis',
+              showDirectoryVisibilityInTests: true,
+            ),
+            overrides: [
+              mentorApplicationDetailProvider('u-vis').overrideWith(
+                (ref) => Stream.value(approvedApp),
+              ),
+              userProfileProvider('u-vis').overrideWith(
+                (ref) => Stream.value(hiddenProfile),
+              ),
+              adminOperationsClientProvider.overrideWithValue(spyAdmin),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.text('Publish to mentor directory'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(
+          find.text('Hidden from student mentor directory'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Publish to mentor directory'));
+        await tester.pumpAndSettle();
+        expect(spyAdmin.visibilityCalls, [(uid: 'u-vis', isPublic: true)]);
+      },
+    );
+
+    testWidgets(
+      'StudentDashboardScreen surfaces mentor directory load errors instead of empty state',
+      (tester) async {
+        const studentSession = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 's-err',
+          displayName: 'Aline Uwase',
+          role: UserRole.student,
+          onboarded: true,
+          accountExists: true,
+        );
+        await tester.pumpWidget(
+          wrap(
+            const StudentDashboardScreen(),
+            overrides: [
+              appSessionProvider.overrideWith(
+                (ref) => Stream.value(studentSession),
+              ),
+              liveUnreadNotificationCountProvider('s-err').overrideWith(
+                (ref) => Stream.value(0),
+              ),
+              userProfileProvider('s-err').overrideWith(
+                (ref) => Stream.value(null),
+              ),
+              studentMentorshipsProvider('s-err').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              studentSessionsProvider('s-err').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              publishedCoursesProvider.overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              userCourseProgressProvider('s-err').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              approvedMentorsProvider.overrideWith(
+                (ref) => Stream.error(
+                  FirebaseException(
+                    plugin: 'cloud_firestore',
+                    code: 'failed-precondition',
+                  ),
+                ),
+              ),
+              publishedOpportunitiesProvider.overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.text('Could not load mentors'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Could not load mentors'), findsOneWidget);
+        expect(find.text('No verified mentors available yet'), findsNothing);
+      },
+    );
   });
 }
 
@@ -1451,6 +1578,7 @@ class _NoopAuthService extends AuthService {}
 class _SpyAdminOperations implements AdminOperationsClient {
   String? rejectedReason;
   final List<String> retriedEmailUids = [];
+  final List<({String uid, bool isPublic})> visibilityCalls = [];
 
   @override
   Future<AdminActionResult> reviewMentorApplication({
@@ -1469,6 +1597,15 @@ class _SpyAdminOperations implements AdminOperationsClient {
     required String applicantUid,
   }) async {
     retriedEmailUids.add(applicantUid);
+    return const AdminActionResult(completed: true, message: 'Done');
+  }
+
+  @override
+  Future<AdminActionResult> setMentorDirectoryVisibility({
+    required String mentorUid,
+    required bool isPublic,
+  }) async {
+    visibilityCalls.add((uid: mentorUid, isPublic: isPublic));
     return const AdminActionResult(completed: true, message: 'Done');
   }
 

@@ -34,6 +34,11 @@ abstract interface class AdminOperationsClient {
 
   Future<AdminActionResult> retryApprovalEmail({required String applicantUid});
 
+  Future<AdminActionResult> setMentorDirectoryVisibility({
+    required String mentorUid,
+    required bool isPublic,
+  });
+
   Future<AdminActionResult> revokeMentorRole({
     required String targetUid,
     required String reason,
@@ -101,6 +106,174 @@ class SparkAdminOperationsClient implements AdminOperationsClient {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  static Map<String, dynamic> _buildMentorProfileCreateData({
+    required String mentorUid,
+    required Map<String, dynamic> appData,
+    required Map<String, dynamic> userData,
+    required bool isPublic,
+  }) {
+    final expertise = appData['expertise'] is List
+        ? List<String>.from(appData['expertise'] as List)
+        : const <String>[];
+    final skills = appData['skills'] is List
+        ? List<String>.from(appData['skills'] as List)
+        : const <String>[];
+    final supportingLinks = appData['supportingLinks'] is List
+        ? List<String>.from(appData['supportingLinks'] as List)
+        : const <String>[];
+    final mergedSkills = <String>{
+      ...expertise,
+      ...skills,
+    }.toList(growable: false);
+    final experienceYears = (appData['experienceYears'] as num?)?.toInt() ?? 0;
+    final maxMentees = ((appData['maxMentees'] as num?)?.toInt() ?? 5).clamp(
+      1,
+      50,
+    );
+    final availability = appData['availability'] as String? ?? '';
+    final bio = appData['bio'] as String? ?? '';
+    final headline = (appData['headline'] as String? ?? '').trim();
+    final educationText = (appData['education'] as String? ?? '').trim();
+    final displayName =
+        ((appData['applicantName'] as String?)?.trim().isNotEmpty == true
+                ? appData['applicantName'] as String
+                : (userData['displayName'] as String? ?? ''))
+            .trim();
+
+    return <String, dynamic>{
+      'ownerUid': mentorUid,
+      'displayName': displayName,
+      'headline': headline,
+      'location': 'Kigali, Rwanda',
+      'about': bio,
+      'photoAsset': userData['photoAsset'],
+      'cvAsset': appData['cvAsset'],
+      'skills': mergedSkills,
+      'interests': const <String>[],
+      'learningGoal': '',
+      'professionalLinks': supportingLinks,
+      'education': educationText.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : [
+              {
+                'id': 'edu_mentor_app',
+                'institution': educationText,
+                'program': 'Academic / Professional Background',
+                'period': '',
+                'description': '',
+              },
+            ],
+      'experience': const <Map<String, dynamic>>[],
+      'certificates': const <Map<String, dynamic>>[],
+      'isMentorPublic': isPublic,
+      'mentorExpertise': expertise,
+      'mentorExperienceYears': experienceYears,
+      'mentorAvailability': availability,
+      'mentorMaxMentees': maxMentees,
+      'mentorBio': bio,
+      'status': ProfileStatus.active.value,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  static Map<String, dynamic> _buildMentorProfileUpdatePatch({
+    required Map<String, dynamic> existingProfile,
+    required Map<String, dynamic> appData,
+    required Map<String, dynamic> userData,
+    required bool isPublic,
+    required bool syncApplicationFields,
+  }) {
+    final expertise = appData['expertise'] is List
+        ? List<String>.from(appData['expertise'] as List)
+        : const <String>[];
+    final skills = appData['skills'] is List
+        ? List<String>.from(appData['skills'] as List)
+        : const <String>[];
+    final supportingLinks = appData['supportingLinks'] is List
+        ? List<String>.from(appData['supportingLinks'] as List)
+        : const <String>[];
+    final mergedSkills = <String>{
+      ...expertise,
+      ...skills,
+    }.toList(growable: false);
+    final experienceYears = (appData['experienceYears'] as num?)?.toInt() ?? 0;
+    final maxMentees = ((appData['maxMentees'] as num?)?.toInt() ?? 5).clamp(
+      1,
+      50,
+    );
+    final availability = appData['availability'] as String? ?? '';
+    final bio = appData['bio'] as String? ?? '';
+    final headline = (appData['headline'] as String? ?? '').trim();
+    final displayName =
+        ((appData['applicantName'] as String?)?.trim().isNotEmpty == true
+                ? appData['applicantName'] as String
+                : (userData['displayName'] as String? ?? ''))
+            .trim();
+
+    final existingSkills = existingProfile['skills'] is List
+        ? List<String>.from(existingProfile['skills'] as List)
+        : const <String>[];
+    final existingLinks = existingProfile['professionalLinks'] is List
+        ? List<String>.from(existingProfile['professionalLinks'] as List)
+        : const <String>[];
+    final existingExpertise = existingProfile['mentorExpertise'] is List
+        ? List<String>.from(existingProfile['mentorExpertise'] as List)
+        : const <String>[];
+
+    final patch = <String, dynamic>{
+      'isMentorPublic': isPublic,
+      'status': ProfileStatus.active.value,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (syncApplicationFields ||
+        (existingExpertise.isEmpty && expertise.isNotEmpty)) {
+      patch['mentorExpertise'] = expertise;
+    }
+    if (syncApplicationFields ||
+        ((existingProfile['mentorExperienceYears'] as num?)?.toInt() ?? 0) ==
+            0 &&
+            experienceYears > 0) {
+      patch['mentorExperienceYears'] = experienceYears;
+    }
+    if (syncApplicationFields ||
+        ((existingProfile['mentorAvailability'] as String?) ?? '')
+                .trim()
+                .isEmpty &&
+            availability.trim().isNotEmpty) {
+      patch['mentorAvailability'] = availability;
+    }
+    if (syncApplicationFields ||
+        existingProfile['mentorMaxMentees'] == null) {
+      patch['mentorMaxMentees'] = maxMentees;
+    }
+    if (syncApplicationFields ||
+        ((existingProfile['mentorBio'] as String?) ?? '').trim().isEmpty &&
+            bio.trim().isNotEmpty) {
+      patch['mentorBio'] = bio;
+    }
+    if (displayName.isNotEmpty &&
+        (existingProfile['displayName'] as String? ?? '').trim().isEmpty) {
+      patch['displayName'] = displayName;
+    }
+    if (headline.isNotEmpty &&
+        (syncApplicationFields ||
+            (existingProfile['headline'] as String? ?? '').trim().isEmpty)) {
+      patch['headline'] = headline;
+    }
+    if (existingSkills.isEmpty && mergedSkills.isNotEmpty) {
+      patch['skills'] = mergedSkills;
+    }
+    if (existingLinks.isEmpty && supportingLinks.isNotEmpty) {
+      patch['professionalLinks'] = supportingLinks;
+    }
+    if (existingProfile['cvAsset'] == null && appData['cvAsset'] != null) {
+      patch['cvAsset'] = appData['cvAsset'];
+    }
+    return patch;
   }
 
   Map<String, dynamic> _buildApprovalMailDocument({
@@ -325,102 +498,29 @@ class SparkAdminOperationsClient implements AdminOperationsClient {
           });
         }
 
-        final expertise = appData['expertise'] is List
-            ? List<String>.from(appData['expertise'] as List)
-            : const <String>[];
-        final skills = appData['skills'] is List
-            ? List<String>.from(appData['skills'] as List)
-            : const <String>[];
-        final supportingLinks = appData['supportingLinks'] is List
-            ? List<String>.from(appData['supportingLinks'] as List)
-            : const <String>[];
-        final mergedSkills = <String>{
-          ...expertise,
-          ...skills,
-        }.toList(growable: false);
-        final experienceYears =
-            (appData['experienceYears'] as num?)?.toInt() ?? 0;
-        final maxMentees = ((appData['maxMentees'] as num?)?.toInt() ?? 5)
-            .clamp(1, 50);
-        final availability = appData['availability'] as String? ?? '';
-        final bio = appData['bio'] as String? ?? '';
-        final headline = (appData['headline'] as String? ?? '').trim();
-        final educationText = (appData['education'] as String? ?? '').trim();
-
         if (profileSnap.exists) {
           final existingProfile =
               profileSnap.data() ?? const <String, dynamic>{};
-          final existingSkills = existingProfile['skills'] is List
-              ? List<String>.from(existingProfile['skills'] as List)
-              : const <String>[];
-          final existingLinks = existingProfile['professionalLinks'] is List
-              ? List<String>.from(existingProfile['professionalLinks'] as List)
-              : const <String>[];
-          final profileUpdates = <String, dynamic>{
-            'mentorExpertise': expertise,
-            'mentorExperienceYears': experienceYears,
-            'mentorAvailability': availability,
-            'mentorMaxMentees': maxMentees,
-            'mentorBio': bio,
-            'status': ProfileStatus.active.value,
-            'updatedAt': FieldValue.serverTimestamp(),
-          };
-          if (applicantName.isNotEmpty &&
-              (existingProfile['displayName'] as String? ?? '')
-                  .trim()
-                  .isEmpty) {
-            profileUpdates['displayName'] = applicantName;
-          }
-          if (headline.isNotEmpty) {
-            profileUpdates['headline'] = headline;
-          }
-          if (existingSkills.isEmpty && mergedSkills.isNotEmpty) {
-            profileUpdates['skills'] = mergedSkills;
-          }
-          if (existingLinks.isEmpty && supportingLinks.isNotEmpty) {
-            profileUpdates['professionalLinks'] = supportingLinks;
-          }
-          if (existingProfile['cvAsset'] == null &&
-              appData['cvAsset'] != null) {
-            profileUpdates['cvAsset'] = appData['cvAsset'];
-          }
-          tx.update(profileRef, profileUpdates);
+          tx.update(
+            profileRef,
+            _buildMentorProfileUpdatePatch(
+              existingProfile: existingProfile,
+              appData: appData,
+              userData: existingUser,
+              isPublic: true,
+              syncApplicationFields: true,
+            ),
+          );
         } else {
-          tx.set(profileRef, {
-            'ownerUid': applicantUid,
-            'displayName': applicantName,
-            'headline': headline,
-            'location': 'Kigali, Rwanda',
-            'about': bio,
-            'photoAsset': null,
-            'cvAsset': appData['cvAsset'],
-            'skills': mergedSkills,
-            'interests': const <String>[],
-            'learningGoal': '',
-            'professionalLinks': supportingLinks,
-            'education': educationText.isEmpty
-                ? const <Map<String, dynamic>>[]
-                : [
-                    {
-                      'id': 'edu_mentor_app',
-                      'institution': educationText,
-                      'program': 'Academic / Professional Background',
-                      'period': '',
-                      'description': '',
-                    },
-                  ],
-            'experience': const <Map<String, dynamic>>[],
-            'certificates': const <Map<String, dynamic>>[],
-            'isMentorPublic': false,
-            'mentorExpertise': expertise,
-            'mentorExperienceYears': experienceYears,
-            'mentorAvailability': availability,
-            'mentorMaxMentees': maxMentees,
-            'mentorBio': bio,
-            'status': ProfileStatus.active.value,
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          tx.set(
+            profileRef,
+            _buildMentorProfileCreateData(
+              mentorUid: applicantUid,
+              appData: appData,
+              userData: existingUser,
+              isPublic: true,
+            ),
+          );
         }
 
         tx.set(_firestore.collection(Fs.notifications).doc(), {
@@ -619,6 +719,103 @@ class SparkAdminOperationsClient implements AdminOperationsClient {
           : 'Approval email queued via Trigger Email extension.',
       emailDeliveryStatus: resultStatus,
       emailDelivered: resultStatus == 'already_sent',
+    );
+  }
+
+  @override
+  Future<AdminActionResult> setMentorDirectoryVisibility({
+    required String mentorUid,
+    required bool isPublic,
+  }) async {
+    final actor = _auth.currentUser;
+    if (actor == null) {
+      throw StateError('Sign in as a verified administrator first.');
+    }
+
+    if (_hasExternalBackend) {
+      await _postExternalAdminAction('/admin/set-mentor-visibility', {
+        'mentorUid': mentorUid,
+        'isPublic': isPublic,
+      });
+      return AdminActionResult(
+        completed: true,
+        message: isPublic
+            ? 'Mentor published to student directory'
+            : 'Mentor hidden from student directory',
+      );
+    }
+
+    final actorUid = actor.uid;
+    final actorEmail = (actor.email ?? '').trim().toLowerCase();
+    final appRef = _firestore.collection(Fs.mentorApplications).doc(mentorUid);
+    final userRef = _firestore.collection(Fs.users).doc(mentorUid);
+    final profileRef = _firestore.collection(Fs.profiles).doc(mentorUid);
+
+    await _firestore.runTransaction((tx) async {
+      final appSnap = await tx.get(appRef);
+      final userSnap = await tx.get(userRef);
+      final profileSnap = await tx.get(profileRef);
+
+      final appData = appSnap.data() ?? const <String, dynamic>{};
+      final userData = userSnap.data() ?? const <String, dynamic>{};
+      final userApproved =
+          userSnap.exists &&
+          userData['role'] == UserRole.mentor.value &&
+          userData['isApproved'] == true &&
+          (userData['approvalStatus'] == null ||
+              userData['approvalStatus'] == ApprovalStatus.approved.value);
+      final appApproved =
+          appSnap.exists &&
+          appData['status'] == MentorApplicationStatus.approved.value;
+      if (!userApproved && !appApproved) {
+        throw StateError(
+          'Mentor must be approved before changing directory visibility.',
+        );
+      }
+
+      if (profileSnap.exists) {
+        final existingProfile =
+            profileSnap.data() ?? const <String, dynamic>{};
+        tx.update(
+          profileRef,
+          _buildMentorProfileUpdatePatch(
+            existingProfile: existingProfile,
+            appData: appData,
+            userData: userData,
+            isPublic: isPublic,
+            syncApplicationFields: false,
+          ),
+        );
+      } else {
+        tx.set(
+          profileRef,
+          _buildMentorProfileCreateData(
+            mentorUid: mentorUid,
+            appData: appData,
+            userData: userData,
+            isPublic: isPublic,
+          ),
+        );
+      }
+
+      _txAppendAuditLog(
+        tx: tx,
+        actorUid: actorUid,
+        actorEmail: actorEmail,
+        action: isPublic ? 'publishMentorProfile' : 'hideMentorProfile',
+        targetCollection: Fs.profiles,
+        targetId: mentorUid,
+        details: isPublic
+            ? 'Published approved mentor $mentorUid to student directory'
+            : 'Hid approved mentor $mentorUid from student directory',
+      );
+    });
+
+    return AdminActionResult(
+      completed: true,
+      message: isPublic
+          ? 'Mentor published to student directory'
+          : 'Mentor hidden from student directory',
     );
   }
 
