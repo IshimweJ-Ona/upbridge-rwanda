@@ -8,6 +8,7 @@ import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/widgets/cloudinary_media_picker.dart';
 import 'package:upbridge/features/auth/domain/validators.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
+import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
 
@@ -173,6 +174,7 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final session = ref.watch(appSessionProvider).asData?.value;
     final uid = session?.uid;
     final profile = uid == null
@@ -187,7 +189,7 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
     }
 
     return DetailPage(
-      title: 'Edit profile & CV',
+      title: l10n.editProfileCta,
       backFallback: '/profile',
       footer: [
         AppButton(
