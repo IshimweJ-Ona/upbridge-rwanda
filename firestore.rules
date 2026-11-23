@@ -5,6 +5,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email_verified == true;
     }
 
+    function isSelfAuth(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
@@ -30,15 +34,19 @@ service cloud.firestore {
       );
     }
 
-    // Privileged admin role is trusted exclusively from Firebase Auth custom claims.
+    // Privileged admin role is trusted from Firebase Auth custom claims AND verified
+    // not revoked/deactivated in users/{uid} when that account document exists.
     function isAdmin() {
       return isActiveUser()
         && ('role' in request.auth.token)
-        && request.auth.token.role == 'admin';
+        && request.auth.token.role == 'admin'
+        && (!userDocExists(request.auth.uid)
+          || (('role' in userDoc(request.auth.uid))
+            && userDoc(request.auth.uid).role == 'admin'));
     }
 
     // Approved mentor requires active account AND either approved Firestore user record
-    // (blocking revoked mentors immediately on Spark even before token expiry) OR
+    // (blocking revoked/pending mentors immediately on Spark even before token expiry) OR
     // custom token role='mentor' when no users/{uid} doc overrides it.
     function isApprovedMentor() {
       return isActiveUser() && (
@@ -46,15 +54,35 @@ service cloud.firestore {
           && ('role' in userDoc(request.auth.uid))
           && ('isApproved' in userDoc(request.auth.uid))
           && userDoc(request.auth.uid).role == 'mentor'
-          && userDoc(request.auth.uid).isApproved == true)
+          && userDoc(request.auth.uid).isApproved == true
+          && (!('approvalStatus' in userDoc(request.auth.uid))
+            || userDoc(request.auth.uid).approvalStatus == 'approved'))
         || (!userDocExists(request.auth.uid)
           && ('role' in request.auth.token)
           && request.auth.token.role == 'mentor')
       );
     }
 
+    function isUnapprovedMentor() {
+      return isActiveUser()
+        && userDocExists(request.auth.uid)
+        && ('role' in userDoc(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'mentor'
+        && !isApprovedMentor();
+    }
+
     function isStudent() {
-      return isActiveUser() && !isAdmin() && !isApprovedMentor();
+      return isSignedIn()
+        && (!('role' in request.auth.token) || request.auth.token.role == 'student')
+        && (
+          (userDocExists(request.auth.uid)
+            && isUserDocActive(userDoc(request.auth.uid))
+            && ('role' in userDoc(request.auth.uid))
+            && userDoc(request.auth.uid).role in ['student', 'youth'])
+          || (!userDocExists(request.auth.uid)
+            && ('role' in request.auth.token)
+            && request.auth.token.role == 'student')
+        );
     }
 
     function validStr(value, minLen, maxLen) {
@@ -128,20 +156,33 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Allow a signed-in user to read their own account document even when deactivated
-      // so the client can surface the deactivated notice cleanly.
-      allow read: if isAdmin() || isOwner(userId);
+      // Allow an authenticated owner to read their own account document (even before
+      // email verification or when deactivated) so session guards never guess student role.
+      allow read: if isAdmin() || isSelfAuth(userId);
 
+      // Initial self-signup record may be persisted before or after email verification,
+      // strictly locked to isApproved=false, non-admin role, and matching approvalStatus.
       allow create: if isAdmin() || (
-        isOwner(userId)
+        isSelfAuth(userId)
         && request.resource.data.keys().hasOnly([
           'ownerUid', 'email', 'displayName', 'phone', 'role', 'isApproved',
-          'status', 'onboarded', 'preferredLocale', 'photoAsset',
-          'createdAt', 'updatedAt'
+          'approvalStatus', 'emailVerified', 'status', 'onboarded',
+          'preferredLocale', 'photoAsset', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.role == 'student'
+        && request.resource.data.role in ['student', 'mentor']
         && request.resource.data.isApproved == false
+        && (
+          (request.resource.data.role == 'student'
+            && (!('approvalStatus' in request.resource.data)
+              || request.resource.data.approvalStatus == 'notRequired'))
+          || (request.resource.data.role == 'mentor'
+            && request.resource.data.approvalStatus == 'pending')
+        )
+        && (
+          !('emailVerified' in request.resource.data)
+          || request.resource.data.emailVerified == (request.auth.token.email_verified == true)
+        )
         && request.resource.data.status == 'active'
         && validStr(request.resource.data.email, 3, 200)
         && validStr(request.resource.data.displayName, 0, 120)
@@ -155,7 +196,8 @@ service cloud.firestore {
         isActiveUser()
         && isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'phone', 'onboarded', 'preferredLocale', 'photoAsset', 'updatedAt'
+          'displayName', 'phone', 'onboarded', 'preferredLocale', 'photoAsset',
+          'emailVerified', 'updatedAt'
         ])
         && (!('displayName' in request.resource.data)
           || validStr(request.resource.data.displayName, 1, 120))
@@ -166,6 +208,11 @@ service cloud.firestore {
           || request.resource.data.preferredLocale in ['en', 'rw', 'fr'])
         && (!('photoAsset' in request.resource.data)
           || validOptionalAsset(request.resource.data.photoAsset, request.auth.uid))
+        && (
+          !('emailVerified' in request.resource.data.diff(resource.data).affectedKeys())
+          || (request.resource.data.emailVerified == true
+            && request.auth.token.email_verified == true)
+        )
       );
 
       allow delete: if isAdmin();
@@ -263,7 +310,7 @@ service cloud.firestore {
         )
       );
 
-      allow create: if isActiveUser()
+      allow create: if (isStudent() || isApprovedMentor())
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.status in ['draft', 'published']
         && validStr(request.resource.data.title, 2, 120)
@@ -302,10 +349,17 @@ service cloud.firestore {
     }
 
     match /mentorApplications/{applicantUid} {
-      allow read: if isAdmin() || isOwner(applicantUid);
+      allow read: if isAdmin() || isSelfAuth(applicantUid);
 
-      allow create: if isActiveUser()
-        && isOwner(applicantUid)
+      // Existing Youth (users/{uid}.role == 'student') cannot submit self-service
+      // mentor applications; mentorApplications creation is restricted to mentor-track signups.
+      allow create: if isSelfAuth(applicantUid)
+        && (
+          !userDocExists(request.auth.uid)
+          || (isUserDocActive(userDoc(request.auth.uid))
+            && ('role' in userDoc(request.auth.uid))
+            && userDoc(request.auth.uid).role == 'mentor')
+        )
         && request.resource.data.keys().hasOnly([
           'ownerUid', 'applicantName', 'applicantEmail', 'headline', 'profession',
           'education', 'bio', 'expertise', 'skills', 'experienceYears',
@@ -350,29 +404,52 @@ service cloud.firestore {
       allow update: if (
         isAdmin()
         && request.resource.data.ownerUid == resource.data.ownerUid
-        && request.resource.data.reviewedBy == request.auth.uid
-        && request.resource.data.reviewedAt != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'rejectionReason', 'reviewedBy', 'reviewedAt', 'updatedAt'
+          'status', 'rejectionReason', 'reviewedBy', 'reviewedAt',
+          'approvalEmailStatus', 'approvalEmailRecipient',
+          'approvalEmailAttempts', 'approvalEmailError',
+          'approvalEmailSentAt', 'approvalEmailLastAttemptAt',
+          'approvalEmailLastAttemptMillis', 'approvalEmailMessageId',
+          'updatedAt'
         ])
         && (
           (
-            resource.data.status == 'pending'
-            && request.resource.data.status in ['approved', 'rejected']
-            && (
-              request.resource.data.status == 'approved'
-              || validStr(request.resource.data.rejectionReason, 5, 1000)
-            )
+            resource.data.status == 'approved'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'approvalEmailStatus', 'approvalEmailRecipient',
+              'approvalEmailAttempts', 'approvalEmailError',
+              'approvalEmailSentAt', 'approvalEmailLastAttemptAt',
+              'approvalEmailLastAttemptMillis', 'approvalEmailMessageId',
+              'updatedAt'
+            ])
           )
           || (
-            resource.data.status == 'approved'
-            && request.resource.data.status == 'revoked'
-            && validStr(request.resource.data.rejectionReason, 5, 1000)
+            request.resource.data.reviewedBy == request.auth.uid
+            && request.resource.data.reviewedAt != null
+            && (
+              (
+                resource.data.status == 'pending'
+                && request.resource.data.status in ['approved', 'rejected']
+                && (
+                  request.resource.data.status == 'approved'
+                  || validStr(request.resource.data.rejectionReason, 5, 1000)
+                )
+              )
+              || (
+                resource.data.status == 'approved'
+                && request.resource.data.status == 'revoked'
+                && validStr(request.resource.data.rejectionReason, 5, 1000)
+              )
+            )
           )
         )
       ) || (
         isActiveUser()
         && isOwner(applicantUid)
+        && (!userDocExists(request.auth.uid)
+          || (('role' in userDoc(request.auth.uid))
+            && userDoc(request.auth.uid).role == 'mentor'))
         && resource.data.status in ['pending', 'rejected', 'revoked']
         && request.resource.data.status == 'pending'
         && request.resource.data.ownerUid == resource.data.ownerUid
@@ -427,7 +504,7 @@ service cloud.firestore {
         )
       );
 
-      allow create: if isActiveUser()
+      allow create: if isStudent()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.studentUid == request.auth.uid
         && request.resource.data.mentorUid != request.auth.uid
@@ -442,6 +519,8 @@ service cloud.firestore {
             && ('isApproved' in userDoc(request.resource.data.mentorUid))
             && userDoc(request.resource.data.mentorUid).role == 'mentor'
             && userDoc(request.resource.data.mentorUid).isApproved == true
+            && (!('approvalStatus' in userDoc(request.resource.data.mentorUid))
+              || userDoc(request.resource.data.mentorUid).approvalStatus == 'approved')
             && isUserDocActive(userDoc(request.resource.data.mentorUid)))
         );
 
@@ -534,7 +613,7 @@ service cloud.firestore {
         )
       );
 
-      allow create: if isActiveUser()
+      allow create: if (isStudent() || isApprovedMentor())
         && request.resource.data.ownerUid == request.auth.uid
         && (
           request.resource.data.studentUid == request.auth.uid
@@ -705,7 +784,7 @@ service cloud.firestore {
         )
       );
 
-      allow create: if isActiveUser()
+      allow create: if isStudent()
         && request.resource.data.keys().hasOnly([
           'ownerUid', 'courseId', 'courseTitle', 'courseOwnerUid',
           'completedModuleIds', 'progressPercent', 'evidenceUrl',
@@ -732,7 +811,7 @@ service cloud.firestore {
           || validStr(request.resource.data.evidenceUrl, 0, 500))
         && validOptionalAsset(request.resource.data.evidenceAsset, request.auth.uid);
 
-      allow update: if isActiveUser()
+      allow update: if isStudent()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.courseId == resource.data.courseId
@@ -770,7 +849,7 @@ service cloud.firestore {
     match /applications/{applicationId} {
       allow read: if isAdmin() || (isActiveUser() && resource.data.ownerUid == request.auth.uid);
 
-      allow create: if isActiveUser()
+      allow create: if isStudent()
         && applicationId == request.auth.uid + '_' + request.resource.data.opportunityId
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.status == 'submitted'
@@ -781,7 +860,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId)).data.status == 'published';
 
       allow update: if isAdmin() || (
-        isActiveUser()
+        isStudent()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.opportunityId == resource.data.opportunityId
@@ -821,6 +900,12 @@ service cloud.firestore {
         ])
         && request.resource.data.isRead == true
         && request.resource.data.status == 'read';
+    }
+
+    // Optional Firebase Trigger Email extension queue — strictly admin-only.
+    match /mail/{mailId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /auditLogs/{logId} {

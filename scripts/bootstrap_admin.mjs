@@ -47,6 +47,8 @@ async function main() {
       phone: user.phoneNumber || '',
       role: 'admin',
       isApproved: true,
+      approvalStatus: 'approved',
+      emailVerified: Boolean(user.emailVerified),
       status: 'active',
       onboarded: true,
       preferredLocale: 'en',

@@ -804,6 +804,11 @@ class _FakeAdminOperations implements AdminOperationsClient {
   }
 
   @override
+  Future<AdminActionResult> retryApprovalEmail({
+    required String applicantUid,
+  }) async => const AdminActionResult(completed: true, message: 'Email sent');
+
+  @override
   Future<AdminActionResult> revokeMentorRole({
     required String targetUid,
     required String reason,
@@ -1000,6 +1005,11 @@ class _FakeStatefulAdminOperations implements AdminOperationsClient {
     );
     return AdminActionResult(completed: true, message: decision.label);
   }
+
+  @override
+  Future<AdminActionResult> retryApprovalEmail({
+    required String applicantUid,
+  }) async => const AdminActionResult(completed: true, message: 'Email sent');
 
   @override
   Future<AdminActionResult> revokeMentorRole({

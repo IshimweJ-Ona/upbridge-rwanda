@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -32,6 +35,15 @@ class _InterestsScreenState extends ConsumerState<InterestsScreen> {
     final goal = GoRouterState.of(context).uri.queryParameters['goal'] ?? '';
     if (goal.isEmpty || _picked.isEmpty) return;
 
+    final session = ref.read(appSessionProvider).asData?.value;
+    if (session != null &&
+        session.signedIn &&
+        (session.role != UserRole.student ||
+            session.requiresMentorApprovalScreen)) {
+      if (mounted) context.go(homeRouteForSession(session));
+      return;
+    }
+
     setState(() {
       _saving = true;
       _error = null;
@@ -43,6 +55,17 @@ class _InterestsScreenState extends ConsumerState<InterestsScreen> {
       }
 
       final accountRepo = ref.read(userAccountRepositoryProvider);
+      final account = await accountRepo.getAccount(user.uid);
+      if (account != null && account.role != UserRole.student) {
+        if (mounted) {
+          context.go(
+            account.isApprovedMentor
+                ? AppRoutes.mentorHome
+                : AppRoutes.mentorPending,
+          );
+        }
+        return;
+      }
       final profileRepo = ref.read(userProfileRepositoryProvider);
 
       await accountRepo.updateSafeAccount(uid: user.uid, onboarded: true);
@@ -76,6 +99,23 @@ class _InterestsScreenState extends ConsumerState<InterestsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(appSessionProvider).asData?.value;
+    if (session != null &&
+        session.signedIn &&
+        (session.role != UserRole.student ||
+            session.requiresMentorApprovalScreen)) {
+      return PageFrame(
+        showBack: false,
+        children: [
+          const SizedBox(height: 24),
+          AppButton(
+            'Continue',
+            onPressed: () => context.go(homeRouteForSession(session)),
+          ),
+        ],
+      );
+    }
+
     return PageFrame(
       showBack: true,
       backFallback: '/onboarding/goal',

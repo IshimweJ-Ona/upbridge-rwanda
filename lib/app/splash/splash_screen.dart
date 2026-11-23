@@ -12,6 +12,7 @@ import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
 import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/themes/app_colors.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentor_application.dart';
 import 'package:upbridge/shared/widgets/logo.dart';
 
 /// Animated SVG bridge intro (< 1.5s) matched to native splash (#13294B), routing cleanly by auth state.
@@ -61,6 +62,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
     try {
       await initialUser.reload().timeout(const Duration(seconds: 4));
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-disabled') {
+        _goOnce(AppRoutes.accountDeactivated);
+        return;
+      }
+      if (e.code == 'user-not-found' ||
+          e.code == 'invalid-user-token' ||
+          e.code == 'user-token-expired') {
+        await FirebaseAuth.instance.signOut();
+        _goOnce(AppRoutes.welcome);
+        return;
+      }
     } catch (_) {}
     final user = FirebaseAuth.instance.currentUser ?? initialUser;
     if (!user.emailVerified) {
@@ -72,36 +85,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (session != null &&
         session.accountLoaded &&
         session.applicationLoaded) {
-      if (!session.isActive) {
-        _goOnce(AppRoutes.accountDeactivated);
-        return;
-      }
-      if (session.role == UserRole.student &&
-          !session.accountError &&
-          !session.accountExists) {
-        _goOnce(AppRoutes.verifyEmail);
-        return;
-      }
-      _goOnce(
-        homeRouteForRole(
-          session.role,
-          onboarded: session.onboarded,
-          isPendingOrRejectedMentor:
-              session.hasPendingMentorApplication ||
-              session.hasRejectedMentorApplication ||
-              session.hasRevokedMentorApplication,
-        ),
-      );
+      _goOnce(homeRouteForSession(session));
       return;
     }
 
-    UserRole fallbackRole = UserRole.student;
     try {
       var token = await user.getIdTokenResult();
       if (token.claims?['email_verified'] != true) {
         token = await user.getIdTokenResult(true);
       }
-      fallbackRole = userRoleFromClaim(token.claims?['role']);
+      final claimRole = tryUserRoleFromClaim(token.claims?['role']);
       final account = await ref
           .read(userAccountRepositoryProvider)
           .getAccount(user.uid)
@@ -112,38 +105,55 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         _goOnce(AppRoutes.accountDeactivated);
         return;
       }
-      final role = resolveEffectiveRole(
-        claimRole: fallbackRole,
-        account: account,
-      );
-      if (role == UserRole.student && account == null) {
-        _goOnce(AppRoutes.verifyEmail);
-        return;
-      }
-      bool isPendingOrRejectedMentor = false;
-      if (role == UserRole.student) {
+
+      MentorApplication? mentorApp;
+      if (claimRole != UserRole.admin) {
         try {
-          final mentorApp = await ref
+          mentorApp = await ref
               .read(mentorApplicationRepositoryProvider)
               .getApplication(user.uid)
               .timeout(const Duration(seconds: 4));
-          isPendingOrRejectedMentor =
-              mentorApp?.status == MentorApplicationStatus.pending ||
-              mentorApp?.status == MentorApplicationStatus.rejected ||
-              mentorApp?.status == MentorApplicationStatus.revoked;
         } catch (_) {}
+      }
+
+      if (!mounted || _navigated) return;
+      final role = resolveEffectiveRoleNullable(
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: mentorApp,
+      );
+      if (role == null) {
+        _goOnce(AppRoutes.accountAccessIssue);
+        return;
+      }
+      final approvalStatus = resolveApprovalStatus(
+        role: role,
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: mentorApp,
+      );
+      final isPendingOrRejected =
+          approvalStatus == ApprovalStatus.pending ||
+          approvalStatus == ApprovalStatus.rejected ||
+          approvalStatus == ApprovalStatus.revoked;
+      final isApprovedMentor =
+          role == UserRole.mentor &&
+          approvalStatus == ApprovalStatus.approved;
+      if (role != UserRole.admin && account == null) {
+        _goOnce(AppRoutes.accountAccessIssue);
+        return;
       }
       _goOnce(
         homeRouteForRole(
           role,
           onboarded: role != UserRole.student || (account?.onboarded ?? false),
-          isPendingOrRejectedMentor: isPendingOrRejectedMentor,
+          isPendingOrRejectedMentor: isPendingOrRejected,
+          isApprovedMentor: isApprovedMentor,
         ),
       );
     } catch (_) {
-      // Keep authenticated users in their workspace on transient offline cold starts;
-      // live session streams will update role/account status once connectivity returns.
-      _goOnce(homeRouteForRole(fallbackRole, onboarded: true));
+      // Never fall back to Student Dashboard on lookup failure; route to safe recovery.
+      _goOnce(AppRoutes.accountAccessIssue);
     }
   }
 

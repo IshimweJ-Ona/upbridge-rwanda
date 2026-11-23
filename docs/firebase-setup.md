@@ -64,15 +64,36 @@ Because client SDKs cannot mint Firebase Auth custom claims or revoke refresh to
 | **Reject mentor application (`pending -> rejected`)** | Runs directly in-app (`AdminMentorReviewScreen`) via `isAdmin()` Firestore rules + writes applicant notification | Optional audit log via `scripts/review_mentor.mjs --decision reject` |
 | **Activate / deactivate user account** | Updates `users/{uid}.status` directly in-app via `isAdmin()` rules; app session guard immediately redirects deactivated users to `/account-deactivated` | `scripts/set_user_status.mjs --uid <uid> --status deactivated` also sets Auth `disabled: true`, revokes refresh tokens, and records `auditLogs` |
 
-### Optional Free-Tier External Admin Backend (`ADMIN_API_BASE_URL`)
+### Optional Free-Tier External Admin Backend (`ADMIN_API_BASE_URL`) & Approval Emails
 
-If you later host a standalone Express/Node REST service outside Firebase Cloud Functions (for example on Render/Fly/Cloud Run free tier) using the endpoints `/admin/review-mentor-application` and `/admin/set-user-status`, pass its base URL when building:
+Run the included trusted backend (`server/index.mjs`) locally or on any Node host (Render/Fly/Cloud Run) with Resend (`RESEND_API_KEY`) or SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`) to send idempotent mentor approval emails and mint custom claims:
+
+```bash
+RESEND_API_KEY=re_xxx MAIL_FROM="SkillBridge Team <no-reply@yourdomain.com>" \
+  node server/index.mjs
+```
+
+Then build/run Flutter pointing to the backend:
 
 ```bash
 flutter run --dart-define=ADMIN_API_BASE_URL=https://your-admin-service.example.com
 ```
 
-Without `ADMIN_API_BASE_URL`, `SparkAdminOperationsClient` safely stays on Firebase Spark with zero Cloud Functions dependencies.
+Alternatively, if using the official Firebase **Trigger Email from Firestore** extension (`mail` collection) without hosting a Node server, pass `--dart-define=ENABLE_TRIGGER_EMAIL_EXTENSION=true`. Without either configured, `SparkAdminOperationsClient` records `approvalEmailStatus: 'not_configured'` and never claims an email was sent.
+
+### Legacy Account Migration (`scripts/migrate_mentor_accounts.mjs`)
+
+Preview changes (dry-run by default):
+
+```bash
+node scripts/migrate_mentor_accounts.mjs --project upridge-rwanda-dev
+```
+
+Apply verified patches:
+
+```bash
+node scripts/migrate_mentor_accounts.mjs --project upridge-rwanda-dev --apply
+```
 
 ---
 

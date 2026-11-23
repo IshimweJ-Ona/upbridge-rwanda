@@ -81,9 +81,32 @@ void main() {
       expect(
         resolveEffectiveRole(
           claimRole: UserRole.student,
-          account: approvedAccount.copyWith(isApproved: false),
+          account: approvedAccount.copyWith(
+            isApproved: false,
+            approvalStatus: ApprovalStatus.pending,
+          ),
         ),
-        UserRole.student,
+        UserRole.mentor,
+      );
+      expect(
+        resolveApprovalStatus(
+          role: UserRole.mentor,
+          claimRole: UserRole.student,
+          account: approvedAccount.copyWith(
+            isApproved: false,
+            approvalStatus: ApprovalStatus.pending,
+          ),
+        ),
+        ApprovalStatus.pending,
+      );
+      expect(tryUserRoleFromClaim(null), isNull);
+      expect(tryUserRoleFromClaim('bogus'), isNull);
+      expect(
+        resolveEffectiveRoleNullable(
+          claimRole: null,
+          account: approvedAccount.copyWith(role: UserRole.student, hasValidRole: false),
+        ),
+        isNull,
       );
       expect(resolveEffectiveRole(claimRole: UserRole.admin), UserRole.admin);
     });

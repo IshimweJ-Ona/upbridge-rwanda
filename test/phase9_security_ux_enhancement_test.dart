@@ -912,6 +912,11 @@ class _RecordingAdminOperations implements AdminOperationsClient {
   }) async => const AdminActionResult(completed: true, message: 'OK');
 
   @override
+  Future<AdminActionResult> retryApprovalEmail({
+    required String applicantUid,
+  }) async => const AdminActionResult(completed: true, message: 'Email sent');
+
+  @override
   Future<AdminActionResult> revokeMentorRole({
     required String targetUid,
     required String reason,

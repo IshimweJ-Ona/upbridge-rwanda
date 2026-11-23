@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:upbridge/app/router/route_guards.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
@@ -16,18 +19,22 @@ class PublicProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final p = context.palette;
+    final session = ref.watch(appSessionProvider).asData?.value;
+    final fallback = session == null || !session.signedIn
+        ? AppRoutes.welcome
+        : homeRouteForSession(session);
     final profileAsync = ref.watch(userProfileProvider(uid));
     final projectsAsync = ref.watch(publicUserProjectsProvider(uid));
 
     return profileAsync.when(
-      loading: () => const DetailPage(
+      loading: () => DetailPage(
         title: 'CV & Portfolio',
-        backFallback: '/home',
-        children: [SkeletonDashboardLoader(cards: 3)],
+        backFallback: fallback,
+        children: const [SkeletonDashboardLoader(cards: 3)],
       ),
       error: (error, _) => DetailPage(
         title: 'CV & Portfolio',
-        backFallback: '/home',
+        backFallback: fallback,
         children: [
           EmptyState(
             icon: Icons.cloud_off_outlined,
@@ -40,10 +47,10 @@ class PublicProfileScreen extends ConsumerWidget {
       ),
       data: (profile) {
         if (profile == null) {
-          return const DetailPage(
+          return DetailPage(
             title: 'CV & Portfolio',
-            backFallback: '/home',
-            children: [
+            backFallback: fallback,
+            children: const [
               EmptyState(
                 icon: Icons.person_off_outlined,
                 title: 'Profile unavailable',
@@ -61,7 +68,7 @@ class PublicProfileScreen extends ConsumerWidget {
 
         return DetailPage(
           title: 'CV & Portfolio',
-          backFallback: '/home',
+          backFallback: fallback,
           children: [
             const SizedBox(height: 8),
             SurfaceCard(

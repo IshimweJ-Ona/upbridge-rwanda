@@ -172,5 +172,18 @@
   "addCertificateCta": "Add certificate",
   "portfolioProjectsTitle": "Portfolio projects",
   "noProjectsYet": "No portfolio projects yet",
-  "addProjectCta": "Add project"
+  "addProjectCta": "Add project",
+  "mentorRegistrationHeadingTitle": "Welcome to UpBridge — Mentor Registration",
+  "mentorRegistrationHeadingBody": "Your experience can open doors for someone else. Complete your mentor profile and submit it for review to join our mentorship community.",
+  "mentorWelcomeTitle": "Welcome to UpBridge as a Mentor.",
+  "mentorDashboardWelcomeBack": "Welcome back, {name}",
+  "@mentorDashboardWelcomeBack": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "mentorDashboardWelcomeBody": "Share your experience, guide the next generation, and make a meaningful impact.",
+  "completedSessionsLabel": "Completed sessions",
+  "profileCompletionLabel": "Profile completion",
+  "recentMentorshipActivityLabel": "Recent Mentorship Activity"
 }

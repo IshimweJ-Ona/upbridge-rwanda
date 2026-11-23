@@ -577,6 +577,19 @@ class _TestAccountRepository implements UserAccountRepository {
   Future<AppUserAccount?> getAccount(String uid) async => null;
 
   @override
+  Future<void> createAccount({
+    required String uid,
+    required String email,
+    required String displayName,
+    required UserRole role,
+    required bool emailVerified,
+    String phone = '',
+  }) async {}
+
+  @override
+  Future<void> markEmailVerified({required String uid}) async {}
+
+  @override
   Future<void> ensureStudentAccount({
     required String uid,
     required String email,

@@ -94,49 +94,6 @@ class StudentDashboardScreen extends ConsumerWidget {
       },
       children: [
         const SizedBox(height: 12),
-        if (session.hasPendingMentorApplication) ...[
-          SurfaceCard(
-            onTap: () => context.push('/mentor-apply'),
-            accentEdge: context.palette.warningText,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                StatusBadge(l10n.mentorPendingBannerTitle, tone: Tone.warning),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.mentorPendingBannerBody,
-                  style: AppText.bodyS.copyWith(
-                    color: context.palette.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ] else if (session.hasRejectedMentorApplication) ...[
-          SurfaceCard(
-            onTap: () => context.push('/mentor-apply'),
-            accentEdge: context.palette.dangerText,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const StatusBadge(
-                  'Mentor application update',
-                  tone: Tone.danger,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  session.mentorApplication?.rejectionReason ??
-                      'Your mentor application needs updates before approval.',
-                  style: AppText.bodyS.copyWith(
-                    color: context.palette.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
         NextStepCard(
           eyebrow: l10n.nextActionLabel,
           icon: nextAction.icon,

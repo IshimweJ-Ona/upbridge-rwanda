@@ -38,7 +38,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
       context,
       title: 'Revoke mentor access?',
       subtitle:
-          'Immediately returns ${user.displayName.isEmpty ? user.email : user.displayName} to Student role and hides their mentor directory card while preserving history.',
+          'Immediately revokes mentor privileges for ${user.displayName.isEmpty ? user.email : user.displayName} and hides their mentor directory card while preserving their mentor role and history.',
       fieldLabel: 'Revocation reason (required)',
       hint: 'Explain why mentor access is being revoked',
       confirmLabel: 'Revoke mentor',
@@ -248,6 +248,17 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                                 : user.role.label,
                             tone: Tone.info,
                           ),
+                          if (user.role == UserRole.mentor)
+                            StatusBadge(
+                              user.approvalStatus.label,
+                              tone: switch (user.approvalStatus) {
+                                ApprovalStatus.approved => Tone.success,
+                                ApprovalStatus.pending ||
+                                ApprovalStatus.revoked => Tone.warning,
+                                ApprovalStatus.rejected => Tone.danger,
+                                ApprovalStatus.notRequired => Tone.neutral,
+                              },
+                            ),
                           StatusBadge(
                             user.status.label,
                             tone: user.isActive ? Tone.success : Tone.danger,

@@ -61,41 +61,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // Refresh token and Firestore account so admin/mentor approvals take effect immediately.
       final claim = await auth.readRoleClaim(forceRefresh: true);
-      final claimRole = userRoleFromClaim(claim);
+      final claimRole = tryUserRoleFromClaim(claim);
       final account = await ref
           .read(userAccountRepositoryProvider)
           .getAccount(user.uid);
-      final role = resolveEffectiveRole(claimRole: claimRole, account: account);
+      final mentorApp = await ref
+          .read(mentorApplicationRepositoryProvider)
+          .getApplication(user.uid);
+      final role = resolveEffectiveRoleNullable(
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: mentorApp,
+      );
+      final approvalStatus = resolveApprovalStatus(
+        role: role,
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: mentorApp,
+      );
 
-      if (account == null && role == UserRole.student) {
-        if (mounted) context.go(AppRoutes.verifyEmail);
+      if (account == null && role != UserRole.admin) {
+        if (mounted) context.go(AppRoutes.accountAccessIssue);
         return;
       }
       if (account != null && !account.isActive) {
         if (mounted) context.go(AppRoutes.accountDeactivated);
         return;
       }
+      if (account != null && !account.emailVerified) {
+        await ref.read(userAccountRepositoryProvider).markEmailVerified(
+          uid: user.uid,
+        );
+      }
 
       String destination;
-      if (role == UserRole.admin) {
+      if (role == null) {
+        destination = AppRoutes.accountAccessIssue;
+      } else if (role == UserRole.admin) {
         destination = AppRoutes.adminOverview;
       } else if (role == UserRole.mentor) {
-        destination = AppRoutes.mentorHome;
+        final isApprovedMentor =
+            approvalStatus == ApprovalStatus.approved &&
+            (account?.isApproved ?? false) &&
+            (mentorApp == null ||
+                mentorApp.status == MentorApplicationStatus.approved);
+        destination = isApprovedMentor
+            ? AppRoutes.mentorHome
+            : AppRoutes.mentorPending;
       } else {
-        final mentorApp = await ref
-            .read(mentorApplicationRepositoryProvider)
-            .getApplication(user.uid);
-        final isPendingOrRejected =
-            mentorApp?.status == MentorApplicationStatus.pending ||
-            mentorApp?.status == MentorApplicationStatus.rejected ||
-            mentorApp?.status == MentorApplicationStatus.revoked;
-        if (isPendingOrRejected) {
-          destination = AppRoutes.mentorPending;
-        } else {
-          destination = (account?.onboarded ?? false)
-              ? AppRoutes.studentHome
-              : AppRoutes.onboardingGoal;
-        }
+        destination = (account?.onboarded ?? false)
+            ? AppRoutes.studentHome
+            : AppRoutes.onboardingGoal;
       }
 
       if (!mounted) return;

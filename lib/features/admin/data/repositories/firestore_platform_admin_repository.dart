@@ -25,6 +25,7 @@ class FirestorePlatformAdminRepository implements PlatformAdminRepository {
       _firestore
           .collection(Fs.users)
           .where('role', isEqualTo: UserRole.mentor.value)
+          .where('isApproved', isEqualTo: true)
           .count()
           .get(),
       _firestore

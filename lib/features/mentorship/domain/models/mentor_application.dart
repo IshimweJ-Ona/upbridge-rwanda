@@ -25,6 +25,11 @@ class MentorApplication {
     this.rejectionReason = '',
     this.reviewedBy,
     this.reviewedAt,
+    this.approvalEmailStatus,
+    this.approvalEmailRecipient,
+    this.approvalEmailAttempts = 0,
+    this.approvalEmailError = '',
+    this.approvalEmailSentAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -49,6 +54,11 @@ class MentorApplication {
   final String rejectionReason;
   final String? reviewedBy;
   final DateTime? reviewedAt;
+  final String? approvalEmailStatus;
+  final String? approvalEmailRecipient;
+  final int approvalEmailAttempts;
+  final String approvalEmailError;
+  final DateTime? approvalEmailSentAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -80,6 +90,12 @@ class MentorApplication {
       rejectionReason: json['rejectionReason'] as String? ?? '',
       reviewedBy: json['reviewedBy'] as String?,
       reviewedAt: dateTimeFromJson(json['reviewedAt']),
+      approvalEmailStatus: json['approvalEmailStatus'] as String?,
+      approvalEmailRecipient: json['approvalEmailRecipient'] as String?,
+      approvalEmailAttempts:
+          (json['approvalEmailAttempts'] as num?)?.toInt() ?? 0,
+      approvalEmailError: json['approvalEmailError'] as String? ?? '',
+      approvalEmailSentAt: dateTimeFromJson(json['approvalEmailSentAt']),
       createdAt: dateTimeFromJson(json['createdAt']) ?? now,
       updatedAt: dateTimeFromJson(json['updatedAt']) ?? now,
     );
@@ -129,6 +145,11 @@ class MentorApplication {
     String? rejectionReason,
     String? reviewedBy,
     DateTime? reviewedAt,
+    String? approvalEmailStatus,
+    String? approvalEmailRecipient,
+    int? approvalEmailAttempts,
+    String? approvalEmailError,
+    DateTime? approvalEmailSentAt,
     DateTime? updatedAt,
   }) => MentorApplication(
     id: id,
@@ -151,6 +172,13 @@ class MentorApplication {
     rejectionReason: rejectionReason ?? this.rejectionReason,
     reviewedBy: reviewedBy ?? this.reviewedBy,
     reviewedAt: reviewedAt ?? this.reviewedAt,
+    approvalEmailStatus: approvalEmailStatus ?? this.approvalEmailStatus,
+    approvalEmailRecipient:
+        approvalEmailRecipient ?? this.approvalEmailRecipient,
+    approvalEmailAttempts:
+        approvalEmailAttempts ?? this.approvalEmailAttempts,
+    approvalEmailError: approvalEmailError ?? this.approvalEmailError,
+    approvalEmailSentAt: approvalEmailSentAt ?? this.approvalEmailSentAt,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );

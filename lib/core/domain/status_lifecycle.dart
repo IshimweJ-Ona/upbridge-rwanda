@@ -9,16 +9,48 @@ enum UserRole {
   const UserRole(this.value);
   final String value;
 
-  static UserRole fromValue(Object? raw) => switch (raw) {
+  /// Parses an explicit role value without silently defaulting invalid values.
+  static UserRole? tryFromValue(Object? raw) => switch (raw) {
+    'student' || 'youth' => UserRole.student,
     'mentor' => UserRole.mentor,
     'admin' => UserRole.admin,
-    _ => UserRole.student,
+    _ => null,
   };
+
+  static UserRole fromValue(Object? raw) => tryFromValue(raw) ?? UserRole.student;
 
   String get displayLabel => switch (this) {
     UserRole.student => 'Student',
     UserRole.mentor => 'Mentor',
     UserRole.admin => 'Admin',
+  };
+}
+
+enum ApprovalStatus {
+  notRequired('notRequired'),
+  pending('pending'),
+  approved('approved'),
+  rejected('rejected'),
+  revoked('revoked');
+
+  const ApprovalStatus(this.value);
+  final String value;
+
+  static ApprovalStatus? tryFromValue(Object? raw) => switch (raw) {
+    'notRequired' || 'none' || 'na' => ApprovalStatus.notRequired,
+    'pending' => ApprovalStatus.pending,
+    'approved' => ApprovalStatus.approved,
+    'rejected' => ApprovalStatus.rejected,
+    'revoked' => ApprovalStatus.revoked,
+    _ => null,
+  };
+
+  String get label => switch (this) {
+    ApprovalStatus.notRequired => 'Not required',
+    ApprovalStatus.pending => 'Pending',
+    ApprovalStatus.approved => 'Approved',
+    ApprovalStatus.rejected => 'Rejected',
+    ApprovalStatus.revoked => 'Revoked',
   };
 }
 

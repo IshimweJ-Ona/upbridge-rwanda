@@ -140,6 +140,27 @@ class _AdminMentorReviewScreenState
     }
   }
 
+  Future<void> _retryEmail(MentorApplication app) async {
+    setState(() => _submitting = true);
+    try {
+      final result = await ref
+          .read(adminOperationsClientProvider)
+          .retryApprovalEmail(applicantUid: app.ownerUid);
+      ref.invalidate(allMentorApplicationsProvider);
+      if (mounted) {
+        showToast(
+          context,
+          result.message,
+          tone: result.completed ? Tone.info : Tone.warning,
+        );
+      }
+    } catch (error) {
+      if (mounted) showToast(context, errorMessage(error), tone: Tone.danger);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -149,6 +170,12 @@ class _AdminMentorReviewScreenState
     );
     final profile = Firebase.apps.isNotEmpty
         ? ref.watch(userProfileProvider(widget.applicantUid)).asData?.value
+        : null;
+    final account = Firebase.apps.isNotEmpty
+        ? ref
+              .watch(userAccountDetailProvider(widget.applicantUid))
+              .asData
+              ?.value
         : null;
 
     return appAsync.when(
@@ -226,10 +253,23 @@ class _AdminMentorReviewScreenState
                               spacing: 6,
                               runSpacing: 4,
                               children: [
+                                const StatusBadge(
+                                  'Mentor',
+                                  icon: Icons.workspace_premium_outlined,
+                                  tone: Tone.info,
+                                ),
                                 StatusBadge(
-                                  l10n.verifiedEmailAccountBadge,
-                                  icon: Icons.verified_outlined,
-                                  tone: Tone.success,
+                                  (account == null || account.emailVerified)
+                                      ? l10n.verifiedEmailAccountBadge
+                                      : 'Email not verified',
+                                  icon:
+                                      (account == null || account.emailVerified)
+                                      ? Icons.verified_outlined
+                                      : Icons.mark_email_unread_outlined,
+                                  tone:
+                                      (account == null || account.emailVerified)
+                                      ? Tone.success
+                                      : Tone.warning,
                                 ),
                               ],
                             ),
@@ -400,7 +440,51 @@ class _AdminMentorReviewScreenState
                 onPressed: _submitting ? null : () => _reject(app),
               ),
             ] else if (app.status == MentorApplicationStatus.approved) ...[
-              const SizedBox(height: 20),
+              const SectionLabel('Approval email delivery'),
+              NoticeCard(
+                tone: switch (app.approvalEmailStatus) {
+                  'sent' => Tone.success,
+                  'queued' => Tone.info,
+                  'failed' => Tone.danger,
+                  _ => Tone.warning,
+                },
+                icon: switch (app.approvalEmailStatus) {
+                  'sent' => Icons.mark_email_read_outlined,
+                  'queued' => Icons.schedule_send_outlined,
+                  'failed' => Icons.error_outline_rounded,
+                  _ => Icons.mail_outline_rounded,
+                },
+                title: switch (app.approvalEmailStatus) {
+                  'sent' => 'Approval email delivered',
+                  'queued' => 'Approval email queued',
+                  'failed' => 'Approval email delivery failed',
+                  _ => 'Approval email not sent yet',
+                },
+                body: switch (app.approvalEmailStatus) {
+                  'sent' =>
+                    'Delivered to ${app.approvalEmailRecipient ?? app.applicantEmail}.',
+                  'queued' =>
+                    'Queued in mail/ for Trigger Email delivery to ${app.approvalEmailRecipient ?? app.applicantEmail}.',
+                  'failed' =>
+                    app.approvalEmailError.isNotEmpty
+                        ? app.approvalEmailError
+                        : 'Email delivery failed. Tap Retry approval email to resend.',
+                  _ =>
+                    'Database approval succeeded. Configure ADMIN_API_BASE_URL (SMTP/Resend) or ENABLE_TRIGGER_EMAIL_EXTENSION, or run review_mentor.mjs.',
+                },
+              ),
+              if (app.approvalEmailStatus != 'sent' &&
+                  app.approvalEmailStatus != 'queued') ...[
+                const SizedBox(height: 10),
+                AppButton(
+                  'Retry approval email',
+                  leadingIcon: Icons.send_outlined,
+                  variant: ButtonVariant.secondary,
+                  loading: _submitting,
+                  onPressed: () => _retryEmail(app),
+                ),
+              ],
+              const SizedBox(height: 12),
               AppButton(
                 l10n.revokeMentorLabel,
                 leadingIcon: Icons.gpp_bad_outlined,

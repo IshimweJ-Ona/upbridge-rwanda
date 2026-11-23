@@ -124,6 +124,15 @@ class _MentorApplyScreenState extends ConsumerState<MentorApplyScreen> {
 
     final uid = session.uid;
     if (uid == null) return;
+    if (session.role != UserRole.mentor &&
+        !session.hasMentorApplication &&
+        !session.requiresMentorApprovalScreen) {
+      setState(
+        () => _error =
+            'Youth accounts cannot convert into mentor accounts. Please register separately as a mentor.',
+      );
+      return;
+    }
     final validated = MentorFormHelper.buildValidated(
       headline: _headline.text,
       profession: _profession.text,
@@ -200,18 +209,36 @@ class _MentorApplyScreenState extends ConsumerState<MentorApplyScreen> {
     try {
       final auth = ref.read(authServiceProvider);
       final claim = await auth.readRoleClaim(forceRefresh: true);
-      final claimRole = userRoleFromClaim(claim);
+      final claimRole = tryUserRoleFromClaim(claim);
       final uid = auth.currentUser?.uid;
       final account = uid == null
           ? null
           : await ref.read(userAccountRepositoryProvider).getAccount(uid);
-      final effectiveRole = resolveEffectiveRole(
+      final latestApp = uid == null
+          ? null
+          : await ref
+                .read(mentorApplicationRepositoryProvider)
+                .getApplication(uid);
+      final effectiveRole = resolveEffectiveRoleNullable(
         claimRole: claimRole,
         account: account,
+        mentorApplication: latestApp,
       );
+      final approvalStatus = resolveApprovalStatus(
+        role: effectiveRole,
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: latestApp,
+      );
+      final isApprovedMentor =
+          effectiveRole == UserRole.mentor &&
+          approvalStatus == ApprovalStatus.approved &&
+          (account?.isApproved ?? false) &&
+          (latestApp == null ||
+              latestApp.status == MentorApplicationStatus.approved);
       ref.invalidate(appSessionProvider);
       if (!mounted) return;
-      if (effectiveRole == UserRole.mentor) {
+      if (isApprovedMentor) {
         showToast(context, 'Mentor workspace unlocked');
         context.go(AppRoutes.mentorHome);
       } else {
@@ -231,16 +258,40 @@ class _MentorApplyScreenState extends ConsumerState<MentorApplyScreen> {
     final session = sessionAsync.asData?.value;
     if (session == null || !session.signedIn) {
       return const DetailPage(
-        title: 'Become a mentor',
-        backFallback: AppRoutes.studentHome,
+        title: 'Mentor application',
+        backFallback: AppRoutes.welcome,
         children: [Center(child: CircularProgressIndicator())],
+      );
+    }
+
+    if (session.role != UserRole.mentor &&
+        !session.hasMentorApplication &&
+        !session.requiresMentorApprovalScreen) {
+      return DetailPage(
+        title: 'Mentor access restricted',
+        backFallback: AppRoutes.studentHome,
+        footer: [
+          AppButton(
+            'Return to Youth dashboard',
+            onPressed: () => context.go(AppRoutes.studentHome),
+          ),
+        ],
+        children: const [
+          NoticeCard(
+            tone: Tone.warning,
+            icon: Icons.lock_outline_rounded,
+            title: 'Mentor registration is separate',
+            body:
+                'Youth accounts cannot convert to Mentor accounts from inside the student workspace.',
+          ),
+        ],
       );
     }
 
     final existing = session.mentorApplication;
     _prefillIfNeeded(session, existing);
 
-    if (session.role == UserRole.mentor) {
+    if (session.isApprovedMentor) {
       return DetailPage(
         title: 'Mentor workspace unlocked',
         backFallback: AppRoutes.mentorHome,
@@ -315,10 +366,10 @@ class _MentorApplyScreenState extends ConsumerState<MentorApplyScreen> {
     final isEditingPending = existing?.status == MentorApplicationStatus.pending;
 
     return DetailPage(
-      title: isEditingPending ? 'Edit mentor application' : 'Apply to be a mentor',
-      backFallback: (existing != null)
-          ? AppRoutes.mentorPending
-          : AppRoutes.studentHome,
+      title: isEditingPending
+          ? 'Edit mentor application'
+          : 'Complete mentor application',
+      backFallback: AppRoutes.mentorPending,
       footer: [
         AppButton(
           isEditingPending

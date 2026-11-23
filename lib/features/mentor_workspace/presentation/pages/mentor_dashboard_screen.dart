@@ -13,6 +13,7 @@ import 'package:upbridge/features/learning/domain/models/course.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentor_request.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
+import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -108,9 +109,21 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
     final upcomingSessions = sessions
         .where((s) => s.status == SessionStatus.scheduled)
         .toList(growable: false);
+    final completedSessionsCount = sessions
+        .where((s) => s.status == SessionStatus.completed)
+        .length;
     final publishedCourses = courses
         .where((c) => c.status == CourseStatus.published)
         .length;
+    final mentorFullName = (session.displayName?.trim().isNotEmpty ?? false)
+        ? session.displayName!.trim()
+        : session.firstName;
+    final profileCompletion = _computeMentorProfileCompletion(profile);
+    final recentActivity = _buildRecentActivity(
+      requests: requests,
+      mentorships: mentorships,
+      sessions: sessions,
+    );
 
     return PageFrame(
       largeTitle: l10n.greeting(session.firstName),
@@ -132,6 +145,24 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
         ref.invalidate(userProfileProvider(uid));
       },
       children: [
+        const SizedBox(height: 12),
+        SurfaceCard(
+          accentEdge: p.accent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.mentorDashboardWelcomeBack(mentorFullName),
+                style: AppText.titleM.copyWith(color: p.textPrimary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.mentorDashboardWelcomeBody,
+                style: AppText.bodyS.copyWith(color: p.textSecondary),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
         if (!session.isApprovedMentor) ...[
           SurfaceCard(
@@ -204,6 +235,43 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
               onTap: () => context.go('/m/courses'),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        SurfaceCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              ListRow(
+                onTap: () => context.push('/m/sessions'),
+                leading: const IconTile(
+                  Icons.task_alt_rounded,
+                  tone: Tone.success,
+                ),
+                title: l10n.completedSessionsLabel,
+                subtitle: 'Total sessions marked completed across mentees',
+                trailing: Text(
+                  '$completedSessionsCount',
+                  style: AppText.titleM.copyWith(color: p.textPrimary),
+                ),
+              ),
+              const Divider(height: 1),
+              ListRow(
+                onTap: () => context.go('/m/profile'),
+                leading: IconTile(
+                  Icons.workspace_premium_outlined,
+                  tone: profileCompletion >= 80 ? Tone.success : Tone.warning,
+                ),
+                title: l10n.profileCompletionLabel,
+                subtitle: profileCompletion >= 100
+                    ? 'Mentor directory profile complete'
+                    : 'Complete headline, bio, expertise & availability',
+                trailing: StatusBadge(
+                  '$profileCompletion%',
+                  tone: profileCompletion >= 80 ? Tone.success : Tone.warning,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -368,7 +436,117 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
             ),
             const SizedBox(height: 10),
           ],
+        SectionLabel(l10n.recentMentorshipActivityLabel),
+        if (recentActivity.isEmpty)
+          const EmptyState(
+            icon: Icons.history_rounded,
+            title: 'No recent mentorship activity',
+            body: 'Incoming requests, pairings, and session milestones appear here.',
+          )
+        else
+          SurfaceCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (var i = 0; i < recentActivity.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  ListRow(
+                    onTap: () => context.push(recentActivity[i].route),
+                    leading: IconTile(
+                      recentActivity[i].icon,
+                      tone: recentActivity[i].tone,
+                    ),
+                    title: recentActivity[i].title,
+                    subtitle: recentActivity[i].subtitle,
+                    meta: DateFormat(
+                      'd MMM y · HH:mm',
+                    ).format(recentActivity[i].timestamp.toLocal()),
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
+
+  static int _computeMentorProfileCompletion(UserProfile? profile) {
+    if (profile == null) return 0;
+    final checks = [
+      profile.displayName.trim().isNotEmpty,
+      profile.headline.trim().isNotEmpty,
+      profile.mentorBio.trim().isNotEmpty || profile.about.trim().isNotEmpty,
+      profile.mentorExpertise.isNotEmpty,
+      profile.mentorAvailability.trim().isNotEmpty,
+      profile.skills.isNotEmpty || profile.professionalLinks.isNotEmpty,
+      profile.isMentorPublic,
+    ];
+    final done = checks.where((ok) => ok).length;
+    return ((done / checks.length) * 100).round();
+  }
+
+  static List<_MentorActivityItem> _buildRecentActivity({
+    required List<MentorRequest> requests,
+    required List<Mentorship> mentorships,
+    required List<MentorshipSession> sessions,
+  }) {
+    final items = <_MentorActivityItem>[
+      for (final req in requests)
+        _MentorActivityItem(
+          title: 'Request from ${req.studentName}',
+          subtitle: 'Status: ${req.status.label}',
+          route: '/m/requests',
+          timestamp: req.updatedAt,
+          icon: Icons.inbox_outlined,
+          tone: req.status == MentorRequestStatus.pending
+              ? Tone.warning
+              : req.status == MentorRequestStatus.accepted
+              ? Tone.success
+              : Tone.neutral,
+        ),
+      for (final mentorship in mentorships)
+        _MentorActivityItem(
+          title: 'Mentorship with ${mentorship.studentName}',
+          subtitle: 'Status: ${mentorship.status.label}',
+          route: '/mentorship/${mentorship.id}',
+          timestamp: mentorship.updatedAt,
+          icon: Icons.groups_outlined,
+          tone: mentorship.status == MentorshipStatus.active
+              ? Tone.success
+              : Tone.info,
+        ),
+      for (final session in sessions)
+        _MentorActivityItem(
+          title: 'Session: ${session.topic}',
+          subtitle:
+              '${session.studentName} · ${session.status.label}',
+          route: '/mentorship/${session.mentorshipId}',
+          timestamp: session.updatedAt,
+          icon: Icons.event_outlined,
+          tone: session.status == SessionStatus.completed
+              ? Tone.success
+              : Tone.info,
+        ),
+    ];
+    items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return items.take(4).toList(growable: false);
+  }
+}
+
+class _MentorActivityItem {
+  const _MentorActivityItem({
+    required this.title,
+    required this.subtitle,
+    required this.route,
+    required this.timestamp,
+    required this.icon,
+    required this.tone,
+  });
+
+  final String title;
+  final String subtitle;
+  final String route;
+  final DateTime timestamp;
+  final IconData icon;
+  final Tone tone;
 }

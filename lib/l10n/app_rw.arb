@@ -157,5 +157,13 @@
   "addCertificateCta": "Ongeramo impamyabumenyi",
   "portfolioProjectsTitle": "Imishinga yakozwe",
   "noProjectsYet": "Nta mishinga irongerwamo kugeza ubu",
-  "addProjectCta": "Ongeraho umushinga"
+  "addProjectCta": "Ongeraho umushinga",
+  "mentorRegistrationHeadingTitle": "Murakaza neza kuri UpBridge — Kwiyandikisha nk'Umujyanama",
+  "mentorRegistrationHeadingBody": "Uburambe bwawe bushobora gufungurira abandi imiryango. Uzuza umwirondoro wawe w'umujyanama maze uwohereze usuzumwe kugira ngo winjire mu muryango w'abajyanama.",
+  "mentorWelcomeTitle": "Murakaza neza kuri UpBridge nk'Umujyanama.",
+  "mentorDashboardWelcomeBack": "Murakaza neza nanone, {name}",
+  "mentorDashboardWelcomeBody": "Sangiza ubumenyi bwawe, uyobore urubyiruko ruri kuzamuka, kandi ugire impinduka nziza.",
+  "completedSessionsLabel": "Amasomo yarangiye",
+  "profileCompletionLabel": "Ubwuzuzanye bw'umwirondoro",
+  "recentMentorshipActivityLabel": "Ibikorwa biheruka mu bujyanama"
 }

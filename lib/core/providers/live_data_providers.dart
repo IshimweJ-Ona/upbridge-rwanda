@@ -210,3 +210,7 @@ final adminSessionsProvider =
           .watch(platformAdminRepositoryProvider)
           .watchAllSessions(statusFilter: statusFilter),
     );
+
+final userAccountDetailProvider = StreamProvider.family<AppUserAccount?, String>(
+  (ref, uid) => ref.watch(userAccountRepositoryProvider).watchAccount(uid),
+);

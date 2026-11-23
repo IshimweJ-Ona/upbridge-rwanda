@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:upbridge/app/auth/verify_email_screen.dart';
+import 'package:upbridge/app/router/role_shell.dart';
 import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
 import 'package:upbridge/core/domain/status_lifecycle.dart';
@@ -21,14 +22,18 @@ import 'package:upbridge/features/auth/presentation/pages/mentor_pending_screen.
 import 'package:upbridge/features/auth/presentation/pages/sign_up_screen.dart';
 import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
 import 'package:upbridge/features/home/presentation/pages/notifications_screen.dart';
+import 'package:upbridge/features/home/presentation/pages/student_dashboard_screen.dart';
 import 'package:upbridge/features/learning/domain/models/course.dart';
 import 'package:upbridge/features/learning/presentation/pages/course_detail_screen.dart';
 import 'package:upbridge/features/mentor_workspace/presentation/pages/mentor_dashboard_screen.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentor_application.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentorship_session.dart';
 import 'package:upbridge/features/notifications/domain/models/user_notification.dart';
 import 'package:upbridge/features/notifications/domain/repositories/user_notification_repository.dart';
+import 'package:upbridge/features/onboarding/presentation/pages/goal_screen.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
 import 'package:upbridge/features/profile/presentation/pages/edit_profile_cv_screen.dart';
+import 'package:upbridge/features/profile/presentation/pages/profile_screen.dart';
 import 'package:upbridge/features/profile/presentation/pages/project_editor_screen.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/firebase/auth_service.dart';
@@ -840,7 +845,540 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets(
+      'SignUpScreen shows Mentor Registration copy with zero student questions and GoalScreen blocks mentors',
+      (tester) async {
+        await tester.pumpWidget(wrap(const SignUpScreen()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Apply as Mentor'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Welcome to UpBridge — Mentor Registration'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Complete your mentor profile and submit it for review'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('What do you want UpBridge to help with?'),
+          findsNothing,
+        );
+
+        const pendingMentor = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'm-pending',
+          role: UserRole.mentor,
+          approvalStatus: ApprovalStatus.pending,
+          onboarded: true,
+          accountExists: true,
+        );
+        await tester.pumpWidget(
+          wrap(
+            const GoalScreen(),
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(pendingMentor)),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text('What do you want UpBridge to help with?'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'MentorPendingScreen displays required welcome & status and MentorDashboardScreen connects real session data',
+      (tester) async {
+        final app = MentorApplication(
+          id: 'm2',
+          ownerUid: 'm2',
+          applicantName: 'Claire Mukamana',
+          applicantEmail: 'claire@upbridge.rw',
+          headline: 'Principal Engineer',
+          bio: 'Mentoring engineers.',
+          expertise: const ['Web Development'],
+          experienceYears: 7,
+          status: MentorApplicationStatus.pending,
+          createdAt: now,
+          updatedAt: now,
+        );
+        final pendingSession = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'm2',
+          displayName: 'Claire Mukamana',
+          role: UserRole.mentor,
+          approvalStatus: ApprovalStatus.pending,
+          accountExists: true,
+          mentorApplication: app,
+        );
+        await tester.pumpWidget(
+          wrap(
+            const MentorPendingScreen(),
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(pendingSession)),
+              liveUnreadNotificationCountProvider('m2').overrideWith((ref) => Stream.value(0)),
+              authServiceProvider.overrideWithValue(_NoopAuthService()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Welcome to UpBridge as a Mentor.'), findsOneWidget);
+        expect(find.text('Application Pending Review'), findsOneWidget);
+        expect(find.text('Learn'), findsNothing);
+        expect(find.text('Opportunities'), findsNothing);
+
+        final approvedSession = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'm2',
+          displayName: 'Claire Mukamana',
+          role: UserRole.mentor,
+          approvalStatus: ApprovalStatus.approved,
+          accountExists: true,
+          onboarded: true,
+        );
+        final completedSession = MentorshipSession(
+          id: 's-1',
+          ownerUid: 'm2',
+          mentorshipId: 'ms-1',
+          studentUid: 'st-1',
+          studentName: 'Eric Mugisha',
+          mentorUid: 'm2',
+          mentorName: 'Claire Mukamana',
+          topic: 'API Design Review',
+          meetingMode: 'Video',
+          scheduledAt: now,
+          status: SessionStatus.completed,
+          completedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await tester.pumpWidget(
+          wrap(
+            const MentorDashboardScreen(),
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(approvedSession)),
+              liveUnreadNotificationCountProvider('m2').overrideWith((ref) => Stream.value(0)),
+              mentorRequestsProvider('m2').overrideWith((ref) => Stream.value(const [])),
+              mentorMentorshipsProvider('m2').overrideWith((ref) => Stream.value(const [])),
+              mentorSessionsProvider('m2').overrideWith((ref) => Stream.value([completedSession])),
+              mentorCoursesProvider('m2').overrideWith((ref) => Stream.value(const [])),
+              userProfileProvider('m2').overrideWith(
+                (ref) => Stream.value(
+                  UserProfile(
+                    id: 'm2',
+                    ownerUid: 'm2',
+                    displayName: 'Claire Mukamana',
+                    headline: 'Principal Engineer',
+                    location: 'Kigali',
+                    about: 'Mentoring backend engineers',
+                    mentorExpertise: const ['Backend'],
+                    mentorAvailability: 'Thu 18:00 CAT',
+                    mentorBio: 'Backend coaching',
+                    skills: const ['Dart'],
+                    isMentorPublic: true,
+                    createdAt: now,
+                    updatedAt: now,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Welcome back, Claire Mukamana'), findsOneWidget);
+        expect(
+          find.text(
+            'Share your experience, guide the next generation, and make a meaningful impact.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Completed sessions'), findsOneWidget);
+        expect(find.text('Profile completion'), findsOneWidget);
+        expect(find.text('100%'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.text('RECENT MENTORSHIP ACTIVITY'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('RECENT MENTORSHIP ACTIVITY'), findsOneWidget);
+        expect(find.text('Session: API Design Review'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'RoleShell hides student navigation shell while session metadata is still loading',
+      (tester) async {
+        const loadingSession = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'u-load',
+          role: UserRole.student,
+          accountLoaded: false,
+          applicationLoaded: false,
+        );
+        final router = GoRouter(
+          initialLocation: AppRoutes.studentHome,
+          routes: [
+            StatefulShellRoute.indexedStack(
+              builder: (context, state, shell) =>
+                  RoleShell(role: UserRole.student, navigationShell: shell),
+              branches: [
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: AppRoutes.studentHome,
+                      builder: (context, state) =>
+                          const Scaffold(body: Text('STUDENT_BODY')),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(loadingSession)),
+            ],
+            child: MaterialApp.router(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              routerConfig: router,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('STUDENT_BODY'), findsNothing);
+        expect(find.text('Learn'), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Youth Profile, StudentDashboard, and MentorApplyScreen forbid Youth self-service mentor conversion',
+      (tester) async {
+        const youthSession = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'y1',
+          displayName: 'Aline Uwase',
+          role: UserRole.student,
+          approvalStatus: ApprovalStatus.notRequired,
+          onboarded: true,
+          accountExists: true,
+        );
+        final youthProfile = UserProfile(
+          id: 'y1',
+          ownerUid: 'y1',
+          displayName: 'Aline Uwase',
+          headline: 'CS Student',
+          location: 'Kigali',
+          about: 'Building Dart & Flutter portfolio apps.',
+          skills: const ['Flutter'],
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await tester.pumpWidget(
+          wrap(
+            const ProfileScreen(),
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(youthSession)),
+              liveUnreadNotificationCountProvider('y1').overrideWith(
+                (ref) => Stream.value(0),
+              ),
+              userProfileProvider('y1').overrideWith(
+                (ref) => Stream.value(youthProfile),
+              ),
+              userProjectsProvider('y1').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.text('Log out'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Apply to be a mentor'), findsNothing);
+        expect(find.text('Mentor application (Pending review)'), findsNothing);
+
+        await tester.pumpWidget(
+          wrap(
+            const StudentDashboardScreen(),
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(youthSession)),
+              liveUnreadNotificationCountProvider('y1').overrideWith(
+                (ref) => Stream.value(0),
+              ),
+              userProfileProvider('y1').overrideWith(
+                (ref) => Stream.value(youthProfile),
+              ),
+              studentMentorshipsProvider('y1').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              studentSessionsProvider('y1').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              publishedCoursesProvider.overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              userCourseProgressProvider('y1').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              approvedMentorsProvider.overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+              publishedOpportunitiesProvider.overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Mentor application'), findsNothing);
+
+        await tester.pumpWidget(
+          wrap(
+            const MentorApplyScreen(),
+            overrides: [
+              appSessionProvider.overrideWith((ref) => Stream.value(youthSession)),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Mentor access restricted'), findsOneWidget);
+        expect(find.text('Submit mentor application'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'AdminMentorReviewScreen displays approval email delivery status and triggers retryApprovalEmail',
+      (tester) async {
+        final spyAdmin = _SpyAdminOperations();
+        final approvedUnmailed = MentorApplication(
+          id: 'u-email',
+          ownerUid: 'u-email',
+          applicantName: 'Jean Bosco',
+          applicantEmail: 'jean@upbridge.rw',
+          headline: 'Cloud Engineer',
+          bio: 'Mentoring engineers.',
+          expertise: const ['Cloud'],
+          experienceYears: 5,
+          status: MentorApplicationStatus.approved,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await tester.pumpWidget(
+          wrap(
+            const AdminMentorReviewScreen(applicantUid: 'u-email'),
+            overrides: [
+              mentorApplicationDetailProvider('u-email').overrideWith(
+                (ref) => Stream.value(approvedUnmailed),
+              ),
+              adminOperationsClientProvider.overrideWithValue(spyAdmin),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.text('Retry approval email'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Approval email not sent yet'), findsOneWidget);
+        await tester.tap(find.text('Retry approval email'));
+        await tester.pumpAndSettle();
+        expect(spyAdmin.retriedEmailUids, ['u-email']);
+
+        final deliveredApp = approvedUnmailed.copyWith(
+          approvalEmailStatus: 'sent',
+          approvalEmailRecipient: 'jean@upbridge.rw',
+        );
+        await tester.pumpWidget(
+          wrap(
+            const AdminMentorReviewScreen(applicantUid: 'u-email'),
+            overrides: [
+              mentorApplicationDetailProvider('u-email').overrideWith(
+                (ref) => Stream.value(deliveredApp),
+              ),
+              adminOperationsClientProvider.overrideWithValue(spyAdmin),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Approval email delivered'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Approval email delivered'), findsOneWidget);
+        expect(find.text('Retry approval email'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'Active-session revocation immediately locks RoleShell and redirects signed-in mentor from Mentor Dashboard to /mentor-pending',
+      (tester) async {
+        final sessionController = StreamController<AppSession>.broadcast();
+        addTearDown(sessionController.close);
+
+        const initialApproved = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'm-live',
+          displayName: 'Live Mentor',
+          role: UserRole.mentor,
+          approvalStatus: ApprovalStatus.approved,
+          onboarded: true,
+          accountExists: true,
+        );
+        final revokedSession = AppSession(
+          firebaseInitialized: true,
+          signedIn: true,
+          emailVerified: true,
+          uid: 'm-live',
+          displayName: 'Live Mentor',
+          role: UserRole.mentor,
+          approvalStatus: ApprovalStatus.revoked,
+          onboarded: true,
+          accountExists: true,
+          mentorApplication: MentorApplication(
+            id: 'm-live',
+            ownerUid: 'm-live',
+            applicantName: 'Live Mentor',
+            applicantEmail: 'live@upbridge.rw',
+            headline: 'Cloud Architect',
+            bio: 'Mentoring youth on distributed systems.',
+            expertise: const ['Cloud'],
+            experienceYears: 6,
+            status: MentorApplicationStatus.revoked,
+            rejectionReason: 'Compliance hold',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        final routerProviderTest = Provider<GoRouter>((ref) {
+          final notifier = _TestSessionNotifier(ref);
+          ref.onDispose(notifier.dispose);
+          final router = GoRouter(
+            initialLocation: AppRoutes.mentorHome,
+            refreshListenable: notifier,
+            redirect: (context, state) {
+              final s =
+                  ref.read(appSessionProvider).asData?.value ?? initialApproved;
+              return evaluateSessionRedirect(
+                session: s,
+                location: state.uri.path,
+              );
+            },
+            routes: [
+              StatefulShellRoute.indexedStack(
+                builder: (_, _, shell) =>
+                    RoleShell(role: UserRole.mentor, navigationShell: shell),
+                branches: [
+                  StatefulShellBranch(
+                    routes: [
+                      GoRoute(
+                        path: AppRoutes.mentorHome,
+                        builder: (_, _) =>
+                            const Center(child: Text('Live Mentor Workspace')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: AppRoutes.mentorPending,
+                builder: (_, _) =>
+                    const Center(child: Text('Mentor Access Restricted Screen')),
+              ),
+            ],
+          );
+          ref.onDispose(router.dispose);
+          return router;
+        });
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appSessionProvider.overrideWith((ref) async* {
+                yield initialApproved;
+                yield* sessionController.stream;
+              }),
+              mentorRequestsProvider('m-live').overrideWith(
+                (ref) => Stream.value(const []),
+              ),
+            ],
+            child: Consumer(
+              builder: (context, ref, _) {
+                final router = ref.watch(routerProviderTest);
+                return MaterialApp.router(
+                  theme: buildAppTheme(),
+                  localizationsDelegates: AppLocalizations.localizationsDelegates,
+                  supportedLocales: AppLocalizations.supportedLocales,
+                  routerConfig: router,
+                );
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Live Mentor Workspace'), findsOneWidget);
+
+        // Simulate admin revoking mentor while actively viewing /m/home.
+        sessionController.add(revokedSession);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Live Mentor Workspace'), findsNothing);
+        expect(find.text('Mentor Access Restricted Screen'), findsOneWidget);
+      },
+    );
   });
+}
+
+class _TestSessionNotifier extends ChangeNotifier {
+  _TestSessionNotifier(Ref ref) {
+    _sub = ref.listen<AsyncValue<AppSession>>(
+      appSessionProvider,
+      (_, _) => notifyListeners(),
+    );
+  }
+
+  late final ProviderSubscription<AsyncValue<AppSession>> _sub;
+
+  @override
+  void dispose() {
+    _sub.close();
+    super.dispose();
+  }
 }
 
 class _FailingNotificationRepo implements UserNotificationRepository {
@@ -912,6 +1450,7 @@ class _NoopAuthService extends AuthService {}
 
 class _SpyAdminOperations implements AdminOperationsClient {
   String? rejectedReason;
+  final List<String> retriedEmailUids = [];
 
   @override
   Future<AdminActionResult> reviewMentorApplication({
@@ -922,6 +1461,14 @@ class _SpyAdminOperations implements AdminOperationsClient {
     if (decision == MentorApplicationStatus.rejected) {
       rejectedReason = reason;
     }
+    return const AdminActionResult(completed: true, message: 'Done');
+  }
+
+  @override
+  Future<AdminActionResult> retryApprovalEmail({
+    required String applicantUid,
+  }) async {
+    retriedEmailUids.add(applicantUid);
     return const AdminActionResult(completed: true, message: 'Done');
   }
 

@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:upbridge/app/router/route_guards.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
 import 'package:upbridge/core/providers/session_providers.dart';
@@ -37,7 +39,11 @@ class ProjectDetailScreen extends ConsumerWidget {
       await ref.read(projectRepositoryProvider).deleteProject(project.id);
       if (context.mounted) {
         showToast(context, 'Project deleted', tone: Tone.warning);
-        goBack(context, fallback: '/profile');
+        final session = ref.read(appSessionProvider).asData?.value;
+        final fallback = session == null || !session.signedIn
+            ? AppRoutes.welcome
+            : homeRouteForSession(session);
+        goBack(context, fallback: fallback);
       }
     } catch (error) {
       if (context.mounted) {
@@ -48,18 +54,22 @@ class ProjectDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final uid = ref.watch(appSessionProvider).asData?.value.uid;
+    final session = ref.watch(appSessionProvider).asData?.value;
+    final uid = session?.uid;
+    final fallback = session == null || !session.signedIn
+        ? AppRoutes.welcome
+        : homeRouteForSession(session);
     final projectAsync = ref.watch(projectDetailProvider(projectId));
 
     return projectAsync.when(
-      loading: () => const DetailPage(
+      loading: () => DetailPage(
         title: 'Project',
-        backFallback: '/profile',
-        children: [SkeletonDetailPageLoader()],
+        backFallback: fallback,
+        children: const [SkeletonDetailPageLoader()],
       ),
       error: (error, _) => DetailPage(
         title: 'Project',
-        backFallback: '/profile',
+        backFallback: fallback,
         children: [
           EmptyState(
             icon: Icons.cloud_off_outlined,
@@ -70,10 +80,10 @@ class ProjectDetailScreen extends ConsumerWidget {
       ),
       data: (project) {
         if (project == null) {
-          return const DetailPage(
+          return DetailPage(
             title: 'Project not found',
-            backFallback: '/profile',
-            children: [
+            backFallback: fallback,
+            children: const [
               EmptyState(
                 icon: Icons.folder_off_outlined,
                 title: 'Project unavailable',
@@ -87,7 +97,7 @@ class ProjectDetailScreen extends ConsumerWidget {
 
         return DetailPage(
           title: project.title,
-          backFallback: '/profile',
+          backFallback: fallback,
           actions: [
             if (isOwner)
               CircleIconButton(

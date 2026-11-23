@@ -31,29 +31,68 @@ class FirestoreUserAccountRepository implements UserAccountRepository {
   }
 
   @override
-  Future<void> ensureStudentAccount({
+  Future<void> createAccount({
     required String uid,
     required String email,
     required String displayName,
+    required UserRole role,
+    required bool emailVerified,
     String phone = '',
   }) async {
+    if (role == UserRole.admin) {
+      throw StateError('Admin accounts cannot be self-created.');
+    }
     final existing = await _doc(uid).get();
-    if (existing.exists) return;
+    if (existing.exists) {
+      final data = existing.data();
+      if (emailVerified && data != null && data['emailVerified'] != true) {
+        await markEmailVerified(uid: uid);
+      }
+      return;
+    }
+    final isMentor = role == UserRole.mentor;
     await _doc(uid).set({
       'ownerUid': uid,
       'email': email.trim(),
       'displayName': displayName.trim(),
       'phone': phone.trim(),
-      'role': UserRole.student.value,
+      'role': role.value,
       'isApproved': false,
+      'approvalStatus': isMentor
+          ? ApprovalStatus.pending.value
+          : ApprovalStatus.notRequired.value,
+      'emailVerified': emailVerified,
       'status': AccountStatus.active.value,
-      'onboarded': false,
+      'onboarded': isMentor,
       'preferredLocale': 'en',
       'photoAsset': null,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  @override
+  Future<void> markEmailVerified({required String uid}) async {
+    await _doc(uid).update({
+      'emailVerified': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> ensureStudentAccount({
+    required String uid,
+    required String email,
+    required String displayName,
+    String phone = '',
+  }) => createAccount(
+    uid: uid,
+    email: email,
+    displayName: displayName,
+    role: UserRole.student,
+    emailVerified: true,
+    phone: phone,
+  );
 
   @override
   Future<void> updateSafeAccount({

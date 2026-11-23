@@ -74,25 +74,87 @@ const verifiedAdmin = (uid = 'admin-1') =>
 
 const ts = () => new Date('2026-11-19T12:00:00Z');
 
-test('denies unauthenticated and unverified users by default', async () => {
+test('denies unauthenticated users and blocks unverified users from platform data and privilege forgery', async () => {
   const anonDb = testEnv.unauthenticatedContext().firestore();
   const unverifiedDb = testEnv
     .authenticatedContext('unv-1', { email_verified: false })
     .firestore();
 
   await assertFails(getDoc(doc(anonDb, 'courses', 'c-1')));
+  await assertFails(getDoc(doc(unverifiedDb, 'courses', 'c-1')));
+
+  // Unverified self-signup cannot forge emailVerified=true, isApproved=true, or admin role.
   await assertFails(
     setDoc(doc(unverifiedDb, 'users', 'unv-1'), {
       ownerUid: 'unv-1',
       email: 'u@test.rw',
-      displayName: 'Unverified',
+      displayName: 'Forged Verified',
       phone: '',
       role: 'student',
       isApproved: false,
+      approvalStatus: 'notRequired',
+      emailVerified: true,
       status: 'active',
       onboarded: false,
       preferredLocale: 'en',
       photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(unverifiedDb, 'users', 'unv-1'), {
+      ownerUid: 'unv-1',
+      email: 'u@test.rw',
+      displayName: 'Forged Admin',
+      phone: '',
+      role: 'admin',
+      isApproved: true,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // Initial unverified student signup doc with emailVerified=false succeeds.
+  await assertSucceeds(
+    setDoc(doc(unverifiedDb, 'users', 'unv-1'), {
+      ownerUid: 'unv-1',
+      email: 'u@test.rw',
+      displayName: 'Unverified Student',
+      phone: '',
+      role: 'student',
+      isApproved: false,
+      approvalStatus: 'notRequired',
+      emailVerified: false,
+      status: 'active',
+      onboarded: false,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // Unverified user still cannot read profiles or create student/mentor activity.
+  await assertFails(getDoc(doc(unverifiedDb, 'profiles', 'unv-1')));
+  await assertFails(
+    setDoc(doc(unverifiedDb, 'mentorRequests', 'req-unv'), {
+      ownerUid: 'unv-1',
+      studentUid: 'unv-1',
+      studentName: 'Unverified',
+      studentPhotoUrl: '',
+      mentorUid: 'mentor-1',
+      mentorName: 'Mentor',
+      mentorPhotoUrl: '',
+      message: 'Help me',
+      goals: 'Learn',
+      status: 'pending',
+      responseNote: '',
+      respondedAt: null,
       createdAt: ts(),
       updatedAt: ts(),
     }),
@@ -887,15 +949,53 @@ test('mentor course ownership, engagement scoping, session rescheduling, revocat
   await assertFails(getDoc(doc(s2Db, 'users', 'student-1')));
 });
 
-test('mentor registration submits extended profile fields while email verification alone never unlocks mentor writes', async () => {
+test('mentor registration persists pending mentor role across signup and verification while blocking mentor and student actions until admin approval', async () => {
   const unverifiedAppDb = testEnv
     .authenticatedContext('app-2', { email_verified: false })
     .firestore();
   const appDb = unapprovedApplicant('app-2').firestore();
   const anotherMentorDb = verifiedMentor('mentor-other').firestore();
 
-  // Unverified user cannot write mentor application.
+  // Unverified mentor cannot forge isApproved=true, approvalStatus='approved', or emailVerified=true.
   await assertFails(
+    setDoc(doc(unverifiedAppDb, 'users', 'app-2'), {
+      ownerUid: 'app-2',
+      email: 'kevine@upbridge.rw',
+      displayName: 'Kevine Mukiza',
+      phone: '+250 788 123 456',
+      role: 'mentor',
+      isApproved: true,
+      approvalStatus: 'approved',
+      emailVerified: false,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // Unverified mentor signup persists role=mentor, approvalStatus=pending, emailVerified=false.
+  await assertSucceeds(
+    setDoc(doc(unverifiedAppDb, 'users', 'app-2'), {
+      ownerUid: 'app-2',
+      email: 'kevine@upbridge.rw',
+      displayName: 'Kevine Mukiza',
+      phone: '+250 788 123 456',
+      role: 'mentor',
+      isApproved: false,
+      approvalStatus: 'pending',
+      emailVerified: false,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertSucceeds(
     setDoc(doc(unverifiedAppDb, 'mentorApplications', 'app-2'), {
       ownerUid: 'app-2',
       applicantName: 'Kevine Mukiza',
@@ -921,45 +1021,10 @@ test('mentor registration submits extended profile fields while email verificati
     }),
   );
 
-  // Verified user creates student account (never mentor) and pending mentor application.
+  // Once email is verified, user may sync emailVerified=true ONLY while keeping mentor/pending.
   await assertSucceeds(
-    setDoc(doc(appDb, 'users', 'app-2'), {
-      ownerUid: 'app-2',
-      email: 'kevine@upbridge.rw',
-      displayName: 'Kevine Mukiza',
-      phone: '+250 788 123 456',
-      role: 'student',
-      isApproved: false,
-      status: 'active',
-      onboarded: false,
-      preferredLocale: 'en',
-      photoAsset: null,
-      createdAt: ts(),
-      updatedAt: ts(),
-    }),
-  );
-  await assertSucceeds(
-    setDoc(doc(appDb, 'mentorApplications', 'app-2'), {
-      ownerUid: 'app-2',
-      applicantName: 'Kevine Mukiza',
-      applicantEmail: 'kevine@upbridge.rw',
-      headline: 'Staff Mobile Engineer',
-      profession: 'Mobile Architect',
-      education: 'BSc CS, University of Rwanda',
-      bio: '8 years building production mobile platforms across East Africa.',
-      expertise: ['Mobile Development'],
-      skills: ['Flutter', 'Firebase'],
-      experienceYears: 8,
-      availability: 'Tue & Thu 18:00 CAT',
-      mentoringInterests: 'Portfolio code reviews',
-      maxMentees: 5,
-      cvAsset: null,
-      supportingLinks: ['https://github.com/kevine'],
-      status: 'pending',
-      rejectionReason: '',
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt: ts(),
+    updateDoc(doc(appDb, 'users', 'app-2'), {
+      emailVerified: true,
       updatedAt: ts(),
     }),
   );
@@ -977,7 +1042,7 @@ test('mentor registration submits extended profile fields while email verificati
     }),
   );
 
-  // Self-approval, tampering with reviewedBy, or mentor course creation all fail.
+  // Self-approval, tampering with approvalStatus, mentor courses, and student requests all fail.
   await assertFails(
     updateDoc(doc(appDb, 'mentorApplications', 'app-2'), {
       status: 'approved',
@@ -986,8 +1051,13 @@ test('mentor registration submits extended profile fields while email verificati
   );
   await assertFails(
     updateDoc(doc(appDb, 'users', 'app-2'), {
-      role: 'mentor',
       isApproved: true,
+      approvalStatus: 'approved',
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(appDb, 'users', 'app-2'), {
+      approvalStatus: 'approved',
     }),
   );
   await assertFails(
@@ -997,6 +1067,24 @@ test('mentor registration submits extended profile fields while email verificati
       title: 'Unauthorized Course',
       summary: 'Pending mentor must not create courses.',
       status: 'draft',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(appDb, 'mentorRequests', 'pending-mentor-req'), {
+      ownerUid: 'app-2',
+      studentUid: 'app-2',
+      studentName: 'Kevine Mukiza',
+      studentPhotoUrl: '',
+      mentorUid: 'mentor-other',
+      mentorName: 'Other Mentor',
+      mentorPhotoUrl: '',
+      message: 'Should be blocked',
+      goals: 'Test',
+      status: 'pending',
+      responseNote: '',
+      respondedAt: null,
       createdAt: ts(),
       updatedAt: ts(),
     }),
@@ -1401,5 +1489,291 @@ test('legacy users with accountStatus or missing status can read profiles, proje
         orderBy('createdAt', 'desc'),
       ),
     ),
+  );
+});
+
+test('Phase 2 & 8 hardening: Youth cannot create mentorApplications, demoted admins fail closed, missing users fail isStudent, mentors read-mark notifications, and mail is admin-only', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users', 'youth-locked'), {
+      ownerUid: 'youth-locked',
+      email: 'youth@test.rw',
+      displayName: 'Locked Youth',
+      phone: '',
+      role: 'student',
+      isApproved: false,
+      approvalStatus: 'notRequired',
+      emailVerified: true,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'users', 'demoted-admin'), {
+      ownerUid: 'demoted-admin',
+      email: 'demoted@test.rw',
+      displayName: 'Former Admin',
+      phone: '',
+      role: 'student',
+      isApproved: false,
+      approvalStatus: 'notRequired',
+      emailVerified: true,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'users', 'corrupt-user'), {
+      ownerUid: 'corrupt-user',
+      email: 'corrupt@test.rw',
+      displayName: 'Corrupt User',
+      phone: '',
+      role: 'superhacker',
+      isApproved: false,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'notifications', 'mentor-notif-1'), {
+      ownerUid: 'mentor-1',
+      title: 'Welcome mentor',
+      body: 'Approved!',
+      type: 'mentorApproval',
+      route: '/m/home',
+      isRead: false,
+      readAt: null,
+      status: 'unread',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+  });
+
+  const youthDb = verifiedStudent('youth-locked').firestore();
+  const demotedAdminDb = verifiedAdmin('demoted-admin').firestore();
+  const orphanDb = testEnv
+    .authenticatedContext('orphan-no-doc', { email_verified: true })
+    .firestore();
+  const corruptDb = verifiedStudent('corrupt-user').firestore();
+  const mentorDb = verifiedMentor('mentor-1').firestore();
+  const adminDb = verifiedAdmin('admin-real').firestore();
+
+  // 1. Existing Youth (users/{uid}.role == 'student') cannot create mentorApplications/{uid}.
+  await assertFails(
+    setDoc(doc(youthDb, 'mentorApplications', 'youth-locked'), {
+      ownerUid: 'youth-locked',
+      applicantName: 'Locked Youth',
+      applicantEmail: 'youth@test.rw',
+      headline: 'Attempting self upgrade',
+      bio: 'Trying to convert student account into mentor account illegally.',
+      expertise: ['Web Development'],
+      experienceYears: 3,
+      availability: 'Weekends',
+      cvAsset: null,
+      supportingLinks: [],
+      status: 'pending',
+      rejectionReason: '',
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // 2. Demoted admin (token still carries role='admin', Firestore role='student') cannot perform admin writes.
+  await assertFails(
+    setDoc(doc(demotedAdminDb, 'opportunities', 'hacked-opp'), {
+      ownerUid: 'demoted-admin',
+      title: 'Stale Admin Claim Hack',
+      status: 'published',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // 3. Verified user with NO users/{uid} doc (and corrupt role doc) fails isStudent() on project creation.
+  await assertFails(
+    setDoc(doc(orphanDb, 'projects', 'orphan-proj'), {
+      ownerUid: 'orphan-no-doc',
+      title: 'Should Fail Without User Doc',
+      description: 'Users without a valid student account record cannot bypass role rules.',
+      skills: ['Dart'],
+      images: [],
+      attachments: [],
+      isPublic: false,
+      status: 'draft',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(corruptDb, 'projects', 'corrupt-proj'), {
+      ownerUid: 'corrupt-user',
+      title: 'Should Fail With Corrupt Role',
+      description: 'Users with invalid role strings cannot bypass role rules.',
+      skills: ['Dart'],
+      images: [],
+      attachments: [],
+      isPublic: false,
+      status: 'draft',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // 4. Approved mentor CAN mark their own notification as read.
+  await assertSucceeds(
+    updateDoc(doc(mentorDb, 'notifications', 'mentor-notif-1'), {
+      isRead: true,
+      status: 'read',
+      readAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+
+  // 5. mail/ collection (Trigger Email) is strictly admin-only and immutable after create.
+  await assertFails(
+    setDoc(doc(youthDb, 'mail', 'spoof-mail'), {
+      to: ['someone@test.rw'],
+      message: { subject: 'Spoof', text: 'Hack' },
+    }),
+  );
+  await assertSucceeds(
+    setDoc(doc(adminDb, 'mail', 'mentor_approval_m1'), {
+      to: ['mentor@test.rw'],
+      message: {
+        subject: "You're Approved! Welcome to SkillBridge as a Mentor",
+        text: 'Welcome!',
+      },
+      createdAt: ts(),
+    }),
+  );
+  await assertFails(deleteDoc(doc(adminDb, 'mail', 'mentor_approval_m1')));
+
+  // 6. Revoked mentor (even holding stale mentor claim) cannot set isMentorPublic, write courses,
+  //    or impersonate Youth, while valid field-scoped resubmission preserves admin approvalEmail* metadata.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users', 'revoked-m1'), {
+      ownerUid: 'revoked-m1',
+      email: 'revoked@test.rw',
+      displayName: 'Revoked Mentor',
+      phone: '',
+      role: 'mentor',
+      isApproved: false,
+      approvalStatus: 'revoked',
+      emailVerified: true,
+      status: 'active',
+      onboarded: true,
+      preferredLocale: 'en',
+      photoAsset: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'profiles', 'revoked-m1'), {
+      ownerUid: 'revoked-m1',
+      displayName: 'Revoked Mentor',
+      headline: 'Backend Lead',
+      location: 'Kigali',
+      about: 'Mentoring engineers.',
+      photoAsset: null,
+      cvAsset: null,
+      skills: ['Dart'],
+      interests: [],
+      learningGoal: '',
+      professionalLinks: [],
+      education: [],
+      experience: [],
+      certificates: [],
+      isMentorPublic: false,
+      status: 'active',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+    await setDoc(doc(db, 'mentorApplications', 'revoked-m1'), {
+      ownerUid: 'revoked-m1',
+      applicantName: 'Revoked Mentor',
+      applicantEmail: 'revoked@test.rw',
+      headline: 'Backend Lead',
+      profession: 'Staff Engineer',
+      education: 'BSc CS',
+      bio: 'Mentoring Rwandan youth engineers for 7 years.',
+      expertise: ['Web Development'],
+      skills: ['Dart'],
+      experienceYears: 7,
+      availability: 'Weekends',
+      mentoringInterests: 'Code review',
+      maxMentees: 5,
+      cvAsset: null,
+      supportingLinks: [],
+      status: 'revoked',
+      rejectionReason: 'Availability lapsed',
+      reviewedBy: 'admin-real',
+      reviewedAt: ts(),
+      approvalEmailStatus: 'sent',
+      approvalEmailRecipient: 'revoked@test.rw',
+      approvalEmailAttempts: 1,
+      approvalEmailMessageId: 'msg-prev-1',
+      createdAt: ts(),
+      updatedAt: ts(),
+    });
+  });
+
+  const revokedMentorDb = verifiedMentor('revoked-m1').firestore();
+  await assertFails(
+    updateDoc(doc(revokedMentorDb, 'profiles', 'revoked-m1'), {
+      isMentorPublic: true,
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(revokedMentorDb, 'courses', 'revoked-c1'), {
+      ownerUid: 'revoked-m1',
+      ownerName: 'Revoked Mentor',
+      title: 'Blocked Course',
+      summary: 'Revoked mentors cannot author courses even with stale token claim.',
+      status: 'draft',
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(revokedMentorDb, 'courseProgress', 'revoked-m1_c-1'), {
+      ownerUid: 'revoked-m1',
+      courseId: 'c-1',
+      courseTitle: 'Course',
+      courseOwnerUid: 'mentor-1',
+      completedModuleIds: [],
+      progressPercent: 10,
+      evidenceUrl: '',
+      evidenceAsset: null,
+      status: 'inProgress',
+      completedAt: null,
+      createdAt: ts(),
+      updatedAt: ts(),
+    }),
+  );
+  // Resubmission updating only owner-editable fields succeeds even when admin approvalEmail* metadata exists.
+  await assertSucceeds(
+    updateDoc(doc(revokedMentorDb, 'mentorApplications', 'revoked-m1'), {
+      bio: 'Updated bio with renewed availability for Rwandan youth developers.',
+      status: 'pending',
+      rejectionReason: '',
+      reviewedBy: null,
+      reviewedAt: null,
+      updatedAt: ts(),
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(revokedMentorDb, 'mentorApplications', 'revoked-m1'), {
+      approvalEmailStatus: 'tampered',
+      updatedAt: ts(),
+    }),
   );
 });

@@ -1047,6 +1047,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add project'**
   String get addProjectCta;
+
+  /// No description provided for @mentorRegistrationHeadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to UpBridge — Mentor Registration'**
+  String get mentorRegistrationHeadingTitle;
+
+  /// No description provided for @mentorRegistrationHeadingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your experience can open doors for someone else. Complete your mentor profile and submit it for review to join our mentorship community.'**
+  String get mentorRegistrationHeadingBody;
+
+  /// No description provided for @mentorWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to UpBridge as a Mentor.'**
+  String get mentorWelcomeTitle;
+
+  /// No description provided for @mentorDashboardWelcomeBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back, {name}'**
+  String mentorDashboardWelcomeBack(String name);
+
+  /// No description provided for @mentorDashboardWelcomeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your experience, guide the next generation, and make a meaningful impact.'**
+  String get mentorDashboardWelcomeBody;
+
+  /// No description provided for @completedSessionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed sessions'**
+  String get completedSessionsLabel;
+
+  /// No description provided for @profileCompletionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile completion'**
+  String get profileCompletionLabel;
+
+  /// No description provided for @recentMentorshipActivityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent Mentorship Activity'**
+  String get recentMentorshipActivityLabel;
 }
 
 class _AppLocalizationsDelegate

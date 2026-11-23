@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
-import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/models/media_asset.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
@@ -870,19 +869,6 @@ class ProfileScreen extends ConsumerWidget {
                 const SectionLabel('Account & Preferences'),
                 ListGroup(
                   children: [
-                    if (session.role == UserRole.student)
-                      ListRow(
-                        leading: const IconTile(
-                          Icons.verified_user_outlined,
-                          tone: Tone.info,
-                        ),
-                        title: session.hasPendingMentorApplication
-                            ? 'Mentor application (Pending review)'
-                            : 'Apply to be a mentor',
-                        subtitle:
-                            'Verified mentors guide students across Rwanda',
-                        onTap: () => context.push('/mentor-apply'),
-                      ),
                     ListRow(
                       leading: const IconTile(
                         Icons.language_rounded,

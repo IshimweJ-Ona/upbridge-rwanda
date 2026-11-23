@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:upbridge/app/auth/account_access_issue_screen.dart';
 import 'package:upbridge/app/auth/account_deactivated_screen.dart';
 import 'package:upbridge/app/auth/verify_email_screen.dart';
 import 'package:upbridge/app/router/role_shell.dart';
@@ -50,17 +51,23 @@ import 'package:upbridge/shared/animations/page_transitions.dart';
 
 class _SessionRefreshListenable extends ChangeNotifier {
   _SessionRefreshListenable(Ref ref) {
-    _subscription = ref.listen<AsyncValue<AppSession>>(
+    _sessionSubscription = ref.listen<AsyncValue<AppSession>>(
       appSessionProvider,
+      (_, _) => notifyListeners(),
+    );
+    _regSubscription = ref.listen<bool>(
+      registrationInProgressProvider,
       (_, _) => notifyListeners(),
     );
   }
 
-  late final ProviderSubscription<AsyncValue<AppSession>> _subscription;
+  late final ProviderSubscription<AsyncValue<AppSession>> _sessionSubscription;
+  late final ProviderSubscription<bool> _regSubscription;
 
   @override
   void dispose() {
-    _subscription.close();
+    _sessionSubscription.close();
+    _regSubscription.close();
     super.dispose();
   }
 }
@@ -114,9 +121,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
       final session = sessionAsync.value ?? const AppSession.signedOut();
+      final registrationBusy = ref.read(registrationInProgressProvider);
       return evaluateSessionRedirect(
         session: session,
         location: state.uri.path,
+        registrationInProgress: registrationBusy,
       );
     },
     errorBuilder: (_, _) => const NotFoundScreen(),
@@ -153,6 +162,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.accountDeactivated,
         pageBuilder: (_, s) => fadePage(s, const AccountDeactivatedScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.accountAccessIssue,
+        pageBuilder: (_, s) => fadePage(s, const AccountAccessIssueScreen()),
       ),
       GoRoute(
         path: AppRoutes.onboardingGoal,

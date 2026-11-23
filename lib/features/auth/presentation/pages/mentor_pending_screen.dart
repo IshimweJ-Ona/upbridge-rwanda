@@ -32,30 +32,50 @@ class _MentorPendingScreenState extends ConsumerState<MentorPendingScreen> {
     try {
       final auth = ref.read(authServiceProvider);
       final claim = await auth.readRoleClaim(forceRefresh: true);
-      final claimRole = userRoleFromClaim(claim);
+      final claimRole = tryUserRoleFromClaim(claim);
       final uid = auth.currentUser?.uid;
       final account = uid == null
           ? null
           : await ref.read(userAccountRepositoryProvider).getAccount(uid);
       final latestApp = uid == null
           ? null
-          : await ref.read(mentorApplicationRepositoryProvider).getApplication(uid);
-      final effectiveRole = resolveEffectiveRole(
+          : await ref
+                .read(mentorApplicationRepositoryProvider)
+                .getApplication(uid);
+      final effectiveRole = resolveEffectiveRoleNullable(
         claimRole: claimRole,
         account: account,
+        mentorApplication: latestApp,
       );
+      final approvalStatus = resolveApprovalStatus(
+        role: effectiveRole,
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: latestApp,
+      );
+      final isApprovedMentor =
+          effectiveRole == UserRole.mentor &&
+          approvalStatus == ApprovalStatus.approved &&
+          (account?.isApproved ?? false) &&
+          (latestApp == null ||
+              latestApp.status == MentorApplicationStatus.approved);
       ref.invalidate(appSessionProvider);
       if (!mounted) return;
-      if (effectiveRole == UserRole.mentor) {
-        showToast(context, 'Congratulations! Your mentor application has been approved.');
+      if (isApprovedMentor) {
+        showToast(
+          context,
+          'Congratulations! Your mentor application has been approved.',
+        );
         context.go(AppRoutes.mentorHome);
-      } else if (latestApp?.status == MentorApplicationStatus.rejected) {
+      } else if (approvalStatus == ApprovalStatus.rejected ||
+          latestApp?.status == MentorApplicationStatus.rejected) {
         showToast(
           context,
           'Your mentor application needs updates before approval.',
           tone: Tone.warning,
         );
-      } else if (latestApp?.status == MentorApplicationStatus.revoked) {
+      } else if (approvalStatus == ApprovalStatus.revoked ||
+          latestApp?.status == MentorApplicationStatus.revoked) {
         showToast(
           context,
           'Your mentor privileges were revoked. Review the reason and resubmit when ready.',
@@ -101,7 +121,7 @@ class _MentorPendingScreenState extends ConsumerState<MentorPendingScreen> {
         ? 0
         : ref.watch(liveUnreadNotificationCountProvider(uid)).asData?.value ?? 0;
 
-    if (session.role == UserRole.mentor) {
+    if (session.isApprovedMentor) {
       return PageFrame(
         title: 'Mentor workspace unlocked',
         showBack: false,
@@ -129,27 +149,62 @@ class _MentorPendingScreenState extends ConsumerState<MentorPendingScreen> {
     final app = session.mentorApplication;
     if (app == null) {
       return PageFrame(
-        title: 'Mentor application',
+        title: 'Mentor Application Pending',
         showBack: false,
         footer: [
           AppButton(
+            l10n?.checkApplicationStatusCta ?? 'Check application status',
+            icon: Icons.refresh_rounded,
+            loading: _refreshing,
+            onPressed: _refreshStatus,
+          ),
+          AppButton(
             'Complete mentor application',
+            variant: ButtonVariant.secondary,
             onPressed: () => context.go(AppRoutes.mentorApply),
           ),
           AppButton(
-            'Sign out',
-            variant: ButtonVariant.secondary,
+            l10n?.signOut ?? 'Sign out',
+            variant: ButtonVariant.ghost,
             onPressed: _signOut,
           ),
         ],
-        children: const [
-          SizedBox(height: 12),
-          NoticeCard(
-            tone: Tone.info,
-            icon: Icons.assignment_outlined,
-            title: 'Finish your mentor application',
-            body:
-                'Your email is verified, and we need your mentor profile details to submit your application for administrator review.',
+        children: [
+          const SizedBox(height: 12),
+          SurfaceCard(
+            accentEdge: p.warningText,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    StatusBadge(
+                      'Application Pending Review',
+                      icon: Icons.hourglass_top_rounded,
+                      tone: Tone.warning,
+                    ),
+                    StatusBadge(
+                      'Email verified',
+                      icon: Icons.verified_outlined,
+                      tone: Tone.success,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n?.mentorWelcomeTitle ?? 'Welcome to UpBridge as a Mentor.',
+                  style: AppText.titleL.copyWith(color: p.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n?.mentorPendingVerifiedBody ??
+                      'Your email has been verified successfully. Your mentor application is now awaiting review by the UpBridge Rwanda administration team. Verifying your email does not grant mentor access. You will receive an update once your application has been reviewed.',
+                  style: AppText.bodyS.copyWith(color: p.textSecondary),
+                ),
+              ],
+            ),
           ),
         ],
       );
@@ -239,6 +294,12 @@ class _MentorPendingScreenState extends ConsumerState<MentorPendingScreen> {
                         : Icons.hourglass_top_rounded,
                     tone: isRejected ? Tone.danger : Tone.warning,
                   ),
+                  if (!isRejected && !isRevoked)
+                    const StatusBadge(
+                      'Application Pending Review',
+                      icon: Icons.assignment_turned_in_outlined,
+                      tone: Tone.info,
+                    ),
                   const StatusBadge(
                     'Email verified',
                     icon: Icons.verified_outlined,
@@ -246,7 +307,14 @@ class _MentorPendingScreenState extends ConsumerState<MentorPendingScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              if (!isRejected && !isRevoked) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l10n?.mentorWelcomeTitle ?? 'Welcome to UpBridge as a Mentor.',
+                  style: AppText.titleL.copyWith(color: p.textPrimary),
+                ),
+              ],
+              const SizedBox(height: 10),
               Text(
                 isRejected
                     ? (l10n?.mentorRejectedTitle ??

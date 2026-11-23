@@ -81,8 +81,7 @@ class FirestoreMentorApplicationRepository
           .where((e) => e.isNotEmpty)
           .toList(growable: false);
 
-      tx.set(ref, {
-        'ownerUid': application.ownerUid,
+      final updateFields = <String, dynamic>{
         'applicantName': application.applicantName.trim(),
         'applicantEmail': application.applicantEmail.trim(),
         'headline': application.headline.trim(),
@@ -101,11 +100,19 @@ class FirestoreMentorApplicationRepository
         'rejectionReason': '',
         'reviewedBy': null,
         'reviewedAt': null,
-        'createdAt': existing.exists && existingData?['createdAt'] != null
-            ? existingData!['createdAt']
-            : FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (existing.exists) {
+        // Use update so admin-only approvalEmail* fields stay preserved under firestore.rules.
+        tx.update(ref, updateFields);
+      } else {
+        tx.set(ref, {
+          'ownerUid': application.ownerUid,
+          ...updateFields,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     });
   }
 }

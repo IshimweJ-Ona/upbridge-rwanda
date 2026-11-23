@@ -1,13 +1,18 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/models/media_asset.dart';
+import 'package:upbridge/core/providers/repository_providers.dart';
+import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/services/cloudinary_service.dart';
 import 'package:upbridge/features/auth/domain/validators.dart';
 import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
 import 'package:upbridge/features/auth/presentation/widgets/mentor_application_form_sections.dart';
+import 'package:upbridge/features/mentorship/domain/models/mentor_application.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -141,16 +146,24 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       return;
     }
 
+    final auth = ref.read(authServiceProvider);
+    final cloudinary = ref.read(cloudinaryMediaServiceProvider);
+    final draftNotifier = ref.read(registrationDraftProvider.notifier);
+    final regProgress = ref.read(registrationInProgressProvider.notifier);
+    final accountRepo = ref.read(userAccountRepositoryProvider);
+    final mentorAppRepo = ref.read(mentorApplicationRepositoryProvider);
+
     setState(() {
       _loading = true;
       _error = null;
     });
+    regProgress.setBusy(true);
     try {
-      final auth = ref.read(authServiceProvider);
       final credential = await auth.signUp(_email.text, _password.text);
       final cleanName = _name.text.trim();
+      final cleanEmail = (credential.user?.email ?? _email.text).trim();
+      final cleanPhone = '+250 ${_phone.text.trim()}';
       await credential.user?.updateDisplayName(cleanName);
-      await auth.sendVerificationEmail();
 
       final uid = credential.user?.uid;
       MediaAsset? uploadedCredential;
@@ -160,13 +173,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           uid != null &&
           uid.isNotEmpty) {
         try {
-          uploadedCredential = await ref
-              .read(cloudinaryMediaServiceProvider)
-              .uploadImage(
-                file: _pickedCredentialFile!,
-                ownerUid: uid,
-                category: 'mentor-applications',
-              );
+          uploadedCredential = await cloudinary.uploadImage(
+            file: _pickedCredentialFile!,
+            ownerUid: uid,
+            category: 'mentor-applications',
+          );
         } catch (_) {
           credentialUploadFailed = true;
         }
@@ -205,28 +216,86 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
       final draft = RegistrationDraft(
         displayName: cleanName,
-        phone: '+250 ${_phone.text.trim()}',
+        phone: cleanPhone,
         wantsMentorApplication: _isMentor,
         credentialUploadFailed: credentialUploadFailed,
         mentorApplication: mentorPayload,
       );
       if (uid != null && uid.isNotEmpty) {
-        await ref
-            .read(registrationDraftProvider.notifier)
-            .persistForUid(uid, draft);
+        await draftNotifier.persistForUid(uid, draft);
         if (credentialUploadFailed) {
           await RegistrationDraftController.setCredentialUploadWarning(
             uid,
             true,
           );
         }
+        if (Firebase.apps.isNotEmpty) {
+          try {
+            await accountRepo.createAccount(
+              uid: uid,
+              email: cleanEmail,
+              displayName: cleanName,
+              role: _isMentor ? UserRole.mentor : UserRole.student,
+              emailVerified: credential.user?.emailVerified ?? false,
+              phone: cleanPhone,
+            );
+            if (_isMentor && mentorPayload != null) {
+              final now = DateTime.now().toUtc();
+              await mentorAppRepo.submitApplication(
+                MentorApplication(
+                  id: uid,
+                  ownerUid: uid,
+                  applicantName: cleanName.isNotEmpty ? cleanName : 'Applicant',
+                  applicantEmail: cleanEmail,
+                  headline: mentorPayload.headline,
+                  profession: mentorPayload.profession,
+                  education: mentorPayload.education,
+                  bio: mentorPayload.bio,
+                  expertise: mentorPayload.expertise,
+                  skills: mentorPayload.skills,
+                  experienceYears: mentorPayload.experienceYears,
+                  availability: mentorPayload.availability,
+                  mentoringInterests: mentorPayload.mentoringInterests,
+                  maxMentees: mentorPayload.maxMentees,
+                  cvAsset: mentorPayload.cvAsset,
+                  supportingLinks: mentorPayload.supportingLinks,
+                  status: MentorApplicationStatus.pending,
+                  createdAt: now,
+                  updatedAt: now,
+                ),
+              );
+            }
+          } on FirebaseException catch (error) {
+            // Transient offline errors retry in VerifyEmailScreen using the persisted draft.
+            const transient = {
+              'unavailable',
+              'deadline-exceeded',
+              'network-request-failed',
+            };
+            if (!transient.contains(error.code)) rethrow;
+          }
+        }
       } else {
-        ref.read(registrationDraftProvider.notifier).setDraft(draft);
+        draftNotifier.setDraft(draft);
       }
+
+      var verificationSendWarning = false;
+      try {
+        await auth.sendVerificationEmail();
+      } catch (_) {
+        verificationSendWarning = true;
+      }
+
       if (credentialUploadFailed && mounted) {
         showToast(
           context,
           'Account created, but your credential image failed to upload. You can re-upload it after verifying your email.',
+          tone: Tone.warning,
+        );
+      } else if (verificationSendWarning && mounted) {
+        showToast(
+          context,
+          'Account created. Tap Send verification email on the next screen to request a fresh link.',
           tone: Tone.warning,
         );
       }
@@ -234,6 +303,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     } catch (error) {
       if (mounted) setState(() => _error = errorMessage(error));
     } finally {
+      regProgress.setBusy(false);
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -278,10 +348,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         UpBridgeLogo(markWidth: 36, onDark: isDark, horizontal: true),
         const SizedBox(height: 16),
         PageHeading(
-          title: l10n?.joinUpBridgeTitle ?? 'Join UpBridge Rwanda',
-          body:
-              l10n?.joinUpBridgeBody ??
-              'Build career-ready skills, verify real projects, and connect with vetted mentors across Rwanda.',
+          title: _isMentor
+              ? (l10n?.mentorRegistrationHeadingTitle ??
+                    'Welcome to UpBridge — Mentor Registration')
+              : (l10n?.joinUpBridgeTitle ?? 'Join UpBridge Rwanda'),
+          body: _isMentor
+              ? (l10n?.mentorRegistrationHeadingBody ??
+                    'Your experience can open doors for someone else. Complete your mentor profile and submit it for review to join our mentorship community.')
+              : (l10n?.joinUpBridgeBody ??
+                    'Build career-ready skills, verify real projects, and connect with vetted mentors across Rwanda.'),
         ),
         const SectionLabel('Choose how you want to join', top: 8),
         LayoutBuilder(

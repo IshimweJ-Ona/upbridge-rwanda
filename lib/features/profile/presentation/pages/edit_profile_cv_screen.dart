@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/models/media_asset.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
@@ -140,6 +142,17 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
     }
   }
 
+  static String _profileFallbackForSession(AppSession? session) {
+    if (session == null || !session.signedIn) return AppRoutes.welcome;
+    if (session.isApprovedMentor) return AppRoutes.mentorProfile;
+    if (session.role == UserRole.mentor ||
+        session.requiresMentorApprovalScreen) {
+      return AppRoutes.mentorPending;
+    }
+    if (session.role == UserRole.admin) return AppRoutes.adminOverview;
+    return AppRoutes.studentProfile;
+  }
+
   Future<void> _save(AppSession session, UserProfile? existing) async {
     FocusScope.of(context).unfocus();
     final nameErr = Validators.fullName(_name.text);
@@ -219,7 +232,7 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
           );
       if (mounted) {
         showToast(context, 'Profile & CV saved');
-        goBack(context, fallback: '/profile');
+        goBack(context, fallback: _profileFallbackForSession(session));
       }
     } catch (error) {
       if (mounted) setState(() => _error = errorMessage(error));
@@ -268,7 +281,7 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
 
     return DetailPage(
       title: l10n.editProfileCta,
-      backFallback: '/profile',
+      backFallback: _profileFallbackForSession(session),
       footer: [
         AppButton(
           'Save changes',

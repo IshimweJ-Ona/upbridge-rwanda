@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
-import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/repository_providers.dart';
 import 'package:upbridge/core/providers/session_providers.dart';
@@ -44,15 +43,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final uid = session?.uid;
     final fallback = session == null || !session.signedIn
         ? AppRoutes.welcome
-        : homeRouteForRole(
-            session.role,
-            onboarded: session.onboarded,
-            isPendingOrRejectedMentor:
-                session.role == UserRole.student &&
-                (session.hasPendingMentorApplication ||
-                    session.hasRejectedMentorApplication ||
-                    session.hasRevokedMentorApplication),
-          );
+        : homeRouteForSession(session);
 
     if (uid == null) {
       return DetailPage(

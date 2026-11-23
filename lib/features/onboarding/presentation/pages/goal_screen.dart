@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
+import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/live_data_providers.dart';
 import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -39,7 +41,24 @@ class _GoalScreenState extends ConsumerState<GoalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = ref.watch(appSessionProvider).asData?.value.uid;
+    final session = ref.watch(appSessionProvider).asData?.value;
+    if (session != null &&
+        session.signedIn &&
+        (session.role != UserRole.student ||
+            session.requiresMentorApprovalScreen)) {
+      return PageFrame(
+        showBack: false,
+        children: [
+          const SizedBox(height: 24),
+          AppButton(
+            'Continue',
+            onPressed: () => context.go(homeRouteForSession(session)),
+          ),
+        ],
+      );
+    }
+
+    final uid = session?.uid;
     final profile = uid == null
         ? null
         : ref.watch(userProfileProvider(uid)).asData?.value;

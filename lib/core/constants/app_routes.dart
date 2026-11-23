@@ -8,6 +8,7 @@ abstract final class AppRoutes {
   static const passwordUpdated = '/password-updated';
   static const verifyEmail = '/verify-email';
   static const accountDeactivated = '/account-deactivated';
+  static const accountAccessIssue = '/account-access-issue';
   static const mentorPending = '/mentor-pending';
   static const mentorApply = '/mentor-apply';
   static const notifications = '/notifications';
@@ -15,6 +16,8 @@ abstract final class AppRoutes {
   static const onboardingGoal = '/onboarding/goal';
   static const onboardingInterests = '/onboarding/interests';
   static const studentHome = '/home';
+  static const studentProfile = '/profile';
   static const mentorHome = '/m/home';
+  static const mentorProfile = '/m/profile';
   static const adminOverview = '/a/overview';
 }

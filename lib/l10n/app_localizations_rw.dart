@@ -523,4 +523,34 @@ class AppLocalizationsRw extends AppLocalizations {
 
   @override
   String get addProjectCta => 'Ongeraho umushinga';
+
+  @override
+  String get mentorRegistrationHeadingTitle =>
+      'Murakaza neza kuri UpBridge — Kwiyandikisha nk\'Umujyanama';
+
+  @override
+  String get mentorRegistrationHeadingBody =>
+      'Uburambe bwawe bushobora gufungurira abandi imiryango. Uzuza umwirondoro wawe w\'umujyanama maze uwohereze usuzumwe kugira ngo winjire mu muryango w\'abajyanama.';
+
+  @override
+  String get mentorWelcomeTitle =>
+      'Murakaza neza kuri UpBridge nk\'Umujyanama.';
+
+  @override
+  String mentorDashboardWelcomeBack(String name) {
+    return 'Murakaza neza nanone, $name';
+  }
+
+  @override
+  String get mentorDashboardWelcomeBody =>
+      'Sangiza ubumenyi bwawe, uyobore urubyiruko ruri kuzamuka, kandi ugire impinduka nziza.';
+
+  @override
+  String get completedSessionsLabel => 'Amasomo yarangiye';
+
+  @override
+  String get profileCompletionLabel => 'Ubwuzuzanye bw\'umwirondoro';
+
+  @override
+  String get recentMentorshipActivityLabel => 'Ibikorwa biheruka mu bujyanama';
 }

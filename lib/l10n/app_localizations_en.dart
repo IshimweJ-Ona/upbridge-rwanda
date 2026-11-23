@@ -522,4 +522,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addProjectCta => 'Add project';
+
+  @override
+  String get mentorRegistrationHeadingTitle =>
+      'Welcome to UpBridge — Mentor Registration';
+
+  @override
+  String get mentorRegistrationHeadingBody =>
+      'Your experience can open doors for someone else. Complete your mentor profile and submit it for review to join our mentorship community.';
+
+  @override
+  String get mentorWelcomeTitle => 'Welcome to UpBridge as a Mentor.';
+
+  @override
+  String mentorDashboardWelcomeBack(String name) {
+    return 'Welcome back, $name';
+  }
+
+  @override
+  String get mentorDashboardWelcomeBody =>
+      'Share your experience, guide the next generation, and make a meaningful impact.';
+
+  @override
+  String get completedSessionsLabel => 'Completed sessions';
+
+  @override
+  String get profileCompletionLabel => 'Profile completion';
+
+  @override
+  String get recentMentorshipActivityLabel => 'Recent Mentorship Activity';
 }

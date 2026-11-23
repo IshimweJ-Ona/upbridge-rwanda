@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:upbridge/app/router/route_guards.dart';
 import 'package:upbridge/core/constants/app_routes.dart';
-import 'package:upbridge/core/domain/status_lifecycle.dart';
 import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/providers/settings_providers.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
@@ -35,15 +34,7 @@ class _LanguageScreenState extends ConsumerState<LanguageScreen> {
     final session = ref.watch(appSessionProvider).asData?.value;
     final fallback = session == null || !session.signedIn
         ? AppRoutes.welcome
-        : homeRouteForRole(
-            session.role,
-            onboarded: session.onboarded,
-            isPendingOrRejectedMentor:
-                session.role == UserRole.student &&
-                (session.hasPendingMentorApplication ||
-                    session.hasRejectedMentorApplication ||
-                    session.hasRevokedMentorApplication),
-          );
+        : homeRouteForSession(session);
     final selected = _pickedLocale ?? prefs.locale.languageCode;
     final isDark = prefs.themeMode == ThemeMode.dark;
 

@@ -157,5 +157,13 @@
   "addCertificateCta": "Ajouter un certificat",
   "portfolioProjectsTitle": "Projets de portfolio",
   "noProjectsYet": "Aucun projet de portfolio pour le moment",
-  "addProjectCta": "Ajouter un projet"
+  "addProjectCta": "Ajouter un projet",
+  "mentorRegistrationHeadingTitle": "Bienvenue sur UpBridge — Inscription Mentor",
+  "mentorRegistrationHeadingBody": "Votre expérience peut ouvrir des portes à quelqu'un d'autre. Complétez votre profil de mentor et soumettez-le pour examen afin de rejoindre notre communauté.",
+  "mentorWelcomeTitle": "Bienvenue sur UpBridge en tant que Mentor.",
+  "mentorDashboardWelcomeBack": "Bon retour, {name}",
+  "mentorDashboardWelcomeBody": "Partagez votre expérience, guidez la prochaine génération et créez un impact durable.",
+  "completedSessionsLabel": "Sessions terminées",
+  "profileCompletionLabel": "Profil complété",
+  "recentMentorshipActivityLabel": "Activité récente de mentorat"
 }

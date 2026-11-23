@@ -10,6 +10,7 @@ import 'package:upbridge/core/providers/repository_providers.dart';
 import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/themes/app_colors.dart';
 import 'package:upbridge/core/themes/app_text.dart';
+import 'package:upbridge/features/auth/domain/models/app_user_account.dart';
 import 'package:upbridge/features/auth/presentation/providers/auth_providers.dart';
 import 'package:upbridge/features/mentorship/domain/models/mentor_application.dart';
 import 'package:upbridge/features/profile/domain/models/user_profile.dart';
@@ -157,14 +158,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     }
     try {
       final roleClaim = await authService.readRoleClaim(forceRefresh: true);
-      var role = userRoleFromClaim(roleClaim);
-      var onboarded = role != UserRole.student;
+      final claimRole = tryUserRoleFromClaim(roleClaim);
       final draftNotifier = ref.read(registrationDraftProvider.notifier);
       final draft = user != null
           ? (ref.read(registrationDraftProvider) ??
                 await draftNotifier.loadForUid(user.uid))
           : ref.read(registrationDraftProvider);
 
+      AppUserAccount? account;
+      MentorApplication? existingApp;
       bool hasMentorAppInFirestore = false;
 
       if (user != null && Firebase.apps.isNotEmpty) {
@@ -172,20 +174,72 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
         final profileRepo = ref.read(userProfileRepositoryProvider);
         final mentorAppRepo = ref.read(mentorApplicationRepositoryProvider);
 
-        var account = await accountRepo.getAccount(user.uid);
+        account = await accountRepo.getAccount(user.uid);
+        existingApp = await mentorAppRepo.getApplication(user.uid);
         final mentorDraft = draft?.mentorApplication;
         final displayName = (draft?.displayName ?? user.displayName ?? '')
             .trim();
         final phone = (draft?.phone ?? '').trim();
 
-        if (role == UserRole.student && account == null) {
-          // Email verification strictly ensures a student/unapproved account; it never grants mentor role.
-          await accountRepo.ensureStudentAccount(
+        final wantsMentor =
+            claimRole == UserRole.mentor ||
+            account?.role == UserRole.mentor ||
+            draft?.wantsMentorApplication == true ||
+            existingApp != null;
+
+        if (account == null &&
+            claimRole != UserRole.admin &&
+            (draft != null || existingApp != null)) {
+          // Persist first-time registration state if offline at signup; deleted accounts
+          // with no draft fail closed to AccountAccessIssueScreen below.
+          await accountRepo.createAccount(
             uid: user.uid,
             email: user.email ?? '',
             displayName: displayName,
+            role: wantsMentor ? UserRole.mentor : UserRole.student,
+            emailVerified: true,
             phone: phone,
           );
+          account = await accountRepo.getAccount(user.uid);
+        } else if (account != null && !account.emailVerified) {
+          // Email verification only updates emailVerified; never converts mentor to student or approves them.
+          await accountRepo.markEmailVerified(uid: user.uid);
+          account =
+              await accountRepo.getAccount(user.uid) ??
+              account.copyWith(emailVerified: true);
+        }
+
+        if (draft?.wantsMentorApplication == true &&
+            mentorDraft != null &&
+            existingApp == null) {
+          final now = DateTime.now().toUtc();
+          existingApp = MentorApplication(
+            id: user.uid,
+            ownerUid: user.uid,
+            applicantName: displayName.isNotEmpty
+                ? displayName
+                : (user.displayName ?? 'Applicant'),
+            applicantEmail: user.email ?? '',
+            headline: mentorDraft.headline,
+            profession: mentorDraft.profession,
+            education: mentorDraft.education,
+            bio: mentorDraft.bio,
+            expertise: mentorDraft.expertise,
+            skills: mentorDraft.skills,
+            experienceYears: mentorDraft.experienceYears,
+            availability: mentorDraft.availability,
+            mentoringInterests: mentorDraft.mentoringInterests,
+            maxMentees: mentorDraft.maxMentees,
+            cvAsset: mentorDraft.cvAsset,
+            supportingLinks: mentorDraft.supportingLinks,
+            status: MentorApplicationStatus.pending,
+            createdAt: now,
+            updatedAt: now,
+          );
+          await mentorAppRepo.submitApplication(existingApp);
+        }
+
+        if (account != null || claimRole == UserRole.admin) {
           final existingProfile = await profileRepo.getProfile(user.uid);
           if (existingProfile == null) {
             final now = DateTime.now().toUtc();
@@ -193,78 +247,90 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
               UserProfile(
                 id: user.uid,
                 ownerUid: user.uid,
-                displayName: displayName,
-                headline: mentorDraft?.headline ?? '',
+                displayName: displayName.isNotEmpty
+                    ? displayName
+                    : (existingApp?.applicantName ?? ''),
+                headline: mentorDraft?.headline ?? existingApp?.headline ?? '',
                 location: 'Kigali, Rwanda',
-                about: mentorDraft?.bio ?? '',
-                cvAsset: mentorDraft?.cvAsset,
-                skills: mentorDraft?.skills ?? const [],
-                professionalLinks: mentorDraft?.supportingLinks ?? const [],
+                about: mentorDraft?.bio ?? existingApp?.bio ?? '',
+                cvAsset: mentorDraft?.cvAsset ?? existingApp?.cvAsset,
+                skills: mentorDraft?.skills ?? existingApp?.skills ?? const [],
+                professionalLinks:
+                    mentorDraft?.supportingLinks ??
+                    existingApp?.supportingLinks ??
+                    const [],
+                mentorExpertise:
+                    mentorDraft?.expertise ?? existingApp?.expertise ?? const [],
+                mentorExperienceYears:
+                    mentorDraft?.experienceYears ??
+                    existingApp?.experienceYears ??
+                    0,
+                mentorAvailability:
+                    mentorDraft?.availability ??
+                    existingApp?.availability ??
+                    '',
+                mentorMaxMentees:
+                    mentorDraft?.maxMentees ?? existingApp?.maxMentees ?? 5,
+                mentorBio: mentorDraft?.bio ?? existingApp?.bio ?? '',
                 isMentorPublic: false,
                 createdAt: now,
                 updatedAt: now,
               ),
             );
           }
-          account = await accountRepo.getAccount(user.uid);
         }
 
-        if (draft?.wantsMentorApplication == true && mentorDraft != null) {
-          final existingApp = await mentorAppRepo.getApplication(user.uid);
-          if (existingApp == null) {
-            final now = DateTime.now().toUtc();
-            await mentorAppRepo.submitApplication(
-              MentorApplication(
-                id: user.uid,
-                ownerUid: user.uid,
-                applicantName: displayName.isNotEmpty
-                    ? displayName
-                    : (user.displayName ?? 'Applicant'),
-                applicantEmail: user.email ?? '',
-                headline: mentorDraft.headline,
-                profession: mentorDraft.profession,
-                education: mentorDraft.education,
-                bio: mentorDraft.bio,
-                expertise: mentorDraft.expertise,
-                skills: mentorDraft.skills,
-                experienceYears: mentorDraft.experienceYears,
-                availability: mentorDraft.availability,
-                mentoringInterests: mentorDraft.mentoringInterests,
-                maxMentees: mentorDraft.maxMentees,
-                cvAsset: mentorDraft.cvAsset,
-                supportingLinks: mentorDraft.supportingLinks,
-                status: MentorApplicationStatus.pending,
-                createdAt: now,
-                updatedAt: now,
-              ),
-            );
-          }
-          hasMentorAppInFirestore = true;
-        } else {
-          final existingApp = await mentorAppRepo.getApplication(user.uid);
-          hasMentorAppInFirestore =
-              existingApp?.status == MentorApplicationStatus.pending ||
-              existingApp?.status == MentorApplicationStatus.rejected ||
-              existingApp?.status == MentorApplicationStatus.revoked;
-        }
-
-        role = resolveEffectiveRole(claimRole: role, account: account);
-        onboarded = role != UserRole.student || (account?.onboarded ?? false);
+        hasMentorAppInFirestore =
+            existingApp?.status == MentorApplicationStatus.pending ||
+            existingApp?.status == MentorApplicationStatus.rejected ||
+            existingApp?.status == MentorApplicationStatus.revoked;
       }
 
+      final effectiveRole = resolveEffectiveRoleNullable(
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: existingApp,
+      );
+      final approvalStatus = resolveApprovalStatus(
+        role: effectiveRole,
+        claimRole: claimRole,
+        account: account,
+        mentorApplication: existingApp,
+      );
+
       String destination;
-      if (role == UserRole.admin) {
+      if (effectiveRole == UserRole.admin) {
         destination = AppRoutes.adminOverview;
-      } else if (role == UserRole.mentor) {
-        destination = AppRoutes.mentorHome;
-      } else if (hasMentorAppInFirestore) {
-        destination = AppRoutes.mentorPending;
+      } else if (effectiveRole == UserRole.mentor) {
+        if (account == null && existingApp == null) {
+          destination = AppRoutes.accountAccessIssue;
+        } else {
+          final approvedMentor =
+              account != null &&
+              approvalStatus == ApprovalStatus.approved &&
+              account.isApproved;
+          if (approvedMentor) {
+            destination = AppRoutes.mentorHome;
+          } else if (hasMentorAppInFirestore || account != null) {
+            destination = AppRoutes.mentorPending;
+          } else {
+            destination = AppRoutes.mentorApply;
+          }
+        }
       } else if (draft?.wantsMentorApplication == true) {
-        destination = AppRoutes.mentorApply;
+        destination = hasMentorAppInFirestore
+            ? AppRoutes.mentorPending
+            : AppRoutes.mentorApply;
+      } else if (effectiveRole == UserRole.student) {
+        destination = account == null
+            ? AppRoutes.accountAccessIssue
+            : (account.onboarded
+                  ? AppRoutes.studentHome
+                  : AppRoutes.onboardingGoal);
+      } else if (user == null && Firebase.apps.isEmpty) {
+        destination = AppRoutes.onboardingGoal;
       } else {
-        destination = onboarded
-            ? AppRoutes.studentHome
-            : AppRoutes.onboardingGoal;
+        destination = AppRoutes.accountAccessIssue;
       }
 
       if (user != null) {
@@ -335,6 +401,12 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     final p = context.palette;
     final email =
         ref.watch(authServiceProvider).currentEmail ?? 'your email address';
+    final session = ref.watch(appSessionProvider).asData?.value;
+    final showMentorNotice =
+        (_isMentorTrack ||
+            (session?.isMentorAccount ?? false) ||
+            (session?.hasMentorApplication ?? false)) &&
+        !_verified;
 
     final resendLabel = _sending
         ? 'Sending…'
@@ -384,7 +456,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                       textAlign: TextAlign.center,
                       style: AppText.bodyS.copyWith(color: p.textSecondary),
                     ),
-                    if (_isMentorTrack && !_verified) ...[
+                    if (showMentorNotice) ...[
                       const SizedBox(height: 16),
                       NoticeCard(
                         tone: Tone.info,

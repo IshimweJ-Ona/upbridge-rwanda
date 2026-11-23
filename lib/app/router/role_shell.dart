@@ -172,8 +172,32 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final p = context.palette;
-    final session = ref.watch(appSessionProvider).asData?.value;
-    final tabs = _tabsForRole(l10n, session?.uid);
+    final sessionAsync = ref.watch(appSessionProvider);
+    final session = sessionAsync.asData?.value;
+
+    // Prevent any 1-frame flicker of wrong role tabs or student UI while session
+    // streams settle or if a role transition/redirect is pending.
+    final roleAuthorized =
+        session != null &&
+        session.isSessionReady &&
+        session.roleValid &&
+        !session.accountError &&
+        session.isActive &&
+        session.role == widget.role &&
+        (widget.role != UserRole.mentor || session.isApprovedMentor) &&
+        (widget.role != UserRole.student ||
+            (!session.requiresMentorApprovalScreen && session.onboarded));
+
+    if (!roleAuthorized) {
+      return Scaffold(
+        backgroundColor: p.canvas,
+        body: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    final tabs = _tabsForRole(l10n, session.uid);
     final selectedIndex = widget.navigationShell.currentIndex.clamp(
       0,
       tabs.length - 1,
@@ -194,7 +218,7 @@ class _RoleShellState extends ConsumerState<RoleShell> {
                 child: Column(
                   children: [
                     AppAvatar(
-                      initialsOf(session?.displayLabel ?? 'UB'),
+                      initialsOf(session.displayLabel),
                       tone: Tone.info,
                       size: 40,
                     ),
