@@ -9,6 +9,7 @@ import 'package:upbridge/core/providers/session_providers.dart';
 import 'package:upbridge/core/widgets/skeleton_loaders.dart';
 import 'package:upbridge/features/opportunities/domain/models/opportunity_application.dart';
 import 'package:upbridge/features/opportunities/domain/models/opportunity_listing.dart';
+import 'package:upbridge/features/opportunities/domain/opportunity_filters.dart';
 import 'package:upbridge/l10n/app_localizations.dart';
 import 'package:upbridge/shared/services/error_messages.dart';
 import 'package:upbridge/shared/shared.dart';
@@ -24,6 +25,8 @@ class OpportunitiesScreen extends ConsumerStatefulWidget {
 class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
   String _typeFilter = 'All';
   String _query = '';
+  int _view = 0;
+  String _statusFilter = 'All';
   final _searchCtrl = TextEditingController();
 
   @override
@@ -49,6 +52,7 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
         : ref.watch(userApplicationsProvider(uid)).asData?.value ??
               const <OpportunityApplication>[];
     final appByOpp = {for (final a in apps) a.opportunityId: a};
+    final showMine = uid != null && _view == 1;
 
     return PageFrame(
       largeTitle: l10n.tabJobs,
@@ -59,97 +63,186 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
       },
       children: [
         const SizedBox(height: 12),
-        if (apps.isNotEmpty) ...[
-          SurfaceCard(
-            padding: EdgeInsets.zero,
-            child: ListRow(
-              leading: const IconTile(Icons.send_outlined, tone: Tone.info),
-              title: 'Your applications',
-              subtitle:
-                  '${apps.where((a) => a.status != OpportunityApplicationStatus.withdrawn).length} active submissions',
-              chevron: false,
+        if (uid != null) ...[
+          SegmentedTabs(
+            tabs: const ['Browse', 'My applications'],
+            index: _view,
+            counts: [null, apps.isEmpty ? null : apps.length],
+            onChanged: (i) => setState(() => _view = i),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (showMine)
+          ..._myApplications(apps)
+        else ...[
+          AppSearchField(
+            controller: _searchCtrl,
+            hint: 'Search opportunities by title, organization, or skill',
+            onChanged: (v) => setState(() => _query = v),
+          ),
+          if (typeOptions.length > 1) ...[
+            const SizedBox(height: 12),
+            ChipBar(
+              options: typeOptions,
+              selected: activeType,
+              padding: EdgeInsets.zero,
+              onSelected: (v) => setState(() => _typeFilter = v),
             ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        AppSearchField(
-          controller: _searchCtrl,
-          hint: 'Search opportunities by title, organization, or skill',
-          onChanged: (v) => setState(() => _query = v),
-        ),
-        if (typeOptions.length > 1) ...[
-          const SizedBox(height: 12),
-          ChipBar(
-            options: typeOptions,
-            selected: activeType,
-            padding: EdgeInsets.zero,
-            onSelected: (v) => setState(() => _typeFilter = v),
-          ),
-        ],
-        const SizedBox(height: 16),
-        oppsAsync.when(
-          loading: () => const SkeletonDashboardLoader(cards: 3),
-          error: (error, _) => EmptyState(
-            icon: Icons.cloud_off_outlined,
-            title: 'Could not load opportunities',
-            body: errorMessage(error),
-            action: l10n.retry,
-            onAction: () => ref.invalidate(publishedOpportunitiesProvider),
-          ),
-          data: (listings) {
-            final q = _query.trim().toLowerCase();
-            final filtered = listings
-                .where((o) {
-                  final typeOk =
-                      activeType == 'All' || o.displayType == activeType;
-                  final qOk =
-                      q.isEmpty ||
-                      o.title.toLowerCase().contains(q) ||
-                      o.organization.toLowerCase().contains(q) ||
-                      o.location.toLowerCase().contains(q) ||
-                      o.displayType.toLowerCase().contains(q) ||
-                      o.workMode.toLowerCase().contains(q) ||
-                      o.skills.any((s) => s.toLowerCase().contains(q));
-                  return typeOk && qOk;
-                })
-                .toList(growable: false);
+          ],
+          const SizedBox(height: 16),
+          oppsAsync.when(
+            loading: () => const SkeletonDashboardLoader(cards: 3),
+            error: (error, _) => EmptyState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Could not load opportunities',
+              body: errorMessage(error),
+              action: l10n.retry,
+              onAction: () => ref.invalidate(publishedOpportunitiesProvider),
+            ),
+            data: (listings) {
+              final q = _query.trim().toLowerCase();
+              final filtered = listings
+                  .where((o) {
+                    final typeOk =
+                        activeType == 'All' || o.displayType == activeType;
+                    final qOk =
+                        q.isEmpty ||
+                        o.title.toLowerCase().contains(q) ||
+                        o.organization.toLowerCase().contains(q) ||
+                        o.location.toLowerCase().contains(q) ||
+                        o.displayType.toLowerCase().contains(q) ||
+                        o.workMode.toLowerCase().contains(q) ||
+                        o.skills.any((s) => s.toLowerCase().contains(q));
+                    return typeOk && qOk;
+                  })
+                  .toList(growable: false);
 
-            if (listings.isEmpty) {
-              return EmptyState(
-                icon: Icons.work_outline_rounded,
-                title: l10n.noOpportunitiesYet,
-                body: l10n.noOpportunitiesBody,
-              );
-            }
-            if (filtered.isEmpty) {
-              return EmptyState(
-                icon: Icons.search_off_rounded,
-                title: 'No matching opportunities',
-                body: 'Try another filter or clear your search.',
-                action: 'Reset filters',
-                onAction: () => setState(() {
-                  _typeFilter = 'All';
-                  _query = '';
-                  _searchCtrl.clear();
-                }),
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final o in filtered) ...[
-                  _OpportunityListingCard(
-                    listing: o,
-                    application: appByOpp[o.id],
-                    onTap: () => context.push('/opportunity/${o.id}'),
-                  ),
-                  const SizedBox(height: 12),
+              if (listings.isEmpty) {
+                return EmptyState(
+                  icon: Icons.work_outline_rounded,
+                  title: l10n.noOpportunitiesYet,
+                  body: l10n.noOpportunitiesBody,
+                );
+              }
+              if (filtered.isEmpty) {
+                return EmptyState(
+                  icon: Icons.search_off_rounded,
+                  title: 'No matching opportunities',
+                  body: 'Try another filter or clear your search.',
+                  action: 'Reset filters',
+                  onAction: () => setState(() {
+                    _typeFilter = 'All';
+                    _query = '';
+                    _searchCtrl.clear();
+                  }),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final o in filtered) ...[
+                    _OpportunityListingCard(
+                      listing: o,
+                      application: appByOpp[o.id],
+                      onTap: () => context.push('/opportunity/${o.id}'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                 ],
-              ],
-            );
-          },
-        ),
+              );
+            },
+          ),
+        ],
       ],
+    );
+  }
+
+  // Status filter and cards for the signed-in student's own applications
+  List<Widget> _myApplications(List<OpportunityApplication> apps) {
+    final filtered = filterApplications(apps, _statusFilter);
+    return [
+      ChipBar(
+        options: applicationStatusOptions,
+        selected: _statusFilter,
+        padding: EdgeInsets.zero,
+        onSelected: (v) => setState(() => _statusFilter = v),
+      ),
+      const SizedBox(height: 16),
+      if (apps.isEmpty)
+        const EmptyState(
+          icon: Icons.send_outlined,
+          title: 'No applications yet',
+          body: 'Apply to an opportunity and you can track it here.',
+        )
+      else if (filtered.isEmpty)
+        EmptyState(
+          icon: Icons.search_off_rounded,
+          title: 'No ${_statusFilter.toLowerCase()} applications',
+          body: 'Try another status to see the rest.',
+          action: 'Show all',
+          onAction: () => setState(() => _statusFilter = 'All'),
+        )
+      else
+        for (final a in filtered) ...[
+          _ApplicationCard(
+            application: a,
+            onTap: () => context.push('/opportunity/${a.opportunityId}'),
+          ),
+          const SizedBox(height: 12),
+        ],
+    ];
+  }
+}
+
+Tone _statusTone(OpportunityApplicationStatus status) => switch (status) {
+  OpportunityApplicationStatus.submitted => Tone.info,
+  OpportunityApplicationStatus.underReview => Tone.accent,
+  OpportunityApplicationStatus.accepted => Tone.success,
+  OpportunityApplicationStatus.rejected => Tone.danger,
+  OpportunityApplicationStatus.withdrawn => Tone.neutral,
+};
+
+class _ApplicationCard extends StatelessWidget {
+  const _ApplicationCard({required this.application, required this.onTap});
+
+  final OpportunityApplication application;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SurfaceCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  application.opportunityTitle,
+                  style: AppText.titleS.copyWith(color: p.textPrimary),
+                ),
+              ),
+              const SizedBox(width: 8),
+              StatusBadge(
+                applicationStatusLabel(application.status),
+                tone: _statusTone(application.status),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            application.organization,
+            style: AppText.bodyS.copyWith(color: p.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          MonoLabel(
+            'Applied ${DateFormat('d MMM yyyy').format(application.createdAt.toLocal())}',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -168,6 +261,7 @@ class _OpportunityListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final soon = closingSoonLabel(listing);
     return SurfaceCard(
       onTap: onTap,
       child: Column(
@@ -210,12 +304,8 @@ class _OpportunityListingCard extends StatelessWidget {
               const SizedBox(width: 8),
               if (application != null)
                 StatusBadge(
-                  application!.status.name,
-                  tone:
-                      application!.status ==
-                          OpportunityApplicationStatus.withdrawn
-                      ? Tone.neutral
-                      : Tone.success,
+                  applicationStatusLabel(application!.status),
+                  tone: _statusTone(application!.status),
                 )
               else
                 StatusBadge(listing.displayType, tone: Tone.info),
@@ -239,8 +329,21 @@ class _OpportunityListingCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
-          MonoLabel(
-            'Deadline ${DateFormat('d MMM yyyy').format(listing.deadline.toLocal())}',
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              MonoLabel(
+                'Deadline ${DateFormat('d MMM yyyy').format(listing.deadline.toLocal())}',
+              ),
+              if (soon != null)
+                StatusBadge(
+                  soon,
+                  tone: Tone.warning,
+                  icon: Icons.schedule_rounded,
+                ),
+            ],
           ),
         ],
       ),
