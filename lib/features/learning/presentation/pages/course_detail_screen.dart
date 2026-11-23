@@ -31,7 +31,32 @@ class CourseDetailScreen extends ConsumerStatefulWidget {
 class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
   final _evidenceUrl = TextEditingController();
   MediaAsset? _evidenceAsset;
+  bool _hydratedEvidence = false;
+  bool _hydrationScheduled = false;
+  bool _builtOnce = false;
   bool _submitting = false;
+
+  bool _isSettled<T>(AsyncValue<T> value) =>
+      !value.isLoading || value.hasValue || value.hasError;
+
+  void _applyEvidenceHydration(CourseProgress? progress) {
+    if (_hydratedEvidence) return;
+    _hydratedEvidence = true;
+    _evidenceUrl.text = progress?.evidenceUrl ?? '';
+    _evidenceAsset = progress?.evidenceAsset;
+  }
+
+  void _scheduleEvidenceHydration(CourseProgress? progress) {
+    if (_hydratedEvidence || _hydrationScheduled) return;
+    _hydrationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hydrationScheduled = false;
+      if (!mounted || _hydratedEvidence) return;
+      setState(() {
+        _applyEvidenceHydration(progress);
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -103,6 +128,30 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
     final backRoute = widget.previewOnly
         ? (session?.role == UserRole.admin ? '/a/catalog' : '/m/courses')
         : '/learn';
+
+    if (uid != null && !widget.previewOnly) {
+      final progressProvider = _singleCourseProgressProvider((
+        uid: uid,
+        courseId: widget.courseId,
+      ));
+      ref.listen(progressProvider, (_, next) {
+        if (!_hydratedEvidence && _isSettled(next) && mounted) {
+          setState(() {
+            _applyEvidenceHydration(next.asData?.value);
+          });
+        }
+      });
+      if (!_hydratedEvidence &&
+          progressAsync != null &&
+          _isSettled(progressAsync)) {
+        if (!_builtOnce) {
+          _applyEvidenceHydration(progressAsync.asData?.value);
+        } else {
+          _scheduleEvidenceHydration(progressAsync.asData?.value);
+        }
+      }
+    }
+    _builtOnce = true;
 
     return courseAsync.when(
       loading: () => DetailPage(
@@ -327,8 +376,9 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                 helperText: 'JPG, JPEG, PNG, or WebP image (max 10 MB).',
                 category: 'course-evidence',
                 imagesOnly: false,
-                initialAsset: _evidenceAsset ?? progress?.evidenceAsset,
-                onAssetChanged: (asset) => _evidenceAsset = asset,
+                initialAsset: _evidenceAsset,
+                onAssetChanged: (asset) =>
+                    setState(() => _evidenceAsset = asset),
               ),
               const SizedBox(height: 16),
               AppButton(

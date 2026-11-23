@@ -316,7 +316,7 @@ class _OpportunityDetailScreenState
                   imagesOnly: false,
                   helperText: 'JPG, JPEG, PNG, or WebP image (max 10 MB).',
                   initialAsset: _cvAsset,
-                  onAssetChanged: (asset) => _cvAsset = asset,
+                  onAssetChanged: (asset) => setState(() => _cvAsset = asset),
                 ),
                 const SizedBox(height: 16),
                 AppButton(

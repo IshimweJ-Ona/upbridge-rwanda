@@ -5,10 +5,23 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:upbridge/core/constants/app_copy.dart';
+import 'package:upbridge/core/services/cloudinary_service.dart';
 
 String errorMessage(Object error) {
   if (error is FirebaseAuthException) return _authMessage(error.code);
   if (error is FirebaseException) return _firebaseMessage(error.code);
+  if (error is CloudinaryServiceException || error is UploadCancelledException) {
+    final msg = error.toString().trim();
+    if (msg.isNotEmpty) return msg;
+  }
+  if (error is StateError) {
+    final msg = error.message.trim();
+    if (msg.isNotEmpty) return msg;
+  }
+  if (error is ArgumentError) {
+    final msg = error.message?.toString().trim() ?? '';
+    if (msg.isNotEmpty) return msg;
+  }
   if (error is SocketException || error is TimeoutException) {
     return AppCopy.offlineError;
   }

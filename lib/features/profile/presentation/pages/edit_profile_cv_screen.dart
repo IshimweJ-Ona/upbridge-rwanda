@@ -34,6 +34,9 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
   MediaAsset? _cvAsset;
   bool _hydrated = false;
   bool _phoneHydrated = false;
+  bool _profileHydrationScheduled = false;
+  bool _phoneHydrationScheduled = false;
+  bool _builtOnce = false;
   bool _saving = false;
   String? _error;
 
@@ -65,11 +68,18 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
     super.dispose();
   }
 
-  void _hydrateOnce(AppSession session, UserProfile? profile, String? phone) {
-    if (!_phoneHydrated && phone != null && phone.isNotEmpty) {
-      _phoneHydrated = true;
+  bool _isSettled<T>(AsyncValue<T> value) =>
+      !value.isLoading || value.hasValue || value.hasError;
+
+  void _applyPhoneHydration(String? phone) {
+    if (_phoneHydrated) return;
+    _phoneHydrated = true;
+    if (phone != null && phone.isNotEmpty) {
       _phone.text = phone.replaceFirst('+250', '').trim();
     }
+  }
+
+  void _applyProfileHydration(AppSession session, UserProfile? profile) {
     if (_hydrated) return;
     _hydrated = true;
     _name.text = profile?.displayName.isNotEmpty == true
@@ -81,7 +91,53 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
     _links.text = (profile?.professionalLinks ?? const []).join('\n');
     _photoAsset = profile?.photoAsset;
     _cvAsset = profile?.cvAsset;
-    _skills.addAll(profile?.skills ?? const []);
+    _skills
+      ..clear()
+      ..addAll(profile?.skills ?? const []);
+  }
+
+  void _schedulePhoneHydration(String? phone) {
+    if (_phoneHydrated || _phoneHydrationScheduled) return;
+    _phoneHydrationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _phoneHydrationScheduled = false;
+      if (!mounted || _phoneHydrated) return;
+      setState(() => _applyPhoneHydration(phone));
+    });
+  }
+
+  void _scheduleProfileHydration(AppSession session, UserProfile? profile) {
+    if (_hydrated || _profileHydrationScheduled) return;
+    _profileHydrationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _profileHydrationScheduled = false;
+      if (!mounted || _hydrated) return;
+      setState(() => _applyProfileHydration(session, profile));
+    });
+  }
+
+  void _hydrateOnce(
+    AppSession session,
+    UserProfile? profile,
+    String? phone, {
+    required bool profileReady,
+    required bool accountReady,
+    required bool deferred,
+  }) {
+    if (!_phoneHydrated && accountReady) {
+      if (deferred) {
+        _schedulePhoneHydration(phone);
+      } else {
+        _applyPhoneHydration(phone);
+      }
+    }
+    if (!_hydrated && profileReady) {
+      if (deferred) {
+        _scheduleProfileHydration(session, profile);
+      } else {
+        _applyProfileHydration(session, profile);
+      }
+    }
   }
 
   Future<void> _save(AppSession session, UserProfile? existing) async {
@@ -125,7 +181,7 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
           .updateSafeAccount(
             uid: uid,
             displayName: _name.text.trim(),
-            phone: phoneText.isEmpty ? null : '+250 $phoneText',
+            phone: phoneText.isEmpty ? '' : '+250 $phoneText',
             photoAsset: _photoAsset,
             clearPhotoAsset: _photoAsset == null,
           );
@@ -177,16 +233,38 @@ class _EditProfileCvScreenState extends ConsumerState<EditProfileCvScreen> {
     final l10n = AppLocalizations.of(context);
     final session = ref.watch(appSessionProvider).asData?.value;
     final uid = session?.uid;
-    final profile = uid == null
+    final profileAsync = uid == null
         ? null
-        : ref.watch(userProfileProvider(uid)).asData?.value;
-    final account = uid == null
+        : ref.watch(userProfileProvider(uid));
+    final accountAsync = uid == null
         ? null
-        : ref.watch(_editProfileAccountProvider(uid)).asData?.value;
+        : ref.watch(_editProfileAccountProvider(uid));
+    final profile = profileAsync?.asData?.value;
+    final account = accountAsync?.asData?.value;
+    final profileReady = profileAsync == null || _isSettled(profileAsync);
+    final accountReady = accountAsync == null || _isSettled(accountAsync);
 
-    if (session != null) {
-      _hydrateOnce(session, profile, account?.phone);
+    if (uid != null && session != null) {
+      ref.listen(userProfileProvider(uid), (_, next) {
+        if (!_hydrated && _isSettled(next) && mounted) {
+          setState(() => _applyProfileHydration(session, next.asData?.value));
+        }
+      });
+      ref.listen(_editProfileAccountProvider(uid), (_, next) {
+        if (!_phoneHydrated && _isSettled(next) && mounted) {
+          setState(() => _applyPhoneHydration(next.asData?.value?.phone));
+        }
+      });
+      _hydrateOnce(
+        session,
+        profile,
+        account?.phone,
+        profileReady: profileReady,
+        accountReady: accountReady,
+        deferred: _builtOnce,
+      );
     }
+    _builtOnce = true;
 
     return DetailPage(
       title: l10n.editProfileCta,

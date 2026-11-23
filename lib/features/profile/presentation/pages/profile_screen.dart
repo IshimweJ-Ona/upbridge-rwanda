@@ -443,7 +443,7 @@ class ProfileScreen extends ConsumerWidget {
       actions: [
         CircleIconButton(
           icon: Icons.edit_outlined,
-          tooltip: 'Edit profile & CV',
+          tooltip: l10n.editProfileCta,
           onTap: () => context.push('/profile-edit'),
         ),
         const SizedBox(width: 8),
@@ -637,16 +637,16 @@ class ProfileScreen extends ConsumerWidget {
 
                 // Portfolio Projects
                 SectionLabel(
-                  'Portfolio projects (${projects.length})',
-                  action: 'Add project',
+                  '${l10n.portfolioProjectsTitle} (${projects.length})',
+                  action: l10n.addProjectCta,
                   onAction: () => context.push('/project-new'),
                 ),
                 if (projects.isEmpty)
                   EmptyState(
                     icon: Icons.folder_open_outlined,
-                    title: 'No portfolio projects yet',
+                    title: l10n.noProjectsYet,
                     body: 'Showcase your work with descriptions, links, screenshots, and attachments.',
-                    action: 'Add project',
+                    action: l10n.addProjectCta,
                     onAction: () => context.push('/project-new'),
                   )
                 else
@@ -722,15 +722,15 @@ class ProfileScreen extends ConsumerWidget {
 
                 // Education
                 SectionLabel(
-                  'Education (${profile.education.length})',
+                  '${l10n.educationTitle} (${profile.education.length})',
                   action: 'Add',
                   onAction: () => _showEducationSheet(context, ref, profile),
                 ),
                 if (profile.education.isEmpty)
                   EmptyState(
                     icon: Icons.school_outlined,
-                    title: 'No education entries yet',
-                    action: 'Add education',
+                    title: l10n.noEducationYet,
+                    action: l10n.addEducationCta,
                     onAction: () => _showEducationSheet(context, ref, profile),
                   )
                 else
@@ -765,15 +765,15 @@ class ProfileScreen extends ConsumerWidget {
 
                 // Experience
                 SectionLabel(
-                  'Experience (${profile.experience.length})',
+                  '${l10n.experienceTitle} (${profile.experience.length})',
                   action: 'Add',
                   onAction: () => _showExperienceSheet(context, ref, profile),
                 ),
                 if (profile.experience.isEmpty)
                   EmptyState(
                     icon: Icons.work_outline_rounded,
-                    title: 'No experience entries yet',
-                    action: 'Add experience',
+                    title: l10n.noExperienceYet,
+                    action: l10n.addExperienceCta,
                     onAction: () => _showExperienceSheet(context, ref, profile),
                   )
                 else
@@ -808,15 +808,15 @@ class ProfileScreen extends ConsumerWidget {
 
                 // Certificates & Evidence
                 SectionLabel(
-                  'Certificates & evidence (${profile.certificates.length})',
+                  '${l10n.certificatesTitle} (${profile.certificates.length})',
                   action: 'Add',
                   onAction: () => _showCertificateSheet(context, ref, profile),
                 ),
                 if (profile.certificates.isEmpty)
                   EmptyState(
                     icon: Icons.workspace_premium_outlined,
-                    title: 'No certificates added yet',
-                    action: 'Add certificate',
+                    title: l10n.noCertificatesYet,
+                    action: l10n.addCertificateCta,
                     onAction: () =>
                         _showCertificateSheet(context, ref, profile),
                   )
