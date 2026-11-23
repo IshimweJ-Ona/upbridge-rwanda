@@ -867,6 +867,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Verifying your email confirms your address only — it does not approve mentor access. Once verified, your application enters admin review.'**
   String get mentorReviewFollowsVerificationBody;
+
+  /// No description provided for @cvCompletenessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'CV Completeness'**
+  String get cvCompletenessTitle;
+
+  /// No description provided for @cvCompletenessSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% completed'**
+  String cvCompletenessSubtitle(int percent);
+
+  /// No description provided for @cvCompletenessComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Your CV is complete and ready to share!'**
+  String get cvCompletenessComplete;
+
+  /// No description provided for @cvCompletenessGuidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete missing sections to stand out to mentors and employers.'**
+  String get cvCompletenessGuidance;
+
+  /// No description provided for @cvMissingCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 section to complete} other{{count} sections to complete}}'**
+  String cvMissingCount(int count);
+
+  /// No description provided for @cvItemPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get cvItemPhoto;
+
+  /// No description provided for @cvItemHeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'Professional headline'**
+  String get cvItemHeadline;
+
+  /// No description provided for @cvItemBio.
+  ///
+  /// In en, this message translates to:
+  /// **'About / Bio'**
+  String get cvItemBio;
+
+  /// No description provided for @cvItemSkills.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills (at least 3)'**
+  String get cvItemSkills;
+
+  /// No description provided for @cvItemEducation.
+  ///
+  /// In en, this message translates to:
+  /// **'Education'**
+  String get cvItemEducation;
+
+  /// No description provided for @cvItemExperience.
+  ///
+  /// In en, this message translates to:
+  /// **'Experience'**
+  String get cvItemExperience;
+
+  /// No description provided for @cvItemCvAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Attached CV file'**
+  String get cvItemCvAsset;
+
+  /// No description provided for @cvMissingBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get cvMissingBadge;
+
+  /// No description provided for @cvCompletedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get cvCompletedBadge;
+
+  /// No description provided for @editProfileCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit profile & CV'**
+  String get editProfileCta;
+
+  /// No description provided for @shareExportCvCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Share / Export CV'**
+  String get shareExportCvCta;
+
+  /// No description provided for @aboutAndSkillsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'About & Skills'**
+  String get aboutAndSkillsTitle;
+
+  /// No description provided for @noSkillsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No skills added yet.'**
+  String get noSkillsYet;
+
+  /// No description provided for @educationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Education'**
+  String get educationTitle;
+
+  /// No description provided for @noEducationYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No education entries yet'**
+  String get noEducationYet;
+
+  /// No description provided for @addEducationCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add education'**
+  String get addEducationCta;
+
+  /// No description provided for @experienceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Experience'**
+  String get experienceTitle;
+
+  /// No description provided for @noExperienceYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No experience entries yet'**
+  String get noExperienceYet;
+
+  /// No description provided for @addExperienceCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add experience'**
+  String get addExperienceCta;
+
+  /// No description provided for @certificatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates & evidence'**
+  String get certificatesTitle;
+
+  /// No description provided for @noCertificatesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No certificates added yet'**
+  String get noCertificatesYet;
+
+  /// No description provided for @addCertificateCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add certificate'**
+  String get addCertificateCta;
+
+  /// No description provided for @portfolioProjectsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portfolio projects'**
+  String get portfolioProjectsTitle;
+
+  /// No description provided for @noProjectsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No portfolio projects yet'**
+  String get noProjectsYet;
+
+  /// No description provided for @addProjectCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add project'**
+  String get addProjectCta;
 }
 
 class _AppLocalizationsDelegate

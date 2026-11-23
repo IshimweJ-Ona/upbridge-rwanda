@@ -420,4 +420,106 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get mentorReviewFollowsVerificationBody =>
       'La vérification confirme uniquement votre adresse e-mail — elle n\'accorde pas l\'accès mentor. Une fois vérifiée, votre candidature est transmise aux administrateurs.';
+
+  @override
+  String get cvCompletenessTitle => 'Complétude du CV';
+
+  @override
+  String cvCompletenessSubtitle(int percent) {
+    return '$percent% complété';
+  }
+
+  @override
+  String get cvCompletenessComplete =>
+      'Votre CV est complet et prêt à être partagé !';
+
+  @override
+  String get cvCompletenessGuidance =>
+      'Complétez les sections manquantes pour vous démarquer auprès des mentors et employeurs.';
+
+  @override
+  String cvMissingCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sections restantes',
+      one: '1 section restante',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cvItemPhoto => 'Photo de profil';
+
+  @override
+  String get cvItemHeadline => 'Titre professionnel';
+
+  @override
+  String get cvItemBio => 'À propos / Bio';
+
+  @override
+  String get cvItemSkills => 'Compétences (au moins 3)';
+
+  @override
+  String get cvItemEducation => 'Formation';
+
+  @override
+  String get cvItemExperience => 'Expérience';
+
+  @override
+  String get cvItemCvAsset => 'Document CV joint';
+
+  @override
+  String get cvMissingBadge => 'Manquant';
+
+  @override
+  String get cvCompletedBadge => 'Complet';
+
+  @override
+  String get editProfileCta => 'Modifier le profil et le CV';
+
+  @override
+  String get shareExportCvCta => 'Partager / Exporter le CV';
+
+  @override
+  String get aboutAndSkillsTitle => 'À propos & Compétences';
+
+  @override
+  String get noSkillsYet => 'Aucune compétence ajoutée.';
+
+  @override
+  String get educationTitle => 'Formation';
+
+  @override
+  String get noEducationYet => 'Aucune formation enregistrée';
+
+  @override
+  String get addEducationCta => 'Ajouter une formation';
+
+  @override
+  String get experienceTitle => 'Expérience';
+
+  @override
+  String get noExperienceYet => 'Aucune expérience enregistrée';
+
+  @override
+  String get addExperienceCta => 'Ajouter une expérience';
+
+  @override
+  String get certificatesTitle => 'Certificats & Justificatifs';
+
+  @override
+  String get noCertificatesYet => 'Aucun certificat enregistré';
+
+  @override
+  String get addCertificateCta => 'Ajouter un certificat';
+
+  @override
+  String get portfolioProjectsTitle => 'Projets de portfolio';
+
+  @override
+  String get noProjectsYet => 'Aucun projet de portfolio pour le moment';
+
+  @override
+  String get addProjectCta => 'Ajouter un projet';
 }
