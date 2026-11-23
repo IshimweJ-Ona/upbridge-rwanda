@@ -17,7 +17,7 @@ UpBridge Rwanda (`upridge-rwanda-dev`) is configured strictly for the **Firebase
 
 1. **Authentication -> Sign-in method**: Enable **Email/Password**.
 2. **Authentication -> Templates -> Email address verification**: Confirm sender name and authorized continue domains match your Firebase configuration.
-3. Ensure `android/app/google-services.json` (gitignored) matches package `com.example.upbridge`, and provide `ios/Runner/GoogleServiceInfo.plist` for iOS builds.
+3. Fresh clones pass `flutter analyze` and `flutter test` without any gitignored Firebase config files. For live `flutter run`, either place `android/app/google-services.json` (matching `com.example.upbridge`) / `ios/Runner/GoogleServiceInfo.plist`, or copy `.env.example` to `.env` and launch with `flutter run --dart-define-from-file=.env`.
 
 ---
 

@@ -18,13 +18,30 @@ String firebaseEmulatorHost({
 
 /// Returns false when Firebase setup fails so startup can fail closed.
 Future<bool> initFirebase() async {
+  const useEmulators =
+      kDebugMode && bool.fromEnvironment('USE_FIREBASE_EMULATORS');
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      final envOptions = DefaultFirebaseOptions.currentPlatformOrNull;
+      if (envOptions != null) {
+        await Firebase.initializeApp(options: envOptions);
+      } else {
+        try {
+          // Initialize from native google-services.json / GoogleServiceInfo.plist
+          // when present locally.
+          await Firebase.initializeApp();
+        } catch (nativeError) {
+          if (!useEmulators) rethrow;
+          debugPrint(
+            'Native Firebase config absent; using emulator options ($nativeError).',
+          );
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.emulatorFallbackOptions(),
+          );
+        }
+      }
     }
-    if (kDebugMode && const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) {
+    if (useEmulators) {
       const configuredHost = String.fromEnvironment('FIREBASE_EMULATOR_HOST');
       final host = firebaseEmulatorHost(
         isAndroid: defaultTargetPlatform == TargetPlatform.android,
@@ -35,7 +52,11 @@ Future<bool> initFirebase() async {
     }
     return true;
   } catch (e) {
-    debugPrint('Firebase not ready: $e');
+    debugPrint(
+      'Firebase not ready ($e). Provide android/app/google-services.json, pass '
+      '--dart-define-from-file=.env, or run with '
+      '--dart-define=USE_FIREBASE_EMULATORS=true.',
+    );
     return false;
   }
 }

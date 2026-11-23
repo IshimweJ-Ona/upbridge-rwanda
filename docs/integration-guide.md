@@ -22,7 +22,7 @@
    flutter pub get
    flutter gen-l10n
    ```
-2. Keep local config files out of Git (already listed in `.gitignore`): `.env`, `lib/firebase_options.dart`, `android/app/google-services.json`, and `ios/Runner/GoogleServiceInfo.plist`.
+2. Keep local config files out of Git (already listed in `.gitignore`): `.env`, `lib/firebase_options.dart`, `android/app/google-services.json`, and `ios/Runner/GoogleServiceInfo.plist`. Fresh clones compile and pass `flutter analyze` / `flutter test` without them; for live `flutter run`, either obtain `android/app/google-services.json` (and `ios/Runner/GoogleServiceInfo.plist` for iOS) from your team lead, or copy `.env.example` to `.env` and run `flutter run --dart-define-from-file=.env`.
 3. Read `docs/firebase-setup.md`, `docs/cloudinary-setup.md`, and `docs/firestore-schema.md`.
 4. To test against local Firebase Emulators:
    ```powershell

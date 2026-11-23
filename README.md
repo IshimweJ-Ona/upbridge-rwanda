@@ -37,11 +37,11 @@ integration_test/      End-to-end Flutter integration tests
 
 ### 1. Prerequisites & Local Configuration
 - Install Flutter SDK, Firebase CLI (`firebase login`), and Node.js.
-- Obtain gitignored local Firebase/environment files from your team lead (or `flutterfire configure`):
-  - `lib/firebase_options.dart`
-  - `android/app/google-services.json`
-  - `ios/Runner/GoogleServiceInfo.plist` (for iOS builds)
-  - `.env` (optional overrides; Cloudinary public defaults are configured in `lib/core/constants/firestore_schema.dart`)
+- Static checks (`flutter analyze`) and automated suites (`flutter test`, `integration_test`, rules tests) run out of the box on a fresh clone with **no** gitignored Firebase files.
+- To run the live app (`flutter run`) against `upridge-rwanda-dev`, use **one** of these gitignored local setups:
+  - **Mobile native config (simplest for plain `flutter run`)**: place `android/app/google-services.json` (for Android) and `ios/Runner/GoogleServiceInfo.plist` (for iOS) obtained from your team lead (or via `flutterfire configure --project=upridge-rwanda-dev`).
+  - **Environment file (`--dart-define-from-file=.env`, works on Android, iOS, and Web)**: copy [`.env.example`](.env.example) to `.env`, fill in your `FIREBASE_*` values from your team lead, and run `flutter run --dart-define-from-file=.env`.
+  - **Local emulators only (no Firebase keys required)**: start `.\scripts\start_firebase_emulators.ps1` and run `flutter run --dart-define=USE_FIREBASE_EMULATORS=true`.
 
 ### 2. Install Dependencies & Generate Localizations
 ```powershell
@@ -53,10 +53,13 @@ npm --prefix rules_tests install
 
 ### 3. Run the App
 ```powershell
-# Run against live Firebase (upridge-rwanda-dev)
+# Run against live Firebase using native google-services.json / GoogleServiceInfo.plist
 flutter run
 
-# Run against local Firebase Emulators (emulator started separately)
+# Or run against live Firebase on Android, iOS, or Web using gitignored .env
+flutter run --dart-define-from-file=.env
+
+# Run against local Firebase Emulators (emulator started separately; works without .env or google-services.json)
 flutter run --dart-define=USE_FIREBASE_EMULATORS=true
 
 # Physical device targeting your computer's local Firebase Emulators
